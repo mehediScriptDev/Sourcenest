@@ -252,14 +252,34 @@ export default function ManufacturerProductsPage() {
       name: editFormData.name,
       description: editFormData.description,
       status: editFormData.status,
-      categoryId: editDetail.categoryId,
-      subCategoryId: editDetail.subCategoryId,
-      currencyId: editDetail.currencyId,
+      categoryId: editDetail.categoryId?.toString() || "",
+      subCategoryId: editDetail.subCategoryId?.toString() || "",
+      currencyId: editDetail.currencyId?.toString() || "",
       minPrice: editFormData.minPrice,
       maxPrice: editFormData.maxPrice,
       minimumOrderQuantity: editFormData.minimumOrderQuantity,
       unit: editFormData.unit,
       leadTime: editFormData.leadTime,
+      productionCapacity: editDetail.productionCapacity,
+      productionDuration: editDetail.productionDuration,
+      productionUnit: editDetail.productionUnit,
+      customizeOptions: editDetail.customizeOptions,
+      packagingType: editDetail.packagingType,
+      portOfLoading: editDetail.portOfLoading,
+      packagingDimensions: editDetail.packagingDimensions,
+      packagingWeight: editDetail.packagingWeight,
+      packagingCostPerUnit: editDetail.packagingCostPerUnit,
+      packagingDescription: editDetail.packagingDescription,
+      shippingMethodIds: editDetail.shippingMethodIds,
+      sampleAvailable: editDetail.sampleAvailable,
+      samplePrice: editDetail.samplePrice,
+      customizationAvailable: editDetail.customizationAvailable,
+      customizationDetail: editDetail.customizationDetail,
+      keywords: editDetail.keywords,
+      keyFeatures: editDetail.keyFeatures,
+      specifications: editDetail.specifications,
+      imageFiles: [],
+      brochureFile: null,
     })
     const res = await updateManufacturerProduct(editingRow.id, fd)
     setSavingEdit(false)
@@ -900,7 +920,7 @@ export default function ManufacturerProductsPage() {
           ) : viewDetail ? (
             <div className="space-y-4">
               <div className="flex items-start gap-4">
-                <div className="relative flex h-24 w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
+                <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
                   {viewDetail.images?.[0] &&
                   (viewDetail.images[0].url ||
                     viewDetail.images[0].file_path ||
@@ -923,7 +943,7 @@ export default function ManufacturerProductsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-lg font-semibold break-words">{viewDetail.name}</h3>
+                    <h3 className="text-lg font-semibold wrap-break-word">{viewDetail.name}</h3>
                     <Badge
                       variant={viewDetail.status === "active" ? "default" : "secondary"}
                       className={badgeClass(viewDetail.status)}

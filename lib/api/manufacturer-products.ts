@@ -33,7 +33,7 @@ export interface ManufacturerProductsListResponse {
   meta: ManufacturerProductMeta | null
 }
 
-/** Full product payload for view/edit (normalized common fields). */
+
 export interface ManufacturerProductDetail {
   id: number
   slug: string
@@ -469,10 +469,6 @@ export async function getManufacturerProductBySlug(
   }
 }
 
-/**
- * Build multipart body for POST /manufacturer/products/:id (with _method=PUT).
- * Sends all fields matching the Postman PUT contract.
- */
 export function buildManufacturerProductUpdateFormData(
   p: ManufacturerProductCreatePayload
 ): FormData {
@@ -486,7 +482,6 @@ export async function updateManufacturerProduct(
   data: FormData
 ): Promise<ManufacturerProductActionResponse> {
   try {
-    // Use POST + _method=PUT — Laravel does not read $_FILES on PUT requests.
     const response = await apiClient.post(`/manufacturer/products/${id}`, data, {
       validateStatus: () => true,
     })
@@ -842,10 +837,10 @@ export function buildManufacturerProductCreateFormData(
   const feats = p.keyFeatures.map((f) => f.trim()).filter(Boolean)
   if (feats.length > 0) {
     feats.forEach((feat, i) => {
-      fd.append(`key_features[${i}]`, feat)
+      fd.append(`key_feature[${i}]`, feat)
     })
   } else {
-    fd.append("key_features[0]", p.name.trim().slice(0, 120) || "Key feature")
+    fd.append("key_feature[0]", p.name.trim().slice(0, 120) || "Key feature")
   }
 
   const specs = p.specifications.filter((s) => s.title.trim() && s.value.trim())
@@ -867,7 +862,7 @@ export function buildManufacturerProductCreateFormData(
   })
 
   if (p.brochureFile) {
-    fd.append("product_broschure", p.brochureFile)
+    fd.append("product_brochure", p.brochureFile)
   }
 
   return fd
@@ -877,8 +872,6 @@ export async function createManufacturerProduct(
   formData: FormData
 ): Promise<ManufacturerProductActionResponse> {
   try {
-    // Do not set Content-Type manually — Axios must add the multipart boundary.
-    // validateStatus: read JSON body on 4xx/5xx (Laravel often returns validation details there).
     const response = await apiClient.post("/manufacturer/products", formData, {
       validateStatus: () => true,
     })

@@ -17,7 +17,6 @@ export interface ManufacturerApplication {
   terms_accepted?: boolean
   device_name?: string
   business_license_file?: string
-  factory_images?: string[]
   primary_industry?: string
   employee_count?: string
   tax_id?: string

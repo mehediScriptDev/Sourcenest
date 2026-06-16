@@ -459,7 +459,11 @@ export default function SignUpPage() {
                         <FileText className="h-5 w-5 text-secondary" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-foreground">{formData.businessLicense.name}</p>
+                        <p className="text-sm font-medium text-foreground" title={formData.businessLicense.name}>
+                          {formData.businessLicense.name.length > 20 
+                            ? formData.businessLicense.name.substring(0, 20) + '...' 
+                            : formData.businessLicense.name}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {(formData.businessLicense.size / 1024 / 1024).toFixed(2)} MB
                         </p>
@@ -552,7 +556,11 @@ export default function SignUpPage() {
                       <div key={index} className="flex items-center justify-between rounded-lg border bg-muted/30 p-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <Camera className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <span className="text-sm truncate">{photo.name}</span>
+                          <span className="text-sm truncate" title={photo.name}>
+                            {photo.name.length > 20 
+                              ? photo.name.substring(0, 20) + '...' 
+                              : photo.name}
+                          </span>
                         </div>
                         <Button
                           type="button"

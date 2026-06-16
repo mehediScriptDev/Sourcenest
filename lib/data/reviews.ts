@@ -1,6 +1,7 @@
 export interface Review {
   id: string
   supplierId: string
+  productId?: string
   buyerId: string
   buyerName: string
   buyerCompany?: string
@@ -395,4 +396,36 @@ export function getRecentReviews(limit: number = 10): Review[] {
 
 export function getAllReviewsForAdmin(): Review[] {
   return reviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+}
+
+export function getReviewsByProduct(productId: string): Review[] {
+  // Mock logic: return reviews where productId matches, or just return a few random published ones if not found
+  const productReviews = reviews.filter(r => r.productId === productId && r.status === "published")
+  // If none match specifically, just return some reviews for demo purposes, 
+  // since we haven't assigned productIds to all dummy reviews
+  if (productReviews.length === 0) {
+    return reviews.filter(r => r.status === "published").slice(0, 3)
+  }
+  return productReviews
+}
+
+export function getProductRatingSummary(productId: string) {
+  const productReviews = getReviewsByProduct(productId)
+  if (productReviews.length === 0) {
+    return { average: 0, total: 0, distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } }
+  }
+
+  const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+  let total = 0
+
+  productReviews.forEach(review => {
+    distribution[review.rating as keyof typeof distribution]++
+    total += review.rating
+  })
+
+  return {
+    average: Math.round((total / productReviews.length) * 10) / 10,
+    total: productReviews.length,
+    distribution
+  }
 }

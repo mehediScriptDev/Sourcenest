@@ -15,6 +15,7 @@ interface Industry {
   slug: string
   description: string
   icon: string
+  icon_color?: string
   supplierCount: number
   productCount: number
   featured?: boolean

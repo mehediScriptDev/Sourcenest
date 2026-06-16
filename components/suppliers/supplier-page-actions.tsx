@@ -133,12 +133,14 @@ export function SupplierPageActions({ supplier }: SupplierPageActionsProps) {
       )}
 
       {/* Report Button */}
+      {/*
       <ReportDialog type="supplier" targetId={supplier.id} targetName={supplier.name}>
         <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-destructive">
           <Flag className="h-4 w-4" />
           Report Supplier
         </Button>
       </ReportDialog>
+      */}
     </div>
   )
 }

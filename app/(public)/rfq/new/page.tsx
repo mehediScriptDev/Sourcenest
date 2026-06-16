@@ -21,6 +21,7 @@ import { createRFQ } from "@/lib/api/rfqs"
 import { suppliers } from "@/lib/data/suppliers"
 import { countries } from "@/lib/data/countries"
 import { useToast } from "@/hooks/use-toast"
+import Swal from "sweetalert2"
 import { 
   ArrowLeft,
   Package,
@@ -37,7 +38,10 @@ function NewRFQForm() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { toast } = useToast()
-  const productId = searchParams.get('product_id')
+  const productId = searchParams.get('product_id') || searchParams.get('product')
+  const supplierSlug = searchParams.get('supplier')
+  
+  const initialSupplier = supplierSlug ? suppliers.find(s => s.slug === supplierSlug) : null
   
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(!!productId)
@@ -45,7 +49,7 @@ function NewRFQForm() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   
-  const [selectedSupplier, setSelectedSupplier] = useState<typeof suppliers[0] | null>(null)
+  const [selectedSupplier, setSelectedSupplier] = useState<typeof suppliers[0] | null>(initialSupplier || null)
   const [manufacturerSearch, setManufacturerSearch] = useState("")
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false)
   
@@ -68,30 +72,63 @@ function NewRFQForm() {
     s.industry.toLowerCase().includes(manufacturerSearch.toLowerCase())
   ).slice(0, 8)
 
-  // Fetch product if product_id provided
   useEffect(() => {
     if (!productId) {
       setLoading(false)
       return
     }
 
-    const fetchProduct = async () => {
+    const fetchProductData = async () => {
       setLoading(true)
-      setError(null)
-      
-      const response = await getProduct(productId)
-      
-      if (response.success && response.data) {
-        setProduct(response.data)
-      } else {
-        setError(response.message || "Product not found")
+      try {
+        const response = await getProduct(productId)
+        if (response.success && response.data) {
+          const actualProduct = response.data
+          setProduct(actualProduct)
+          
+          if (!initialSupplier) {
+            setSelectedSupplier({
+              id: actualProduct.supplierId || "custom",
+              name: actualProduct.supplierName || "Supplier",
+              slug: actualProduct.supplierSlug || "supplier",
+              description: "",
+              shortDescription: "",
+              industry: "General",
+              industrySlug: "general",
+              categories: [],
+              location: {
+                city: "Global",
+                country: "International",
+                countryCode: "INT"
+              },
+              reviewed: true,
+              reviewedLevel: "basic",
+              yearEstablished: new Date().getFullYear(),
+              employeeCount: "Unknown",
+              productCount: 0,
+              rating: 5.0,
+              reviewCount: 0,
+              responseRate: 100,
+              responseTime: "Usually responds within 24h",
+              onTimeDelivery: 100,
+              certifications: [],
+              mainProducts: [],
+              exportMarkets: []
+            })
+          }
+        } else {
+          setError(response.message || "Product not found")
+        }
+      } catch (err) {
+        setError("Failed to fetch product data")
+      } finally {
+        setLoading(false)
       }
-      
-      setLoading(false)
     }
 
-    fetchProduct()
-  }, [productId])
+    fetchProductData()
+  }, [productId, initialSupplier])
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -117,43 +154,43 @@ function NewRFQForm() {
     setSubmitting(true)
     setSubmitError(null)
 
-    const rfqPayload = {
-      product_id: product.id,
-      quantity: parseInt(formData.quantity),
+    const payload = {
+      product_id: Number(product.id),
+      quantity: Number(formData.quantity),
       quantity_unit: formData.quantity_unit,
-      target_price: formData.target_price ? parseFloat(formData.target_price) : 0,
+      target_price: formData.target_price ? Number(formData.target_price) : 0,
       target_currency_code: formData.target_currency_code,
       required_delivery_date: formData.required_delivery_date,
       shipping_terms: formData.shipping_terms,
       destination_country: formData.destination_country,
       destination_port_city: formData.destination_port_city,
       packaging_details: formData.packaging_details,
-      additional_requirements: formData.additional_requirements || undefined,
+      additional_requirements: formData.additional_requirements
     }
 
-    const response = await createRFQ(rfqPayload)
-    
+    const response = await createRFQ(payload)
+
     if (response.success) {
-      // Show success toast
-      toast({
-        title: "Success! 🎉",
-        description: `Your RFQ for "${product.name}" has been sent successfully. Suppliers will review your request shortly.`,
-      })
-      
-      // Redirect after short delay to let user see the toast
-      setTimeout(() => {
+      Swal.fire({
+        title: 'Success! 🎉',
+        text: `Your RFQ for "${product.name}" has been sent successfully. Suppliers will review your request shortly.`,
+        icon: 'success',
+        confirmButtonColor: '#503322',
+        confirmButtonText: 'View My RFQs',
+        customClass: { confirmButton: 'text-white' }
+      }).then(() => {
         router.push('/dashboard/buyer/rfqs')
-      }, 1500)
+      })
     } else {
-      const errorMsg = response.message || "Failed to submit RFQ"
-      setSubmitError(errorMsg)
+      setSubmitError(response.message || "Failed to create RFQ")
       toast({
-        title: "Submission Failed",
-        description: errorMsg,
+        title: "Error",
+        description: response.message || "Failed to create RFQ. Please try again.",
         variant: "destructive",
       })
-      setSubmitting(false)
     }
+    
+    setSubmitting(false)
   }
 
   if (loading) {
@@ -208,10 +245,10 @@ function NewRFQForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Manufacturer Search */}
+        {/* Supplier */}
         <div className="rounded-xl border border-border bg-card p-6">
           <label className="text-sm font-medium text-foreground">
-            Search Manufacturer / Industry
+            Supplier
           </label>
           
           {selectedSupplier ? (
@@ -237,16 +274,17 @@ function NewRFQForm() {
                   </div>
                 </div>
               </div>
-              <button
+              <Button 
                 type="button"
+                variant="ghost" 
+                size="sm"
                 onClick={() => {
                   setSelectedSupplier(null)
                   setManufacturerSearch("")
                 }}
-                className="text-muted-foreground hover:text-foreground"
               >
-                <X className="h-5 w-5" />
-              </button>
+                Change
+              </Button>
             </div>
           ) : (
             <div className="mt-3 relative">

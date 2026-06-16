@@ -12,7 +12,7 @@ import { Loader2 } from "lucide-react"
 
 export default function MessagesPage() {
   const router = useRouter()
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const [selectedConvId, setSelectedConvId] = useState<string | undefined>()
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -21,10 +21,10 @@ export default function MessagesPage() {
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthLoading && !isAuthenticated) {
       router.push("/auth/signin")
     }
-  }, [isAuthenticated, router])
+  }, [isAuthLoading, isAuthenticated, router])
 
   const buildIncomingMessage = (data: any): ChatMessage | null => {
     const msg = data?.message
@@ -177,7 +177,7 @@ export default function MessagesPage() {
           </div>
 
           <div className="h-[calc(100vh-16rem)] min-h-125">
-            {isLoading ? (
+            {isLoading || isAuthLoading ? (
               <div className="flex h-full items-center justify-center rounded-xl border border-border bg-card">
                 <Loader2 className="h-8 w-8 animate-spin text-secondary" />
               </div>

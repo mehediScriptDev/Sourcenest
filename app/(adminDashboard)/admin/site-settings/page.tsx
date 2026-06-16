@@ -746,7 +746,7 @@ export default function SiteSettingsPage() {
                         }}
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <IconComp className="h-4 w-4 flex-shrink-0" />
+                          <IconComp className="h-4 w-4 shrink-0" />
                           <span className="text-sm truncate">{category.title}</span>
                           <Badge variant="secondary" className={`text-xs ${selectedCategory === category.id ? 'bg-primary-foreground/20' : ''}`}>
                             {category.articles.length}
@@ -1093,7 +1093,7 @@ export default function SiteSettingsPage() {
                   <div className="space-y-2">
                     {currentArticle.steps?.map((step, index) => (
                       <div key={index} className="flex items-start gap-2">
-                        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground mt-2">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground mt-2">
                           {index + 1}
                         </span>
                         <Textarea
@@ -1106,7 +1106,7 @@ export default function SiteSettingsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="text-destructive hover:text-destructive flex-shrink-0 mt-1"
+                          className="text-destructive hover:text-destructive shrink-0 mt-1"
                           onClick={() => deleteArticleStep(selectedArticle.categoryId, selectedArticle.articleId, index)}
                         >
                           <X className="h-4 w-4" />

@@ -32,11 +32,21 @@ import {
   Globe,
   HelpCircle,
   X,
-  User
+  User,
+  ShoppingBag,
+  LucideIcon
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const sidebarItems = [
+type SidebarItem = {
+  title: string
+  href: string
+  icon: LucideIcon
+  badge?: string
+  exact?: boolean
+}
+
+const sidebarItems: SidebarItem[] = [
   {
     title: "Overview",
     href: "/dashboard/buyer",
@@ -56,10 +66,15 @@ const sidebarItems = [
     exact: true
   },
   {
+    title: "Orders",
+    href: "/dashboard/buyer/orders",
+    icon: ShoppingBag,
+    exact: true
+  },
+  {
     title: "Messages",
     href: "/dashboard/buyer/messages",
     icon: MessageSquare,
-    badge: "5",
     exact: true
   },
   {
@@ -94,7 +109,8 @@ export default function BuyerDashboardLayout({
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push("/auth/signin")
+      const currentUrl = `${pathname}${window.location.search}`
+      router.push(`/auth/signin?callbackUrl=${encodeURIComponent(currentUrl)}`)
     }
     if (!isLoading && isAuthenticated && user?.role !== "buyer") {
       router.push(user?.role === "admin" ? "/admin" : "/dashboard/manufacturer")

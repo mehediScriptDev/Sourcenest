@@ -17,6 +17,7 @@ export interface Industry {
   productCount: number
   categories: Category[]
   featured?: boolean
+  icon_color?: string
 }
 
 export const industries: Industry[] = [

@@ -280,7 +280,11 @@ function SocialCompleteProfileContent() {
               {formData.businessLicense ? (
                 <div className="flex items-center justify-between rounded-lg border border-secondary/30 bg-secondary/5 p-3">
                   <div>
-                    <p className="text-sm font-medium text-foreground">{formData.businessLicense.name}</p>
+                    <p className="text-sm font-medium text-foreground" title={formData.businessLicense.name}>
+                      {formData.businessLicense.name.length > 20 
+                        ? formData.businessLicense.name.substring(0, 20) + '...' 
+                        : formData.businessLicense.name}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {(formData.businessLicense.size / 1024 / 1024).toFixed(2)} MB
                     </p>
@@ -327,8 +331,12 @@ function SocialCompleteProfileContent() {
               {formData.factoryPhotos.length > 0 && (
                 <div className="space-y-2">
                   {formData.factoryPhotos.map((photo, index) => (
-                    <div key={`${photo.name}-${index}`} className="flex items-center justify-between rounded-lg border p-2">
-                      <span className="truncate text-sm">{photo.name}</span>
+                    <div key={`${photo.name}-${index}`} className="flex items-center justify-between rounded-lg border p-2 min-w-0">
+                      <span className="truncate text-sm" title={photo.name}>
+                        {photo.name.length > 20 
+                          ? photo.name.substring(0, 20) + '...' 
+                          : photo.name}
+                      </span>
                       <Button
                         type="button"
                         variant="ghost"

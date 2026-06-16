@@ -5,6 +5,7 @@ import { Search, Send, MoreVertical, ArrowLeft, MessageSquare, User, Factory, Gl
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
@@ -41,6 +42,7 @@ interface ChatViewProps {
   onSendMessage: (text: string) => void
   selectedConversationId?: string
   isLoading?: boolean
+  initialMessage?: string
 }
 
 export function ChatView({
@@ -50,12 +52,19 @@ export function ChatView({
   onSelectConversation,
   onSendMessage,
   selectedConversationId,
-  isLoading = false
+  isLoading = false,
+  initialMessage = ""
 }: ChatViewProps) {
   const [showSidebar, setShowSidebar] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
-  const [newMessage, setNewMessage] = useState("")
+  const [newMessage, setNewMessage] = useState(initialMessage)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (initialMessage) {
+      setNewMessage(initialMessage)
+    }
+  }, [initialMessage, selectedConversationId])
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId)
   const otherParticipant = selectedConversation?.participants.find(p => p.id !== currentUser.id)
@@ -224,16 +233,13 @@ export function ChatView({
                     )}
                   >
                     <div className={cn(
-                      "max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 text-sm shadow-sm",
+                      "max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 text-sm shadow-sm whitespace-pre-wrap",
                       isMine 
                         ? "bg-secondary text-secondary-foreground rounded-tr-none" 
                         : "bg-card border border-border text-foreground rounded-tl-none"
                     )}>
                       {msg.text}
                     </div>
-                    <span className="mt-1 text-[10px] text-muted-foreground px-1">
-                      {msg.timestamp}
-                    </span>
                   </div>
                 )
               })}
@@ -244,12 +250,17 @@ export function ChatView({
               <div className="flex items-center gap-2">
                 {/* Attachment disabled: removed Paperclip button as requested */}
                 <div className="relative flex-1">
-                  <Input
+                  <Textarea
                     placeholder="Type a message..."
-                    className="pr-12 bg-muted/30 border-none focus-visible:ring-1 focus-visible:ring-secondary py-6"
+                    className="pr-12 bg-muted/30 border-none focus-visible:ring-1 focus-visible:ring-secondary min-h-[60px] py-3 resize-none"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSend()
+                      }
+                    }}
                   />
                   <Button 
                     size="icon" 

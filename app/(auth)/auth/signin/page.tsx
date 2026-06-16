@@ -80,7 +80,9 @@ export default function SignInPage() {
       const result = await login(formData.email, formData.password, activeTab)
 
       if (result.success) {
-        router.push(result.redirectTo)
+        const params = new URLSearchParams(window.location.search)
+        const callbackUrl = params.get("callbackUrl")
+        router.push(callbackUrl || result.redirectTo)
       } else if (result.requiresTwoFactor) {
         const params = new URLSearchParams({
           token: result.twoFactorToken,
@@ -126,7 +128,9 @@ export default function SignInPage() {
       const role = activeTab
       const result = await loginWithGoogle(credential, role)
       if (result.success) {
-        router.push(result.redirectTo)
+        const params = new URLSearchParams(window.location.search)
+        const callbackUrl = params.get("callbackUrl")
+        router.push(callbackUrl || result.redirectTo)
         return
       }
 

@@ -14,6 +14,21 @@ import {
   Globe,
   BarChart3
 } from "lucide-react"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  type ChartConfig
+} from "@/components/ui/chart"
 
 const metrics = [
   { label: "Total Revenue", value: "$1.2M", change: "+18.5%", trend: "up", icon: DollarSign },
@@ -40,6 +55,31 @@ const topIndustries = [
   { industry: "Home & Garden", suppliers: 134, products: 7823 },
   { industry: "Food & Agriculture", suppliers: 98, products: 3456 },
 ]
+
+const chartData = [
+  { name: "Jan", users: 4000, suppliers: 2400, rfqs: 2400 },
+  { name: "Feb", users: 5000, suppliers: 2500, rfqs: 2800 },
+  { name: "Mar", users: 5500, suppliers: 2600, rfqs: 3200 },
+  { name: "Apr", users: 7000, suppliers: 3100, rfqs: 3800 },
+  { name: "May", users: 9500, suppliers: 4200, rfqs: 4500 },
+  { name: "Jun", users: 11200, suppliers: 5100, rfqs: 5200 },
+  { name: "Jul", users: 12847, suppliers: 6200, rfqs: 6800 },
+]
+
+const chartConfig = {
+  users: {
+    label: "Users",
+    color: "var(--chart-1)",
+  },
+  suppliers: {
+    label: "Suppliers",
+    color: "var(--chart-2)",
+  },
+  rfqs: {
+    label: "RFQs",
+    color: "var(--chart-3)",
+  },
+} satisfies ChartConfig
 
 export default function AdminAnalyticsPage() {
   return (
@@ -82,7 +122,7 @@ export default function AdminAnalyticsPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Chart Placeholder */}
+        {/* Real Chart */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -91,16 +131,27 @@ export default function AdminAnalyticsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex h-64 items-center justify-center rounded-lg bg-muted/50">
-              <div className="text-center">
-                <BarChart3 className="mx-auto h-12 w-12 text-muted-foreground/30" />
-                <p className="mt-4 text-muted-foreground">
-                  Chart visualization would appear here
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Showing users, suppliers, and RFQs over time
-                </p>
-              </div>
+            <div className="h-80 w-full">
+              <ChartContainer config={chartConfig} className="h-full w-full">
+                <BarChart
+                  data={chartData}
+                  margin={{
+                    top: 20,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} wrapperStyle={{ paddingTop: "20px" }} />
+                  <Bar dataKey="users" fill="var(--color-users)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="suppliers" fill="var(--color-suppliers)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="rfqs" fill="var(--color-rfqs)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
             </div>
           </CardContent>
         </Card>

@@ -1,19 +1,24 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { ChatView, ChatConversation, ChatMessage, ChatParticipant } from "@/components/chat/chat-view"
 import { useAuth } from "@/lib/auth-context"
-import { getConversations, getMessages, sendMessage, markAsRead } from "@/lib/api/messages"
+import { getConversations, getMessages, sendMessage, markAsRead, createConversation } from "@/lib/api/messages"
 import { getEcho } from "@/lib/echo"
 import { Loader2 } from "lucide-react"
 
 export default function ManufacturerMessagesPage() {
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const [selectedConvId, setSelectedConvId] = useState<string | undefined>()
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isMessagesLoading, setIsMessagesLoading] = useState(false)
+  const [hasProcessedAutoMessage, setHasProcessedAutoMessage] = useState(false)
+  const [prefillMessage, setPrefillMessage] = useState("")
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
   const buildIncomingMessage = (data: any): ChatMessage | null => {
     const msg = data?.message
@@ -29,25 +34,105 @@ export default function ManufacturerMessagesPage() {
 
   // Fetch conversations
   useEffect(() => {
+    let isMounted = true;
     async function loadConversations() {
-      if (!isAuthenticated) return
+      if (!isAuthenticated || !user) return
       
       setIsLoading(true)
       try {
         const data = await getConversations()
-        setConversations(data)
-        if (data.length > 0 && !selectedConvId) {
-          setSelectedConvId(data[0].id)
+        
+        let finalConversations = data;
+        const hasAdmin = data.some(c => c.participants.some(p => p.id === "1" || p.role === "admin"));
+        
+        if (!hasAdmin && user.id) {
+          const newConv = await createConversation([1, user.id]);
+          if (newConv) {
+            finalConversations = [newConv, ...data];
+          }
+        }
+
+        if (isMounted) {
+          setConversations(finalConversations)
+          if (finalConversations.length > 0 && !selectedConvId) {
+            setSelectedConvId(finalConversations[0].id)
+          }
         }
       } catch (error) {
         console.error("Failed to load manufacturer conversations:", error)
       } finally {
-        setIsLoading(false)
+        if (isMounted) setIsLoading(false)
       }
     }
 
     loadConversations()
-  }, [isAuthenticated, selectedConvId])
+    return () => { isMounted = false; }
+  }, [isAuthenticated, user])
+
+  // Handle Auto Message
+  useEffect(() => {
+    async function processAutoMessage() {
+      if (!isAuthenticated || hasProcessedAutoMessage || conversations.length === 0) return
+      
+      const autoMessage = searchParams.get('auto_message')
+      const prefill = searchParams.get('prefill')
+      const supplierSlug = searchParams.get('supplier')
+      const productSlug = searchParams.get('product')
+      const productName = searchParams.get('productName') || productSlug
+      
+      if ((autoMessage === '1' || prefill === '1') && supplierSlug && productSlug) {
+        setHasProcessedAutoMessage(true)
+        
+        const isAutoSend = autoMessage === '1'
+        
+        // Remove query params to avoid duplicate sending on refresh
+        router.replace('/dashboard/manufacturer/messages')
+        
+        setIsMessagesLoading(true)
+        try {
+          let conv = conversations.find(c => c.participants.some(p => 
+            p.id === supplierSlug || 
+            (supplierSlug === "admin" && (p.id === "1" || p.role === "admin")) ||
+            p.name.toLowerCase().includes(supplierSlug.split('-')[0])
+          ))
+          
+          if (!conv) {
+            const supplierId = supplierSlug === "admin" ? 1 : supplierSlug;
+            conv = await createConversation([supplierId, user?.id?.toString() || "mfg-1"], `Inquiry about ${productSlug}`) || undefined;
+            if (conv) {
+              setConversations(prev => [conv!, ...prev])
+            }
+          }
+          
+          if (conv) {
+            setSelectedConvId(conv.id)
+            const defaultText = `Hello,\n\nI am interested in your product "${productName}".\n\nProduct Link: ${window.location.origin}/products/${productSlug}\n\n\nCould you please provide more details regarding pricing, minimum order quantity, and available shipping options?\n\nI look forward to hearing from you soon.\n\nBest regards.`
+            
+            if (isAutoSend) {
+              const sentMsg = await sendMessage(conv.id, defaultText)
+              if (sentMsg) {
+                setMessages(prev => [...prev, sentMsg])
+                setConversations(prev => prev.map(c => 
+                  c.id === conv!.id 
+                    ? { ...c, lastMessage: sentMsg, updatedAt: "Just now" } 
+                    : c
+                ))
+              }
+            } else {
+              setPrefillMessage(defaultText)
+            }
+          }
+        } catch (error) {
+          console.error("Auto message failed:", error)
+        } finally {
+          setIsMessagesLoading(false)
+        }
+      } else if (!selectedConvId && conversations.length > 0) {
+        setSelectedConvId(conversations[0].id)
+      }
+    }
+    processAutoMessage()
+  }, [isAuthenticated, searchParams, hasProcessedAutoMessage, conversations, selectedConvId, router, user])
 
   // Fetch messages
   useEffect(() => {
@@ -150,7 +235,7 @@ export default function ManufacturerMessagesPage() {
     }
   }
 
-  if (isLoading) {
+  if (isLoading || isAuthLoading) {
     return (
       <div className="flex h-[calc(100dvh-120px)] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-secondary" />
@@ -168,6 +253,7 @@ export default function ManufacturerMessagesPage() {
         onSendMessage={handleSendMessage}
         selectedConversationId={selectedConvId}
         isLoading={isMessagesLoading}
+        initialMessage={prefillMessage}
       />
     </div>
   )

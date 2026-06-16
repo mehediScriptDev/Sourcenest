@@ -314,6 +314,30 @@ export default function AddProductPage() {
       toast.error("Add at least one product image.")
       return
     }
+    if (!formData.name.trim()) {
+      toast.error("Please enter a product name.")
+      return
+    }
+    if (!formData.description.trim()) {
+      toast.error("Please enter a product description.")
+      return
+    }
+    if (!formData.priceMin.trim() || isNaN(Number(formData.priceMin))) {
+      toast.error("Please enter a valid minimum price.")
+      return
+    }
+    if (!formData.priceMax.trim() || isNaN(Number(formData.priceMax))) {
+      toast.error("Please enter a valid maximum price.")
+      return
+    }
+    if (!formData.moq.trim() || isNaN(Number(formData.moq))) {
+      toast.error("Please enter a minimum order quantity (MOQ).")
+      return
+    }
+    if (!formData.leadTime.trim()) {
+      toast.error("Please enter a lead time.")
+      return
+    }
 
     setIsSubmitting(true)
     const status: ManufacturerProductStatus = saveAsDraft ? "draft" : "active"
@@ -425,7 +449,6 @@ export default function AddProductPage() {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., Wireless Bluetooth Earbuds TWS"
                 className="mt-2"
-                required
               />
             </div>
 
@@ -437,7 +460,6 @@ export default function AddProductPage() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Describe your product in detail, including key features and benefits..."
                 className="mt-2 min-h-[120px]"
-                required
               />
             </div>
 
@@ -595,7 +617,6 @@ export default function AddProductPage() {
                     onChange={(e) => setFormData({ ...formData, priceMin: e.target.value })}
                     placeholder="0.00"
                     className="pl-7"
-                    required
                   />
                 </div>
               </div>
@@ -612,7 +633,6 @@ export default function AddProductPage() {
                     onChange={(e) => setFormData({ ...formData, priceMax: e.target.value })}
                     placeholder="0.00"
                     className="pl-7"
-                    required
                   />
                 </div>
               </div>
@@ -648,7 +668,6 @@ export default function AddProductPage() {
                     value={formData.moq}
                     onChange={(e) => setFormData({ ...formData, moq: e.target.value })}
                     placeholder="100"
-                    required
                   />
                   <Select 
                     value={formData.moqUnit} 
@@ -676,7 +695,6 @@ export default function AddProductPage() {
                   onChange={(e) => setFormData({ ...formData, leadTime: e.target.value })}
                   placeholder="e.g., 15-20 days"
                   className="mt-2"
-                  required
                 />
               </div>
             </div>

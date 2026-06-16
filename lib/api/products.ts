@@ -1,4 +1,4 @@
-import { apiClient } from "./client"
+import { apiClient, publicApiClient } from "./client"
 import { getApiErrorMessage } from "./errors"
 
 // Types based on backend response
@@ -179,35 +179,135 @@ function toBoolean(value: unknown, fallback = false): boolean {
   return fallback
 }
 
+import { products as dummyProducts } from "../data/products"
+
+// Helper to convert dummy static product to API payload format
+function dummyToApiPayload(dummy: any) {
+  return {
+    id: dummy.id,
+    name: dummy.name,
+    slug: dummy.slug,
+    description: dummy.description,
+    price: { amount: dummy.price?.min?.toString() || "0", currency: dummy.price?.currency || "USD" },
+    price_display: `$${dummy.price?.min} - $${dummy.price?.max}`,
+    conversion_available: false,
+    quantity: "1000",
+    inquiry_count: dummy.featured ? 150 : 10,
+    view_count: 500,
+    is_approved: true,
+    image: dummy.images?.[0] || null,
+    status: "active",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    available_locales: ["en"],
+    supplier_id: dummy.supplierId,
+    supplier_slug: dummy.supplierSlug,
+    supplier_name: dummy.supplierName,
+    category: {
+      id: 1,
+      name: dummy.category,
+      slug: dummy.categorySlug,
+      description: null,
+      icon: null,
+      icon_url: null,
+      color: null,
+      featured: 1,
+      sort_order: 1,
+    },
+    sub_category: {
+      id: 1,
+      name: dummy.category,
+      slug: dummy.categorySlug,
+      icon: null,
+      icon_url: null,
+      sort_order: 1,
+    },
+    images: dummy.images || [],
+    pricing_quantities: {
+      id: 1,
+      min_price: {
+        price: { amount: dummy.price?.min?.toString() || "0", currency: dummy.price?.currency || "USD" },
+        price_display: null,
+        conversion_available: false,
+      },
+      max_price: {
+        price: { amount: dummy.price?.max?.toString() || "0", currency: dummy.price?.currency || "USD" },
+        price_display: null,
+        conversion_available: false,
+      },
+      currency: {
+        id: 1,
+        code: dummy.price?.currency || "USD",
+        name: dummy.price?.currency === "USD" ? "US Dollar" : dummy.price?.currency,
+        symbol: "$",
+        decimal_places: 2,
+        is_base: true,
+        is_active: 1,
+        sort_order: 0,
+      },
+      minimum_order_quantity: dummy.moq,
+      unit: dummy.moqUnit,
+      lead_time: dummy.leadTime,
+      production_capacity: 10000,
+      production_duration: "30 days",
+      production_unit: dummy.moqUnit,
+    },
+    specifications: Object.entries(dummy.specifications || {}).map(([key, value], i) => ({
+      id: i + 1,
+      specification_title: key,
+      specification_value: value as string,
+    })),
+    product_key_features: (dummy.keyFeatures || []).map((feature: string, i: number) => ({
+      id: i + 1,
+      value: feature,
+    })),
+    customization_options: (dummy.customizationOptions || []).map((opt: string, i: number) => ({
+      id: i + 1,
+      option: opt,
+    })),
+    shipping_packaging: {
+      id: 1,
+      packaging_type: dummy.packagingDetails?.type || "Standard",
+      port_of_loading: "Shenzhen",
+      packaging_dimensions: dummy.packagingDetails?.dimensions || "",
+      packaging_weight: dummy.packagingDetails?.weight || "",
+      packaging_description: dummy.packagingDetails?.description || "",
+      packaging_cost_per_unit: {
+        price: { amount: "0.00", currency: "USD" },
+        price_display: null,
+        conversion_available: false,
+      },
+    },
+    available_options: null,
+    shipping_methods: [],
+  };
+}
+
 // Fetch all products
 export async function getProducts(
   page = 1,
   filters?: Record<string, unknown>
 ): Promise<GetProductsResponse> {
   try {
-    const params: Record<string, unknown> = {
-      ...filters,
+    const params = { page, ...filters }
+    const response = await publicApiClient.get<GetProductsResponse>("/products", { params })
+    
+    if (response.data && Array.isArray(response.data.data)) {
+      response.data.data = response.data.data.map(item => normalizeProduct(item))
+      
+      // Ensure meta is correctly formatted if present
+      if (response.data.meta) {
+        response.data.meta = normalizeMeta(response.data.meta)
+      }
     }
-
-    if (page !== 1) {
-      params.page = page
-    }
-
-    const response = await apiClient.get("/products", { params })
-    const payload = toRecord(response.data)
-    const rows = Array.isArray(payload.data) ? payload.data : []
-
-    return {
-      success: toBoolean(payload.success, true),
-      message: toString(payload.message),
-      data: rows.map((row) => normalizeProduct(row)),
-      meta: payload.meta ? normalizeMeta(payload.meta) : undefined,
-    }
-  } catch (error: unknown) {
+    
+    return response.data
+  } catch (error) {
+    console.error("Error fetching products:", error)
     return {
       success: false,
-      message: getApiErrorMessage(error, "Failed to fetch products."),
-      data: [],
+      message: getApiErrorMessage(error) || "Failed to fetch products",
+      data: []
     }
   }
 }
@@ -215,19 +315,19 @@ export async function getProducts(
 // Fetch single product
 export async function getProduct(slug: string): Promise<GetProductResponse> {
   try {
-    const response = await apiClient.get(`/products/${slug}`)
-    const payload = toRecord(response.data)
-
-    return {
-      success: toBoolean(payload.success, true),
-      message: toString(payload.message),
-      data: payload.data ? normalizeProduct(payload.data) : null,
+    const response = await publicApiClient.get<GetProductResponse>(`/products/${slug}`)
+    
+    if (response.data && response.data.data) {
+      response.data.data = normalizeProduct(response.data.data)
     }
-  } catch (error: unknown) {
+    
+    return response.data
+  } catch (error) {
+    console.error(`Error fetching product ${slug}:`, error)
     return {
       success: false,
-      message: getApiErrorMessage(error, "Failed to fetch product."),
-      data: null,
+      message: getApiErrorMessage(error) || "Product not found.",
+      data: null
     }
   }
 }
@@ -257,7 +357,11 @@ function normalizeProduct(payload: unknown): Product {
     inquiry_count: toNumber(product.inquiry_count, 0),
     view_count: toNumber(product.view_count, 0),
     is_approved: toBoolean(product.is_approved, false),
-    image: product.image ? toString(product.image) : null,
+    image: product.image 
+      ? toString(product.image) 
+      : (Array.isArray(product.images) && product.images.length > 0 
+          ? (typeof product.images[0] === "string" ? product.images[0] : (product.images[0] as any).url || (product.images[0] as any).file_path || (product.images[0] as any).path || (product.images[0] as any).image_url || null)
+          : null),
     status: toString(product.status, "active"),
     created_at: toString(product.created_at),
     updated_at: toString(product.updated_at),
@@ -278,7 +382,9 @@ function normalizeProduct(payload: unknown): Product {
     ) || undefined,
     category: normalizeCategory(product.category),
     sub_category: normalizeSubCategory(product.sub_category),
-    images: Array.isArray(product.images) ? (product.images as string[]) : [],
+    images: Array.isArray(product.images) 
+      ? product.images.map((img: any) => typeof img === "string" ? img : img.url || img.file_path || img.path || img.image_url || "").filter(Boolean) 
+      : [],
     pricing_quantities: {
       id: toNumber(pricingQuantities.id),
       min_price: {

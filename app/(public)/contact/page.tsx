@@ -36,6 +36,8 @@ import {
   type InquiryType,
   type FormField,
 } from "@/lib/data/contact-settings"
+import { submitContactForm } from "@/lib/api/contact"
+import Swal from "sweetalert2"
 
 // Icon mapping for dynamic rendering
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -72,10 +74,32 @@ export default function ContactPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-    // Simulate form submission
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    
+    // Map form data to API payload
+    const payload = {
+      name: formData.name || "",
+      email: formData.email || "",
+      company_name: formData.company_name || formData.company || "",
+      inquiry_type: formData.inquiry_type || formData.subject || "general",
+      message: formData.message || "",
+      is_read: false
+    }
+
+    const response = await submitContactForm(payload)
+    
     setIsSubmitting(false)
-    setSubmitted(true)
+    
+    if (response.success) {
+      setSubmitted(true)
+    } else {
+      Swal.fire({
+        icon: "error",
+        title: "Submission Failed",
+        text: response.message || "Something went wrong while sending your message.",
+        confirmButtonColor: "#6366f1",
+        customClass: { confirmButton: "rounded-lg px-6 py-2 font-semibold" },
+      })
+    }
   }
 
   const resetForm = () => {

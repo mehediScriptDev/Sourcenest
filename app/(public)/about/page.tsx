@@ -37,13 +37,6 @@ export default function AboutPage() {
     },
   ]
 
-  const stats = [
-    { value: "50+", label: t.about.stats.countries },
-    { value: "2,000+", label: t.about.stats.suppliers },
-    { value: "15,000+", label: t.about.stats.products },
-    { value: "45+", label: t.about.stats.industries },
-  ]
-
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -75,20 +68,6 @@ export default function AboutPage() {
                 <p>{t.about.story.p3}</p>
                 <p>{t.about.story.p4}</p>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Stats */}
-        <section className="bg-muted/50 py-16">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:grid-cols-4">
-              {stats.map((stat) => (
-                <div key={stat.label} className="text-center">
-                  <div className="font-serif text-4xl font-medium text-foreground">{stat.value}</div>
-                  <div className="mt-2 text-muted-foreground">{stat.label}</div>
-                </div>
-              ))}
             </div>
           </div>
         </section>

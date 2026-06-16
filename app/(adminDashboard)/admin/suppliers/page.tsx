@@ -315,7 +315,7 @@ export default function AdminSuppliersPage() {
                     onCheckedChange={() => toggleSelect(supplier.id)}
                   />
                   <div className="flex items-start gap-4 flex-1">
-                    <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-muted">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-muted">
                       <Factory className="h-7 w-7 text-muted-foreground" />
                     </div>
                     <div className="flex-1">
@@ -330,17 +330,17 @@ export default function AdminSuppliersPage() {
                     </div>
                   </div>
                   
-                  <div className="w-32 flex-shrink-0">
+                  <div className="w-32 shrink-0">
                     <Badge className={config.color}>
                       {config.label}
                     </Badge>
                   </div>
 
-                  <div className="w-24 flex-shrink-0 text-sm text-muted-foreground">
+                  <div className="w-24 shrink-0 text-sm text-muted-foreground">
                     N/A
                   </div>
 
-                  <div className="flex items-center gap-2 w-32 flex-shrink-0">
+                  <div className="flex items-center gap-2 w-32 shrink-0">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon">

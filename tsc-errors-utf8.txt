@@ -1,0 +1,206 @@
+﻿.next/dev/types/validator.ts(981,31): error TS2344: Type 'typeof import("C:/dev/readywithfixes/app/api/buyer/rfqs/[id]/respond-quote/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/buyer/rfqs/[id]/respond-quote">'.
+  Types of property 'POST' are incompatible.
+    Type '(request: NextRequest, { params }: { params: { id: string; }; }) => Promise<NextResponse<RespondQuoteResponse>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ id: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{ id: string; }>; }' is not assignable to type '{ params: { id: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'id' is missing in type 'Promise<{ id: string; }>' but required in type '{ id: string; }'.
+.next/types/validator.ts(981,31): error TS2344: Type 'typeof import("C:/dev/readywithfixes/app/api/buyer/rfqs/[id]/respond-quote/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/buyer/rfqs/[id]/respond-quote">'.
+  Types of property 'POST' are incompatible.
+    Type '(request: NextRequest, { params }: { params: { id: string; }; }) => Promise<NextResponse<RespondQuoteResponse>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ id: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{ id: string; }>; }' is not assignable to type '{ params: { id: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'id' is missing in type 'Promise<{ id: string; }>' but required in type '{ id: string; }'.
+anotehrtest/app/admin/industries/page.tsx(324,24): error TS18048: 'cat.subcategories' is possibly 'undefined'.
+anotehrtest/app/admin/service-providers/page.tsx(33,75): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/app/admin/service-providers/page.tsx(80,62): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/admin/service-providers/page.tsx(80,65): error TS7006: Parameter 'i' implicitly has an 'any' type.
+anotehrtest/app/admin/service-providers/page.tsx(226,39): error TS7006: Parameter 'c' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(49,8): error TS2307: Cannot find module '@/lib/support-context' or its corresponding type declarations.
+anotehrtest/app/admin/support/page.tsx(132,40): error TS7006: Parameter 'c' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(133,43): error TS7006: Parameter 'c' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(134,44): error TS7006: Parameter 'c' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(135,66): error TS7006: Parameter 'v' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(136,54): error TS7006: Parameter 'a' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(136,57): error TS7006: Parameter 'b' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(152,16): error TS7006: Parameter 'conv' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(157,16): error TS7006: Parameter 'conv' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(166,14): error TS7006: Parameter 'a' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(166,17): error TS7006: Parameter 'b' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(173,38): error TS7006: Parameter 'c' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(267,29): error TS7006: Parameter 'conv' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(403,39): error TS7006: Parameter 'm' implicitly has an 'any' type.
+anotehrtest/app/admin/support/page.tsx(403,42): error TS7006: Parameter 'i' implicitly has an 'any' type.
+anotehrtest/app/assistant/page.tsx(59,37): error TS2307: Cannot find module '@/components/assistant/landed-cost-estimator' or its corresponding type declarations.
+anotehrtest/app/auth/signin/page.tsx(56,12): error TS2678: Type '"service-provider"' is not comparable to type 'UserRole'.
+anotehrtest/app/auth/signin/page.tsx(213,15): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"service-provider"' have no overlap.
+anotehrtest/app/auth/signup/page.tsx(119,28): error TS2339: Property 'redirectTo' does not exist on type '{ success: true; pendingReview: true; message: string; manufactureStatus?: string | null | undefined; } | { success: true; pendingReview: false; redirectTo: string; message?: string | undefined; }'.
+  Property 'redirectTo' does not exist on type '{ success: true; pendingReview: true; message: string; manufactureStatus?: string | null | undefined; }'.
+anotehrtest/app/dashboard/buyer/page.tsx(5,29): error TS2307: Cannot find module '@/components/shared/status-badge' or its corresponding type declarations.
+anotehrtest/app/dashboard/buyer/page.tsx(6,50): error TS2307: Cannot find module '@/components/shared/journey-stepper' or its corresponding type declarations.
+anotehrtest/app/dashboard/buyer/page.tsx(7,30): error TS2307: Cannot find module '@/components/shared/next-step-card' or its corresponding type declarations.
+anotehrtest/app/dashboard/buyer/service-requests/page.tsx(5,63): error TS2307: Cannot find module '@/lib/service-requests-context' or its corresponding type declarations.
+anotehrtest/app/dashboard/buyer/service-requests/page.tsx(44,6): error TS7006: Parameter 'r' implicitly has an 'any' type.
+anotehrtest/app/dashboard/buyer/service-requests/page.tsx(50,35): error TS7006: Parameter 'r' implicitly has an 'any' type.
+anotehrtest/app/dashboard/buyer/service-requests/page.tsx(78,28): error TS7006: Parameter 'r' implicitly has an 'any' type.
+anotehrtest/app/dashboard/buyer/service-requests/page.tsx(147,39): error TS7006: Parameter 'm' implicitly has an 'any' type.
+anotehrtest/app/dashboard/buyer/support/page.tsx(3,33): error TS2307: Cannot find module '@/components/support/customer-support' or its corresponding type declarations.
+anotehrtest/app/dashboard/manufacturer/page.tsx(4,29): error TS2307: Cannot find module '@/components/shared/status-badge' or its corresponding type declarations.
+anotehrtest/app/dashboard/manufacturer/page.tsx(5,50): error TS2307: Cannot find module '@/components/shared/journey-stepper' or its corresponding type declarations.
+anotehrtest/app/dashboard/manufacturer/page.tsx(6,30): error TS2307: Cannot find module '@/components/shared/next-step-card' or its corresponding type declarations.
+anotehrtest/app/dashboard/manufacturer/support/page.tsx(3,33): error TS2307: Cannot find module '@/components/support/customer-support' or its corresponding type declarations.
+anotehrtest/app/dashboard/service-provider/layout.tsx(54,33): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"service-provider"' have no overlap.
+anotehrtest/app/dashboard/service-provider/layout.tsx(70,16): error TS2367: This comparison appears to be unintentional because the types 'UserRole' and '"service-provider"' have no overlap.
+anotehrtest/app/dashboard/service-provider/layout.tsx(74,23): error TS2339: Property 'serviceProviderStatus' does not exist on type 'User'.
+anotehrtest/app/dashboard/service-provider/messages/page.tsx(5,36): error TS2307: Cannot find module '@/lib/service-requests-context' or its corresponding type declarations.
+anotehrtest/app/dashboard/service-provider/messages/page.tsx(21,33): error TS7006: Parameter 'r' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/messages/page.tsx(46,28): error TS7006: Parameter 'r' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/messages/page.tsx(77,41): error TS7006: Parameter 'm' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/page.tsx(5,36): error TS2307: Cannot find module '@/lib/service-requests-context' or its corresponding type declarations.
+anotehrtest/app/dashboard/service-provider/page.tsx(6,34): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/app/dashboard/service-provider/page.tsx(23,43): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/page.tsx(25,42): error TS7006: Parameter 'r' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/page.tsx(84,42): error TS7006: Parameter 'req' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/profile/page.tsx(10,8): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/app/dashboard/service-provider/profile/page.tsx(29,43): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/profile/page.tsx(81,43): error TS7006: Parameter 'c' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/profile/page.tsx(139,45): error TS7006: Parameter 'o' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/profile/page.tsx(154,36): error TS7006: Parameter 'lang' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/requests/page.tsx(5,63): error TS2307: Cannot find module '@/lib/service-requests-context' or its corresponding type declarations.
+anotehrtest/app/dashboard/service-provider/requests/page.tsx(42,37): error TS7006: Parameter 'r' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/requests/page.tsx(70,30): error TS7006: Parameter 'req' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/requests/page.tsx(157,48): error TS7006: Parameter 'name' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/requests/page.tsx(174,45): error TS7006: Parameter 'm' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/services/page.tsx(5,34): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/app/dashboard/service-provider/services/page.tsx(32,43): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/services/page.tsx(34,68): error TS7006: Parameter 'name' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/services/page.tsx(34,74): error TS7006: Parameter 'i' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/settings/page.tsx(5,34): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/app/dashboard/service-provider/settings/page.tsx(15,43): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/subscription/page.tsx(5,76): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/app/dashboard/service-provider/subscription/page.tsx(14,43): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/subscription/page.tsx(27,31): error TS7006: Parameter 'pkg' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/subscription/page.tsx(49,36): error TS7006: Parameter 'f' implicitly has an 'any' type.
+anotehrtest/app/dashboard/service-provider/support/page.tsx(3,33): error TS2307: Cannot find module '@/components/support/customer-support' or its corresponding type declarations.
+anotehrtest/app/for-service-providers/page.tsx(4,41): error TS2307: Cannot find module '@/components/service-providers/service-provider-packages' or its corresponding type declarations.
+anotehrtest/app/for-service-providers/page.tsx(5,35): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/app/for-service-providers/page.tsx(107,37): error TS7006: Parameter 'category' implicitly has an 'any' type.
+anotehrtest/app/industries/[slug]/page.tsx(559,27): error TS18048: 'product.price' is possibly 'undefined'.
+anotehrtest/app/industries/[slug]/page.tsx(559,61): error TS18048: 'product.price' is possibly 'undefined'.
+anotehrtest/app/layout.tsx(7,41): error TS2307: Cannot find module '@/lib/service-requests-context' or its corresponding type declarations.
+anotehrtest/app/layout.tsx(10,33): error TS2307: Cannot find module '@/lib/support-context' or its corresponding type declarations.
+anotehrtest/app/messages/new/page.tsx(13,42): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/app/page.tsx(4,33): error TS2307: Cannot find module '@/components/home/smart-rfq-section' or its corresponding type declarations.
+anotehrtest/app/page.tsx(5,35): error TS2307: Cannot find module '@/components/home/ai-sourcing-section' or its corresponding type declarations.
+anotehrtest/app/page.tsx(6,40): error TS2307: Cannot find module '@/components/home/offer-comparison-section' or its corresponding type declarations.
+anotehrtest/app/page.tsx(7,32): error TS2307: Cannot find module '@/components/home/ai-tools-section' or its corresponding type declarations.
+anotehrtest/app/service-providers/[slug]/page.tsx(12,38): error TS2307: Cannot find module '@/components/service-providers/request-service-dialog' or its corresponding type declarations.
+anotehrtest/app/service-providers/[slug]/page.tsx(13,33): error TS2307: Cannot find module '@/components/service-providers/provider-reviews' or its corresponding type declarations.
+anotehrtest/app/service-providers/[slug]/page.tsx(20,8): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/app/service-providers/[slug]/page.tsx(22,37): error TS2307: Cannot find module '@/components/service-providers/service-provider-card' or its corresponding type declarations.
+anotehrtest/app/service-providers/[slug]/page.tsx(49,14): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/service-providers/[slug]/page.tsx(154,52): error TS7006: Parameter 'service' implicitly has an 'any' type.
+anotehrtest/app/service-providers/[slug]/page.tsx(170,48): error TS7006: Parameter 'src' implicitly has an 'any' type.
+anotehrtest/app/service-providers/[slug]/page.tsx(170,53): error TS7006: Parameter 'i' implicitly has an 'any' type.
+anotehrtest/app/service-providers/[slug]/page.tsx(200,55): error TS7006: Parameter 'cert' implicitly has an 'any' type.
+anotehrtest/app/service-providers/[slug]/page.tsx(275,48): error TS7006: Parameter 'lang' implicitly has an 'any' type.
+anotehrtest/app/service-providers/[slug]/page.tsx(288,57): error TS7006: Parameter 'code' implicitly has an 'any' type.
+anotehrtest/app/service-providers/[slug]/page.tsx(308,33): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(25,8): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/app/service-providers/page.tsx(27,37): error TS2307: Cannot find module '@/components/service-providers/service-provider-card' or its corresponding type declarations.
+anotehrtest/app/service-providers/page.tsx(28,30): error TS2307: Cannot find module '@/components/service-providers/service-match' or its corresponding type declarations.
+anotehrtest/app/service-providers/page.tsx(68,52): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(77,52): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(78,56): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(96,45): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(101,32): error TS7006: Parameter 's' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(278,32): error TS7006: Parameter 'provider' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(313,39): error TS7006: Parameter 'category' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(367,51): error TS7006: Parameter 'c' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(401,53): error TS7006: Parameter 'o' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(418,50): error TS7006: Parameter 'l' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(435,45): error TS7006: Parameter 'r' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(504,50): error TS7006: Parameter 'c' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(512,52): error TS7006: Parameter 'o' implicitly has an 'any' type.
+anotehrtest/app/service-providers/page.tsx(523,36): error TS7006: Parameter 'provider' implicitly has an 'any' type.
+anotehrtest/components/layout/header.tsx(191,12): error TS2678: Type '"service-provider"' is not comparable to type 'UserRole'.
+anotehrtest/components/service-providers/provider-reviews.tsx(9,8): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/components/service-providers/provider-reviews.tsx(47,27): error TS7006: Parameter 'row' implicitly has an 'any' type.
+anotehrtest/components/service-providers/provider-reviews.tsx(67,23): error TS7006: Parameter 'review' implicitly has an 'any' type.
+anotehrtest/components/service-providers/request-service-dialog.tsx(6,36): error TS2307: Cannot find module '@/lib/service-requests-context' or its corresponding type declarations.
+anotehrtest/components/service-providers/request-service-dialog.tsx(7,38): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/components/service-providers/request-service-dialog.tsx(153,52): error TS7006: Parameter 'service' implicitly has an 'any' type.
+anotehrtest/components/service-providers/service-match.tsx(10,8): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/components/service-providers/service-match.tsx(116,56): error TS7006: Parameter 'p' implicitly has an 'any' type.
+anotehrtest/components/service-providers/service-match.tsx(156,54): error TS7006: Parameter 'c' implicitly has an 'any' type.
+anotehrtest/components/service-providers/service-provider-card.tsx(4,38): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/components/service-providers/service-provider-card.tsx(5,76): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/components/service-providers/service-provider-card.tsx(9,38): error TS2307: Cannot find module '@/components/service-providers/request-service-dialog' or its corresponding type declarations.
+anotehrtest/components/service-providers/service-provider-packages.tsx(5,33): error TS2307: Cannot find module '@/lib/data/service-providers' or its corresponding type declarations.
+anotehrtest/components/service-providers/service-provider-packages.tsx(16,28): error TS2367: This comparison appears to be unintentional because the types 'UserRole | undefined' and '"service-provider"' have no overlap.
+anotehrtest/components/service-providers/service-provider-packages.tsx(29,29): error TS7006: Parameter 'pkg' implicitly has an 'any' type.
+anotehrtest/components/service-providers/service-provider-packages.tsx(47,32): error TS7006: Parameter 'f' implicitly has an 'any' type.
+anotehrtest/components/support/customer-support.tsx(17,8): error TS2307: Cannot find module '@/lib/support-context' or its corresponding type declarations.
+anotehrtest/components/support/customer-support.tsx(82,31): error TS7006: Parameter 'c' implicitly has an 'any' type.
+anotehrtest/components/support/customer-support.tsx(168,34): error TS7006: Parameter 'conv' implicitly has an 'any' type.
+anotehrtest/components/support/customer-support.tsx(285,39): error TS7006: Parameter 'm' implicitly has an 'any' type.
+anotehrtest/components/support/customer-support.tsx(285,42): error TS7006: Parameter 'i' implicitly has an 'any' type.
+anotehrtest/lib/favorites-context.tsx(143,24): error TS2339: Property 'priceRange' does not exist on type 'Product'.
+anotehrtest/lib/favorites-context.tsx(144,9): error TS2322: Type 'number' is not assignable to type 'string'.
+app/(adminDashboard)/admin/layout.tsx(69,21): error TS2339: Property 'adminOrders' does not exist on type '{ readonly dashboard: "Dashboard"; readonly users: "Users"; readonly suppliers: "Suppliers"; readonly products: "Products"; readonly industries: "Industries"; readonly reviews: "Reviews"; ... 86 more ...; readonly adminSignOut: "Sign Out"; }'.
+app/(adminDashboard)/admin/layout.tsx(71,21): error TS2339: Property 'adminSupportTickets' does not exist on type '{ readonly dashboard: "Dashboard"; readonly users: "Users"; readonly suppliers: "Suppliers"; readonly products: "Products"; readonly industries: "Industries"; readonly reviews: "Reviews"; ... 86 more ...; readonly adminSignOut: "Sign Out"; }'.
+app/(adminDashboard)/admin/messages/page.tsx(124,15): error TS2339: Property 'bind' does not exist on type 'PusherPrivateChannel<"pusher">'.
+app/(adminDashboard)/admin/messages/page.tsx(124,31): error TS2339: Property 'bind' does not exist on type 'PusherPrivateChannel<"pusher">'.
+app/(adminDashboard)/admin/messages/page.tsx(128,15): error TS2339: Property 'bind' does not exist on type 'PusherPrivateChannel<"pusher">'.
+app/(adminDashboard)/admin/messages/page.tsx(128,31): error TS2339: Property 'bind' does not exist on type 'PusherPrivateChannel<"pusher">'.
+app/(auth)/auth/signup/page.tsx(146,46): error TS2339: Property 'registrationFailed' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(236,31): error TS2339: Property 'free' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(240,31): error TS2339: Property 'directMessaging' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(244,31): error TS2339: Property 'unlimitedRFQs' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(267,31): error TS2339: Property 'globalVisibility' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(271,31): error TS2339: Property 'reviewedBadge' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(275,31): error TS2339: Property 'noCommissionFees' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(300,23): error TS2339: Property 'backToRoleSelection' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(307,25): error TS2339: Property 'startSourcing' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(308,25): error TS2339: Property 'completeRegistration' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(417,68): error TS2339: Property 'passwordMinLength' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(429,75): error TS2339: Property 'reviewDocsRequired' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(431,33): error TS2339: Property 'reviewDocsDescription' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(509,29): error TS2339: Property 'cityDescription' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(536,29): error TS2339: Property 'uploadFactoryDesc' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(581,31): error TS2551: Property 'addFactoryPhotos' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'. Did you mean 'factoryPhotos'?
+app/(auth)/auth/signup/page.tsx(619,27): error TS2339: Property 'termsOfService' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(623,27): error TS2339: Property 'privacyPolicy' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(645,31): error TS2551: Property 'creatingAccount' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'. Did you mean 'createAccount'?
+app/(auth)/auth/signup/page.tsx(648,28): error TS2551: Property 'createFreeAccount' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'. Did you mean 'createAccount'?
+app/(auth)/auth/signup/page.tsx(650,28): error TS2339: Property 'submitForReview' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(auth)/auth/signup/page.tsx(671,19): error TS2339: Property 'alreadyHaveAccount' does not exist on type '{ readonly signIn: "Sign In"; readonly signOut: "Sign Out"; readonly signUp: "Sign Up"; readonly email: "Email Address"; readonly password: "Password"; readonly forgotPassword: "Forgot Password?"; ... 80 more ...; readonly emailMissing: "Email is missing. Please request a reset code again."; }'.
+app/(manufacturerDashboard)/dashboard/manufacturer/products/page.tsx(255,7): error TS2322: Type 'number | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+app/(manufacturerDashboard)/dashboard/manufacturer/products/page.tsx(256,7): error TS2322: Type 'number | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+app/(manufacturerDashboard)/dashboard/manufacturer/products/page.tsx(257,7): error TS2322: Type 'number | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+app/(manufacturerDashboard)/dashboard/manufacturer/support-tickets/[ticketId]/page.tsx(11,7): error TS2322: Type '{ basePath: string; initialTicketId: string; }' is not assignable to type 'IntrinsicAttributes & CustomerSupportChatViewProps'.
+  Property 'initialTicketId' does not exist on type 'IntrinsicAttributes & CustomerSupportChatViewProps'.
+app/(manufacturerDashboard)/dashboard/manufacturer/support-tickets/page.tsx(4,11): error TS2741: Property 'title' is missing in type '{ basePath: string; }' but required in type 'CustomerSupportChatViewProps'.
+app/(public)/messages/new/page.tsx(162,39): error TS2339: Property 'verified' does not exist on type 'Supplier'.
+app/(public)/messages/new/page.tsx(225,32): error TS2339: Property 'verified' does not exist on type 'Supplier'.
+app/(public)/products/page.tsx(189,90): error TS2339: Property 'filters' does not exist on type '{ readonly pageTitle: "Discover Products"; readonly pageDescription: "Browse {productCount}+ products from reviewed manufacturers worldwide"; readonly searchPlaceholder: "Search products, categories..."; ... 15 more ...; readonly errorLoadingProducts: "Error loading products"; }'.
+app/(public)/products/page.tsx(195,48): error TS2339: Property 'clearAll' does not exist on type '{ readonly pageTitle: "Discover Products"; readonly pageDescription: "Browse {productCount}+ products from reviewed manufacturers worldwide"; readonly searchPlaceholder: "Search products, categories..."; ... 15 more ...; readonly errorLoadingProducts: "Error loading products"; }'.
+app/(public)/products/page.tsx(224,75): error TS2339: Property 'sortBy' does not exist on type '{ readonly pageTitle: "Discover Products"; readonly pageDescription: "Browse {productCount}+ products from reviewed manufacturers worldwide"; readonly searchPlaceholder: "Search products, categories..."; ... 15 more ...; readonly errorLoadingProducts: "Error loading products"; }'.
+app/(public)/products/page.tsx(227,80): error TS2339: Property 'relevance' does not exist on type '{ readonly pageTitle: "Discover Products"; readonly pageDescription: "Browse {productCount}+ products from reviewed manufacturers worldwide"; readonly searchPlaceholder: "Search products, categories..."; ... 15 more ...; readonly errorLoadingProducts: "Error loading products"; }'.
+app/(userDashboard)/dashboard/buyer/support-tickets/[ticketId]/page.tsx(11,7): error TS2322: Type '{ basePath: string; initialTicketId: string; }' is not assignable to type 'IntrinsicAttributes & CustomerSupportChatViewProps'.
+  Property 'initialTicketId' does not exist on type 'IntrinsicAttributes & CustomerSupportChatViewProps'.
+app/(userDashboard)/dashboard/buyer/support-tickets/page.tsx(4,11): error TS2741: Property 'title' is missing in type '{ basePath: string; }' but required in type 'CustomerSupportChatViewProps'.
+components/admin/manufacturer-application-detail-dialog.tsx(240,37): error TS2339: Property 'id' does not exist on type 'string'.
+components/admin/manufacturer-application-detail-dialog.tsx(241,35): error TS2339: Property 'url' does not exist on type 'string'.
+components/admin/manufacturer-application-detail-dialog.tsx(247,36): error TS2339: Property 'url' does not exist on type 'string'.
+components/industries/industries-page-content.tsx(44,5): error TS2353: Object literal may only specify known properties, and 'icon_color' does not exist in type 'Industry'.
+lib/api/admin-manufacturer-registrations.ts(20,3): error TS2300: Duplicate identifier 'factory_images'.
+lib/api/admin-manufacturer-registrations.ts(83,3): error TS2300: Duplicate identifier 'factory_images'.
+lib/api/admin-manufacturer-registrations.ts(83,3): error TS2717: Subsequent property declarations must have the same type.  Property 'factory_images' must be of type 'string[] | undefined', but here has type '{ id: number; path: string; url: string; mime_type: string; extension: string; original_name: string; created_at: string; updated_at: string; }[] | undefined'.
+lib/api/admin-products.ts(266,7): error TS2353: Object literal may only specify known properties, and 'is_base' does not exist in type '{ id: number; code: string; name: string; symbol: string; decimal_places: number; }'.
+lib/favorites-context.tsx(171,24): error TS2339: Property 'priceRange' does not exist on type 'Product'.
+lib/favorites-context.tsx(172,9): error TS2322: Type 'number' is not assignable to type 'string'.

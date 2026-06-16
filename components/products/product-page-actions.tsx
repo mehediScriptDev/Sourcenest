@@ -55,13 +55,13 @@ export function ProductPageActions({ product }: ProductPageActionsProps) {
     <div className="mt-8 space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button size="lg" className="flex-1 gap-2" asChild>
-          <Link href={`/rfq/new?product=${product.slug}`}>
+          <Link href={`/rfq/new?product=${product.slug}&supplier=${product.supplierSlug}`}>
             <FileText className="h-4 w-4" />
             Request Quote
           </Link>
         </Button>
         <Button size="lg" variant="outline" className="flex-1 gap-2" asChild>
-          <Link href={`/messages/new?supplier=${product.supplierSlug}`}>
+          <Link href={`/messages/new?supplier=${product.supplierSlug}&product=${product.slug}`}>
             <MessageSquare className="h-4 w-4" />
             Contact Supplier
           </Link>

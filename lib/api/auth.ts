@@ -74,6 +74,19 @@ export function isTwoFactorRequiredResponse(payload: unknown): boolean {
 export async function login(data: LoginInput): Promise<LoginEnvelope> {
   try {
     const response = await apiClient.post<LoginEnvelope>("/login", data)
+
+    // Automatically create a conversation with the admin (ID 1)
+    const userId = response.data?.data?.user?.id || (response.data as any)?.user?.id;
+    if (userId) {
+      try {
+        await apiClient.post("/conversations", {
+          participant_ids: [1, userId]
+        });
+      } catch (err) {
+        console.error("Auto-creating admin conversation failed", err);
+      }
+    }
+
     return response.data
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.data && typeof error.response.data === "object") {
@@ -91,6 +104,18 @@ export async function register(formData: FormData): Promise<LoginResponse> {
       "Content-Type": "multipart/form-data",
     },
   });
+
+  // Automatically create a conversation with the admin (ID 1)
+  const userId = response.data?.data?.user?.id;
+  if (userId) {
+    try {
+      await apiClient.post("/conversations", {
+        participant_ids: [1, userId]
+      });
+    } catch (err) {
+      console.error("Auto-creating admin conversation failed", err);
+    }
+  }
 
   return response.data;
 }
@@ -143,6 +168,19 @@ export async function googleTokenLogin(input: {
   role: "buyer" | "manufacturer" | "admin"
 }): Promise<SocialLoginEnvelope> {
   const response = await apiClient.post<SocialLoginEnvelope>("/auth/google/token", input)
+  
+  // Automatically create a conversation with the admin (ID 1)
+  const userId = response.data?.data?.user?.id || (response.data as any)?.user?.id;
+  if (userId) {
+    try {
+      await apiClient.post("/conversations", {
+        participant_ids: [1, userId]
+      });
+    } catch (err) {
+      console.error("Auto-creating admin conversation failed", err);
+    }
+  }
+
   return response.data
 }
 
@@ -187,6 +225,18 @@ export async function completeSocialProfile(input: SocialCompleteProfileInput): 
       "Content-Type": "multipart/form-data",
     },
   })
+
+  // Automatically create a conversation with the admin (ID 1)
+  const userId = response.data?.data?.user?.id;
+  if (userId) {
+    try {
+      await apiClient.post("/conversations", {
+        participant_ids: [1, userId]
+      });
+    } catch (err) {
+      console.error("Auto-creating admin conversation failed", err);
+    }
+  }
 
   return response.data
 }

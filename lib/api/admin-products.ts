@@ -39,6 +39,9 @@ export interface PricingQuantities {
     name: string
     symbol: string
     decimal_places: number
+    is_base: boolean
+    is_active: number
+    sort_order: number
   }
   minimum_order_quantity: number
   unit: string

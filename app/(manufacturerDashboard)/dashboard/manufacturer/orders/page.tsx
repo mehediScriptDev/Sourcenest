@@ -1,15 +1,25 @@
 "use client"
 
-import { Package } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
+import { SellerOrdersList } from "@/components/orders/seller-orders"
+
+const DEMO_MANUFACTURER_ID = "mfr-1"
 
 export default function ManufacturerOrdersPage() {
+  const { user } = useAuth()
+  const sellerId = user?.id ?? DEMO_MANUFACTURER_ID
   return (
-    <div className="flex flex-col items-center justify-center min-h-[400px] gap-4 text-center">
-      <Package className="w-12 h-12 text-muted-foreground" />
-      <h1 className="text-2xl font-bold">Orders</h1>
-      <p className="text-muted-foreground max-w-md">
-        Incoming orders from buyers will appear here.
-      </p>
-    </div>
+    <SellerOrdersList
+      config={{
+        kind: "product",
+        basePath: "/dashboard/manufacturer/orders",
+        sellerId,
+        listTitle: "Orders",
+        listSubtitle: "Manage confirmed orders, share production and shipping updates, and keep documents in one place.",
+        noun: "order",
+        nounPlural: "orders",
+        createLabel: "Create order",
+      }}
+    />
   )
 }

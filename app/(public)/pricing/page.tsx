@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
@@ -15,116 +15,9 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { cn } from "@/lib/utils"
-import { Check, X, ArrowRight, Shield, HelpCircle, Sparkles, Users, CheckCircle, AlertCircle, X as XIcon } from "lucide-react"
-
-const plans = [
-  {
-    name: "Starter",
-    description: "For small manufacturers starting their export journey",
-    monthlyPrice: 149,
-    yearlyPrice: 1490,
-    features: [
-      { name: "Company profile", included: true },
-      { name: "Up to 25 products", included: true },
-      { name: "Internal messaging", included: true },
-      { name: "Inquiry inbox", included: true },
-      { name: "RFQ reception", included: true },
-      { name: "Catalog upload", included: true },
-      { name: "Certifications section", included: true },
-      { name: "Export markets section", included: true },
-      { name: "Basic analytics", included: true },
-      { name: "Priority search visibility", included: false },
-      { name: "Featured supplier badge", included: false },
-      { name: "Multiple team users", included: false },
-      { name: "Advanced analytics", included: false },
-    ],
-    cta: "Get Started",
-    popular: false,
-  },
-  {
-    name: "Growth",
-    description: "For established manufacturers seeking more exposure",
-    monthlyPrice: 299,
-    yearlyPrice: 2990,
-    features: [
-      { name: "Company profile", included: true },
-      { name: "Up to 100 products", included: true },
-      { name: "Internal messaging", included: true },
-      { name: "Inquiry inbox", included: true },
-      { name: "RFQ reception", included: true },
-      { name: "Catalog upload", included: true },
-      { name: "Certifications section", included: true },
-      { name: "Export markets section", included: true },
-      { name: "Advanced analytics", included: true },
-      { name: "Priority search visibility", included: true },
-      { name: "Featured supplier badge", included: true },
-      { name: "Multiple team users (3)", included: true },
-      { name: "Premium support", included: false },
-    ],
-    cta: "Get Started",
-    popular: true,
-  },
-  {
-    name: "Enterprise",
-    description: "For large manufacturers with custom requirements",
-    monthlyPrice: null,
-    yearlyPrice: null,
-    features: [
-      { name: "Company profile", included: true },
-      { name: "Unlimited products", included: true },
-      { name: "Internal messaging", included: true },
-      { name: "Inquiry inbox", included: true },
-      { name: "RFQ reception", included: true },
-      { name: "Catalog upload", included: true },
-      { name: "Certifications section", included: true },
-      { name: "Export markets section", included: true },
-      { name: "Enterprise analytics", included: true },
-      { name: "Premium search placement", included: true },
-      { name: "Featured supplier badge", included: true },
-      { name: "Unlimited team users", included: true },
-      { name: "Dedicated account manager", included: true },
-      { name: "Priority support", included: true },
-      { name: "Custom onboarding", included: true },
-    ],
-    cta: "Contact Sales",
-    popular: false,
-  },
-]
-
-const faqs = [
-  {
-    question: "Does payment automatically publish my profile?",
-    answer: "No. Payment creates your manufacturer account, but your profile must still go through our review and approval process before it becomes visible to buyers. This typically takes 2-5 business days after you submit your complete profile.",
-  },
-  {
-    question: "What happens if my profile is not approved?",
-    answer: "If your profile doesn't meet our requirements, we'll provide specific feedback on what needs to be updated. You can make the necessary changes and resubmit. If approval is ultimately not possible, we offer a full refund within 30 days.",
-  },
-  {
-    question: "Can I upgrade or downgrade my plan?",
-    answer: "Yes, you can change your plan at any time. When upgrading, you'll be charged the prorated difference. When downgrading, the new rate applies at your next billing cycle.",
-  },
-  {
-    question: "What is the Founding Manufacturer program?",
-    answer: "The Founding Manufacturer program is a limited offer for the first 300 manufacturers who join SourceNest. As a founding member, you get 6 months of free access to our full Growth plan ($299/month value) - including up to 100 products, advanced analytics, priority search visibility, featured supplier badge, and multiple team users. No credit card required to start.",
-  },
-  {
-    question: "What happens after my 6-month free period ends?",
-    answer: "After your 6-month free period ends, you'll need to choose and pay for one of our plans (Starter, Growth, or Enterprise) to continue using the platform. We'll send you reminders before your free period expires so you have plenty of time to choose the right plan for your business.",
-  },
-  {
-    question: "Is the Founding Manufacturer program still available?",
-    answer: "The program is available until we reach 300 approved manufacturer registrations (pending applications don't count toward the limit). You can see the remaining spots on our pricing page. Once all spots are filled, the program will close and new manufacturers will need to choose a paid plan.",
-  },
-  {
-    question: "Are there any commission fees on sales?",
-    answer: "No. SourceNest does not take any commission on deals you close through the platform. Your subscription fee is your only cost.",
-  },
-  {
-    question: "What payment methods do you accept?",
-    answer: "We accept all major credit cards (Visa, Mastercard, American Express) and PayPal. For Enterprise plans, we also offer bank transfer options.",
-  },
-]
+import { Check, X, ArrowRight, Shield, HelpCircle, Sparkles, Users, CheckCircle, AlertCircle, X as XIcon, Loader2 } from "lucide-react"
+import { fetchPublicPlans, type PublicPlan } from "@/lib/api/public-plans"
+import { fetchActivePromotion, type ActivePromotion } from "@/lib/api/public-promotions"
 
 import { useRouter } from "next/navigation"
 
@@ -142,6 +35,37 @@ export default function PricingPage() {
   const [transactionId, setTransactionId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const router = useRouter()
+
+  // Dynamic plans from backend
+  const [plans, setPlans] = useState<PublicPlan[]>([])
+  const [plansLoading, setPlansLoading] = useState(true)
+
+  const [activePromotion, setActivePromotion] = useState<ActivePromotion | null>(null)
+  const [promotionLoading, setPromotionLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadPlans() {
+      setPlansLoading(true)
+      const res = await fetchPublicPlans()
+      if (cancelled) return
+      if (res.success) {
+        // Only show active plans (status === 1)
+        setPlans(res.data.filter((p) => p.status === 1))
+      }
+      setPlansLoading(false)
+
+      const promoRes = await fetchActivePromotion()
+      if (!cancelled) {
+        if (promoRes.success && promoRes.data) {
+          setActivePromotion(promoRes.data)
+        }
+        setPromotionLoading(false)
+      }
+    }
+    void loadPlans()
+    return () => { cancelled = true }
+  }, [])
 
   const handlePlanSelect = (planName: string, price: number) => {
     setSelectedPlan({
@@ -174,6 +98,25 @@ export default function PricingPage() {
     setErrorMessage(null)
   }
 
+  /** Helper: parse price amount string to number */
+  const parsePrice = (amount: string): number => {
+    const num = parseFloat(amount)
+    return Number.isFinite(num) ? num : 0
+  }
+
+  /** Check if a plan is "free" (both monthly and yearly are 0) */
+  const isFree = (plan: PublicPlan): boolean => {
+    return parsePrice(plan.monthly_price.amount) === 0 && parsePrice(plan.yearly_price.amount) === 0
+  }
+
+  /** Check if a feature is enabled (boolean with value "1") */
+  const isFeatureEnabled = (feature: PublicPlan["features"][number]): boolean => {
+    if (feature.input_type === "boolean") {
+      return feature.value === "1"
+    }
+    return feature.value.trim().length > 0
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -195,123 +138,107 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* Special Launch Plan */}
-        <section className="py-16 lg:py-20 bg-linear-to-b from-secondary/5 to-background">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="mx-auto max-w-3xl text-center mb-12">
-              <Badge className="bg-secondary/20 text-secondary border-secondary/30 mb-4">
-                <Sparkles className="mr-1.5 h-3 w-3" />
-                {t?.pricing?.founding?.badge || "Limited Time Offer"}
-              </Badge>
-              <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground">
-                {t?.pricing?.founding?.title || "Join as a Founding Manufacturer"}
-              </h2>
-              <p className="mt-4 text-muted-foreground">
-                {(t?.pricing?.founding?.subtitle || "Be among the first 300 manufacturers to join and get 6 months free access to our full {plan} plan - a $1,794 value.")
-                  .replace("{plan}", t?.pricing?.founding?.plan || "Growth")}
-              </p>
-            </div>
-
-            <div className="max-w-lg mx-auto">
-              {/* Founding Manufacturer */}
-              <div className="relative rounded-2xl border-2 border-secondary bg-card p-8 shadow-lg">
-                <Badge className="absolute -top-3 left-6 bg-secondary text-secondary-foreground">
-                  <Users className="mr-1.5 h-3 w-3" />
-                  {t?.pricing?.founding?.badge2 || "First 300 Only"}
+        {/* Special Launch Plan - Dynamic Promotion */}
+        {(!promotionLoading && activePromotion) && (
+          <section className="py-16 lg:py-20 bg-linear-to-b from-secondary/5 to-background">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <div className="mx-auto max-w-3xl text-center mb-12">
+                <Badge className="bg-secondary/20 text-secondary border-secondary/30 mb-4">
+                  <Sparkles className="mr-1.5 h-3 w-3" />
+                  {t?.pricing?.founding?.badge || "Limited Time Offer"}
                 </Badge>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary/10">
-                    <Sparkles className="h-6 w-6 text-secondary" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-foreground">{t?.pricing?.founding?.cardTitle || "Founding Manufacturer"}</h3>
-                    <p className="text-sm text-muted-foreground">{t?.pricing?.founding?.cardSubtitle || "Early Supplier Program"}</p>
-                  </div>
-                </div>
-                <div className="mb-4">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-bold text-foreground">$0</span>
-                    <span className="text-muted-foreground">{t?.pricing?.founding?.freeFor || "for 6 months"}</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-sm line-through text-muted-foreground">$299/mo</span>
-                    <Badge variant="secondary" className="text-xs bg-secondary/20 text-secondary">{t?.pricing?.founding?.saveBadge || "Save $1,794"}</Badge>
-                  </div>
-                  <p className="mt-1 text-sm text-secondary font-medium">{t?.pricing?.founding?.noCardRequired || "No credit card required"}</p>
-                </div>
-                <div className="mb-4 rounded-lg bg-secondary/10 p-3 border border-secondary/20">
-                  <p className="text-sm text-foreground">
-                    {(t?.pricing?.founding?.description || "Get full {plan} plan features free for 6 months. After the trial, continue with any paid plan to keep your account active.")
-                      .replace("{plan}", t?.pricing?.founding?.plan || "Growth")}
-                  </p>
-                </div>
-                {/* Commented out: Spots remaining section
-                <div className="mb-6 rounded-lg bg-muted/50 p-3 border border-border">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">{t?.pricing?.founding?.spotsRemaining || "Spots remaining:"}</span>
-                    <span className="font-semibold text-secondary">127 / 300</span>
-                  </div>
-                  <div className="mt-2 h-2 rounded-full bg-secondary/20">
-                    <div className="h-full w-[58%] rounded-full bg-secondary" />
-                  </div>
-                </div>
-                */}
-                <ul className="space-y-3 mb-6">
-                  <li className="flex items-center gap-3 text-sm">
-                    <Check className="h-4 w-4 text-secondary" />
-                    <span className="text-foreground">{t?.pricing?.founding?.cardFeatures?.companyProfile || "Company profile"}</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-sm">
-                    <Check className="h-4 w-4 text-secondary" />
-                    <span className="text-foreground font-medium">{t?.pricing?.founding?.cardFeatures?.products100 || "Up to 100 products"}</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-sm">
-                    <Check className="h-4 w-4 text-secondary" />
-                    <span className="text-foreground">{t?.pricing?.founding?.cardFeatures?.internalMessaging || "Internal messaging"}</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-sm">
-                    <Check className="h-4 w-4 text-secondary" />
-                    <span className="text-foreground">{t?.pricing?.founding?.cardFeatures?.inquiryAndRfq || "Inquiry inbox & RFQ reception"}</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-sm">
-                    <Check className="h-4 w-4 text-secondary" />
-                    <span className="text-foreground">{t?.pricing?.founding?.cardFeatures?.catalogUpload || "Catalog upload"}</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-sm">
-                    <Check className="h-4 w-4 text-secondary" />
-                    <span className="text-foreground">{t?.pricing?.founding?.cardFeatures?.certificationsAndMarkets || "Certifications & Export markets"}</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-sm">
-                    <Check className="h-4 w-4 text-secondary" />
-                    <span className="text-foreground font-medium">{t?.pricing?.founding?.cardFeatures?.advancedAnalytics || "Advanced analytics"}</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-sm">
-                    <Check className="h-4 w-4 text-secondary" />
-                    <span className="text-foreground font-medium">{t?.pricing?.founding?.cardFeatures?.prioritySearch || "Priority search visibility"}</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-sm">
-                    <Check className="h-4 w-4 text-secondary" />
-                    <span className="text-foreground font-medium">{t?.pricing?.founding?.cardFeatures?.featuredBadge || "Featured supplier badge"}</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-sm">
-                    <Check className="h-4 w-4 text-secondary" />
-                    <span className="text-foreground font-medium">{t?.pricing?.founding?.cardFeatures?.teamUsers3 || "Multiple team users (3)"}</span>
-                  </li>
-                </ul>
-                <Button
-                  className="w-full gap-2 bg-secondary text-secondary-foreground hover:bg-secondary/90"
-                  onClick={() => router.push('/auth/signup?role=manufacturer&plan=founding')}
-                >
-                  {t?.pricing?.founding?.button || "Apply as Founding Member"}
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-                <p className="mt-3 text-xs text-center text-muted-foreground">
-                  {t?.pricing?.founding?.note || "Subject to admin review and approval"}
+                <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground">
+                  {activePromotion.promotion_title || t?.pricing?.founding?.title || "Join as a Founding Manufacturer"}
+                </h2>
+                <p className="mt-4 text-muted-foreground">
+                  {activePromotion.short_description}
                 </p>
               </div>
+
+              <div className="max-w-lg mx-auto">
+                <div className="relative rounded-2xl border-2 border-secondary bg-card p-8 shadow-lg">
+                  <Badge className="absolute -top-3 left-6 bg-secondary text-secondary-foreground">
+                    <Users className="mr-1.5 h-3 w-3" />
+                    First {activePromotion.slots} Only
+                  </Badge>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary/10">
+                      <Sparkles className="h-6 w-6 text-secondary" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold text-foreground">{activePromotion.promotion_title}</h3>
+                      <p className="text-sm text-muted-foreground">Early Supplier Program</p>
+                    </div>
+                  </div>
+                  <div className="mb-4">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl font-bold text-foreground">$0</span>
+                      <span className="text-muted-foreground">for {activePromotion.duration_months} months</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-sm line-through text-muted-foreground">
+                        ${parsePrice(activePromotion.plan.monthly_price.amount).toFixed(0)}/mo
+                      </span>
+                      <Badge variant="secondary" className="text-xs bg-secondary/20 text-secondary">
+                        Save ${(parsePrice(activePromotion.plan.monthly_price.amount) * activePromotion.duration_months).toFixed(0)}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-secondary font-medium">No credit card required</p>
+                  </div>
+                  <div className="mb-4 rounded-lg bg-secondary/10 p-3 border border-secondary/20">
+                    <p className="text-sm text-foreground">
+                      {activePromotion.highlight_text || `Get full ${activePromotion.plan.name} plan features free for ${activePromotion.duration_months} months.`}
+                    </p>
+                  </div>
+                  
+                  {/* Spots remaining section */}
+                  <div className="mb-6 rounded-lg bg-muted/50 p-3 border border-border">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Spots remaining:</span>
+                      <span className="font-semibold text-secondary">{activePromotion.stats.spots_remaining} / {activePromotion.slots}</span>
+                    </div>
+                    <div className="mt-2 h-2 rounded-full bg-secondary/20 overflow-hidden">
+                      <div 
+                        className="h-full rounded-full bg-secondary transition-all" 
+                        style={{ width: `${activePromotion.stats.fill_percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  <ul className="space-y-3 mb-6">
+                    <li className="flex items-center gap-3 text-sm">
+                      <Check className="h-4 w-4 text-secondary" />
+                      <span className="text-foreground">Full {activePromotion.plan.name} Features</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-sm">
+                      <Check className="h-4 w-4 text-secondary" />
+                      <span className="text-foreground font-medium">Free for {activePromotion.duration_months} months</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-sm">
+                      <Check className="h-4 w-4 text-secondary" />
+                      <span className="text-foreground">Priority search visibility</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-sm">
+                      <Check className="h-4 w-4 text-secondary" />
+                      <span className="text-foreground font-medium">Featured supplier badge</span>
+                    </li>
+                  </ul>
+                  <Button
+                    className="w-full gap-2 bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                    onClick={() => router.push(`/auth/signup?role=manufacturer&plan=${activePromotion.plan.id}&promo=${activePromotion.id}`)}
+                    disabled={activePromotion.stats.is_full}
+                  >
+                    {activePromotion.stats.is_full ? "Promotion Full" : (activePromotion.cta_button_text || "Apply as Founding Member")}
+                    {!activePromotion.stats.is_full && <ArrowRight className="h-4 w-4" />}
+                  </Button>
+                  <p className="mt-3 text-xs text-center text-muted-foreground">
+                    Subject to admin review and approval
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Pricing Toggle & Cards */}
         <section className="py-16 lg:py-24">
@@ -354,81 +281,113 @@ export default function PricingPage() {
               </div>
             </div>
 
-            {/* Pricing Cards */}
-            <div className="mt-12 grid gap-8 lg:grid-cols-3">
-              {plans.map((plan) => (
-                <div
-                  key={plan.name}
-                  className={cn(
-                    "relative rounded-2xl border bg-card p-8",
-                    plan.popular ? "border-secondary shadow-lg" : "border-border"
-                  )}
-                >
-                  {plan.popular && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-secondary text-secondary-foreground">
-                      {t?.pricing?.paidPlans?.growth?.badge || "Most Popular"}
-                    </Badge>
-                  )}
-                  <div>
-                    <h3 className="text-xl font-semibold text-foreground">{plan.name}</h3>
-                    <p className="mt-2 text-sm text-muted-foreground">{plan.description}</p>
-                  </div>
-                  <div className="mt-6">
-                    {plan.monthlyPrice ? (
-                      <>
-                        <div className="flex items-baseline">
-                          <span className="text-4xl font-bold text-foreground">
-                            ${billingCycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice}
-                          </span>
-                          <span className="ml-2 text-muted-foreground">
-                            /{billingCycle === "monthly" ? (t?.pricing?.paidPlans?.monthly || "month") : (t?.pricing?.paidPlans?.yearly || "year")}
-                          </span>
-                        </div>
-                        {billingCycle === "yearly" && (
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {(t?.pricing?.paidPlans?.billedAnnually || "Billed annually (${price}/month)").replace("${price}", Math.round(plan.yearlyPrice! / 12).toString())}
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-4xl font-bold text-foreground">{t?.pricing?.paidPlans?.enterprise?.price || "Custom"}</div>
-                    )}
-                  </div>
-                  <Button
-                    className={cn(
-                      "mt-6 w-full gap-2",
-                      plan.popular && "bg-secondary text-secondary-foreground hover:bg-secondary/90"
-                    )}
-                    variant={plan.popular ? "default" : "outline"}
-                    onClick={() => {
-                      if (plan.monthlyPrice) {
-                        const price = billingCycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice!
-                        handlePlanSelect(plan.name, price)
-                      } else {
-                        router.push("/contact?type=sales")
-                      }
-                    }}
-                  >
-                    {plan.cta}
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                  <ul className="mt-8 space-y-3">
-                    {plan.features.map((feature) => (
-                      <li key={feature.name} className="flex items-center gap-3 text-sm">
-                        {feature.included ? (
-                          <Check className="h-4 w-4 text-secondary" />
+            {/* Loading State */}
+            {plansLoading && (
+              <div className="mt-12 flex items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            )}
+
+            {/* Pricing Cards — Dynamic from GET /plans */}
+            {!plansLoading && plans.length > 0 && (
+              <div className={cn(
+                "mt-12 grid gap-8",
+                plans.length === 1 ? "max-w-md mx-auto" : plans.length === 2 ? "max-w-3xl mx-auto lg:grid-cols-2" : "lg:grid-cols-3"
+              )}>
+                {plans.map((plan) => {
+                  const monthlyPrice = parsePrice(plan.monthly_price.amount)
+                  const yearlyPrice = parsePrice(plan.yearly_price.amount)
+                  const currentPrice = billingCycle === "monthly" ? monthlyPrice : yearlyPrice
+                  const planIsFree = isFree(plan)
+                  const enabledFeatures = plan.features.filter(isFeatureEnabled)
+
+                  return (
+                    <div
+                      key={plan.id}
+                      className={cn(
+                        "relative rounded-2xl border bg-card p-8",
+                        plan.is_popular ? "border-secondary shadow-lg" : "border-border"
+                      )}
+                    >
+                      {plan.is_popular && (
+                        <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-secondary text-secondary-foreground">
+                          {t?.pricing?.paidPlans?.growth?.badge || "Most Popular"}
+                        </Badge>
+                      )}
+                      <div>
+                        <h3 className="text-xl font-semibold text-foreground">{plan.name}</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">{plan.description}</p>
+                      </div>
+                      <div className="mt-6">
+                        {planIsFree ? (
+                          <div className="flex items-baseline">
+                            <span className="text-4xl font-bold text-foreground">
+                              {(t?.pricing?.paidPlans as any)?.free || "Free"}
+                            </span>
+                          </div>
                         ) : (
-                          <X className="h-4 w-4 text-muted-foreground/50" />
+                          <>
+                            <div className="flex items-baseline">
+                              <span className="text-4xl font-bold text-foreground">
+                                ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </span>
+                              <span className="ml-2 text-muted-foreground">
+                                /{billingCycle === "monthly" ? (t?.pricing?.paidPlans?.monthly || "month") : (t?.pricing?.paidPlans?.yearly || "year")}
+                              </span>
+                            </div>
+                            {billingCycle === "yearly" && yearlyPrice > 0 && (
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {(t?.pricing?.paidPlans?.billedAnnually || "Billed annually (${price}/month)").replace("${price}", Math.round(yearlyPrice / 12).toString())}
+                              </p>
+                            )}
+                          </>
                         )}
-                        <span className={feature.included ? "text-foreground" : "text-muted-foreground"}>
-                          {feature.name}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
+                      </div>
+                      <Button
+                        className={cn(
+                          "mt-6 w-full gap-2",
+                          plan.is_popular && "bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                        )}
+                        variant={plan.is_popular ? "default" : "outline"}
+                        onClick={() => {
+                          if (planIsFree) {
+                            router.push("/auth/signup?role=manufacturer&plan=free")
+                          } else if (currentPrice > 0) {
+                            handlePlanSelect(plan.name, currentPrice)
+                          } else {
+                            router.push("/contact?type=sales")
+                          }
+                        }}
+                      >
+                        {plan.button_text || "Get Started"}
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+
+                      {/* Feature List */}
+                      {enabledFeatures.length > 0 && (
+                        <ul className="mt-8 space-y-3">
+                          {enabledFeatures.map((feature) => (
+                            <li key={feature.id} className="flex items-center gap-3 text-sm">
+                              <Check className="h-4 w-4 shrink-0 text-secondary" />
+                              <span className="text-foreground">
+                                {feature.features.name}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Empty state if no plans */}
+            {!plansLoading && plans.length === 0 && (
+              <div className="mt-12 rounded-xl border border-dashed border-border py-16 text-center">
+                <p className="text-muted-foreground">{(t?.pricing?.paidPlans as any)?.noPlans || "No pricing plans available at this time."}</p>
+              </div>
+            )}
 
             {/* Approval Notice */}
             <div className="mx-auto mt-12 max-w-2xl rounded-xl bg-secondary/10 p-6 text-center">
@@ -458,54 +417,46 @@ export default function PricingPage() {
                 <thead>
                   <tr>
                     <th className="border-b border-border p-4 text-left font-medium text-foreground">{t?.pricing?.comparison?.feature || "Feature"}</th>
-                    <th className="border-b border-border p-4 text-center font-medium text-foreground">Starter</th>
-                    <th className="border-b border-border p-4 text-center font-medium text-foreground">Growth</th>
-                    <th className="border-b border-border p-4 text-center font-medium text-foreground">Enterprise</th>
+                    {plans.map((plan) => (
+                      <th key={plan.id} className="border-b border-border p-4 text-center font-medium text-foreground">
+                        {plan.name}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td className="border-b border-border p-4 text-muted-foreground">{t?.pricing?.comparison?.productsLimit || "Products limit"}</td>
-                    <td className="border-b border-border p-4 text-center">25</td>
-                    <td className="border-b border-border p-4 text-center">100</td>
-                    <td className="border-b border-border p-4 text-center">{t?.pricing?.comparison?.unlimited || "Unlimited"}</td>
-                  </tr>
-                  <tr>
-                    <td className="border-b border-border p-4 text-muted-foreground">{t?.pricing?.comparison?.teamMembers || "Team members"}</td>
-                    <td className="border-b border-border p-4 text-center">1</td>
-                    <td className="border-b border-border p-4 text-center">3</td>
-                    <td className="border-b border-border p-4 text-center">{t?.pricing?.comparison?.unlimited || "Unlimited"}</td>
-                  </tr>
-                  <tr>
-                    <td className="border-b border-border p-4 text-muted-foreground">{t?.pricing?.comparison?.searchVisibility || "Search visibility"}</td>
-                    <td className="border-b border-border p-4 text-center">{t?.pricing?.comparison?.standard || "Standard"}</td>
-                    <td className="border-b border-border p-4 text-center">{t?.pricing?.comparison?.priority || "Priority"}</td>
-                    <td className="border-b border-border p-4 text-center">{t?.pricing?.comparison?.premium || "Premium"}</td>
-                  </tr>
-                  <tr>
-                    <td className="border-b border-border p-4 text-muted-foreground">{t?.pricing?.comparison?.analytics || "Analytics"}</td>
-                    <td className="border-b border-border p-4 text-center">{t?.pricing?.comparison?.basic || "Basic"}</td>
-                    <td className="border-b border-border p-4 text-center">{t?.pricing?.comparison?.advanced || "Advanced"}</td>
-                    <td className="border-b border-border p-4 text-center">{t?.pricing?.comparison?.enterpriseLevel || "Enterprise"}</td>
-                  </tr>
-                  <tr>
-                    <td className="border-b border-border p-4 text-muted-foreground">{t?.pricing?.comparison?.featuredBadge || "Featured badge"}</td>
-                    <td className="border-b border-border p-4 text-center"><X className="mx-auto h-4 w-4 text-muted-foreground/50" /></td>
-                    <td className="border-b border-border p-4 text-center"><Check className="mx-auto h-4 w-4 text-secondary" /></td>
-                    <td className="border-b border-border p-4 text-center"><Check className="mx-auto h-4 w-4 text-secondary" /></td>
-                  </tr>
-                  <tr>
-                    <td className="border-b border-border p-4 text-muted-foreground">{t?.pricing?.comparison?.accountManager || "Account manager"}</td>
-                    <td className="border-b border-border p-4 text-center"><X className="mx-auto h-4 w-4 text-muted-foreground/50" /></td>
-                    <td className="border-b border-border p-4 text-center"><X className="mx-auto h-4 w-4 text-muted-foreground/50" /></td>
-                    <td className="border-b border-border p-4 text-center"><Check className="mx-auto h-4 w-4 text-secondary" /></td>
-                  </tr>
-                  <tr>
-                    <td className="p-4 text-muted-foreground">{t?.pricing?.comparison?.supportLevel || "Support level"}</td>
-                    <td className="p-4 text-center">{t?.pricing?.comparison?.email || "Email"}</td>
-                    <td className="p-4 text-center">{t?.pricing?.comparison?.priorityEmail || "Priority email"}</td>
-                    <td className="p-4 text-center">{t?.pricing?.comparison?.dedicated || "Dedicated"}</td>
-                  </tr>
+                  {/* Build a unified feature list across all plans */}
+                  {(() => {
+                    // Collect all unique features across all plans
+                    const featureMap = new Map<number, string>()
+                    plans.forEach((plan) => {
+                      plan.features.forEach((f) => {
+                        if (!featureMap.has(f.features.id)) {
+                          featureMap.set(f.features.id, f.features.name)
+                        }
+                      })
+                    })
+                    const allFeatures = Array.from(featureMap.entries())
+
+                    return allFeatures.map(([featureId, featureName]) => (
+                      <tr key={featureId}>
+                        <td className="border-b border-border p-4 text-muted-foreground">{featureName}</td>
+                        {plans.map((plan) => {
+                          const match = plan.features.find((f) => f.features.id === featureId)
+                          const enabled = match ? isFeatureEnabled(match) : false
+                          return (
+                            <td key={plan.id} className="border-b border-border p-4 text-center">
+                              {enabled ? (
+                                <Check className="mx-auto h-4 w-4 text-secondary" />
+                              ) : (
+                                <X className="mx-auto h-4 w-4 text-muted-foreground/50" />
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -694,4 +645,5 @@ export default function PricingPage() {
     </div>
   )
 }
+
 

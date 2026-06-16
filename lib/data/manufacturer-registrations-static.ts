@@ -8,7 +8,7 @@ export type ManufacturerRegistrationsResponse = {
   data: ManufacturerApplication[]
 }
 
-const envelope = raw as ManufacturerRegistrationsResponse
+const envelope = raw as unknown as ManufacturerRegistrationsResponse
 
 /** Deep copy of seed rows for UI state (approve/reject updates stay in memory only). */
 export function cloneManufacturerRegistrationsSeed(): ManufacturerApplication[] {

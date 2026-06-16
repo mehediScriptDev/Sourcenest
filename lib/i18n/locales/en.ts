@@ -86,8 +86,18 @@ const en = {
     uploadBizLicense: "Upload Business License",
     uploadFactoryPhotos: "Upload Factory Photos (Max 5)",
     uploadDesc: "Drag and drop or click to select files",
+    uploadFactoryDesc: "Drag and drop or click to select files",
     max5Photos: "Maximum 5 photos",
     remove: "Remove",
+    reviewDocsDescription: "Please upload your business documents for review.",
+    cityDescription: "Enter your city.",
+    termsOfService: "Terms of Service",
+    privacyPolicy: "Privacy Policy",
+    submitForReview: "Submit for Review",
+    alreadyHaveAccount: "Already have an account?",
+    addFactoryPhotos: "Add Factory Photos",
+    creatingAccount: "Creating account...",
+    createFreeAccount: "Create free account",
     
     // Social signup
     needsProfileCompletion: "Complete your profile",
@@ -131,6 +141,18 @@ const en = {
     rememberPassword: "Remember your password?",
     passwordMismatch: "Password confirmation does not match.",
     emailMissing: "Email is missing. Please request a reset code again.",
+    registrationFailed: "Registration failed",
+    free: "Free",
+    directMessaging: "Direct Messaging",
+    unlimitedRFQs: "Unlimited RFQs",
+    globalVisibility: "Global Visibility",
+    reviewedBadge: "Reviewed Badge",
+    noCommissionFees: "No Commission Fees",
+    backToRoleSelection: "Back to Role Selection",
+    startSourcing: "Start Sourcing",
+    completeRegistration: "Complete Registration",
+    passwordMinLength: "Password must be at least 8 characters",
+    reviewDocsRequired: "Review documents are required",
   },
 
   // ── Auth Layout ──────────────────────────────────────────────────────
@@ -257,6 +279,8 @@ const en = {
     adminSettings: "Settings",
     adminViewSite: "View Site",
     adminSignOut: "Sign Out",
+    adminOrders: "Orders",
+    adminSupportTickets: "Support Tickets",
   },
 
   // ── Settings Page ────────────────────────────────────────────────────
@@ -681,6 +705,10 @@ const en = {
       inquiriesLabel: "inquiries",
       noProductsFound: "No products found",
       errorLoadingProducts: "Error loading products",
+      filters: "Filters",
+      clearAll: "Clear all",
+      sortBy: "Sort by",
+      relevance: "Relevance",
     },
     suppliersMap: {
       globalNetwork: "Global Network",

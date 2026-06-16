@@ -39,6 +39,20 @@ interface ApiUser {
   role: string
   company_name?: string
   country?: string
+  avatar?: string
+}
+
+interface ApiMessage {
+  id: number | string
+  conversation_id?: number | string
+  user_id?: number | string
+  sender_id?: number | string
+  message?: string
+  body?: string
+  content?: string
+  is_read?: boolean | number
+  created_at?: string
+  updated_at?: string
 }
 
 interface ApiConversation {
@@ -51,6 +65,7 @@ interface ApiConversation {
   last_message_sent_at: string | null
   creator: ApiUser
   participants: ApiUser[]
+  last_message?: ApiMessage
 }
 
 /**
@@ -59,10 +74,33 @@ interface ApiConversation {
 function normalizeParticipant(user: ApiUser): ChatParticipant {
   return {
     id: user.id.toString(),
-    name: `${user.first_name} ${user.last_name}`.trim(),
+    name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || 'Unknown User',
     role: user.role as any,
     company: user.company_name,
-    country: user.country
+    country: user.country,
+    avatar: user.avatar
+  }
+}
+
+function normalizeMessage(msg: ApiMessage): ChatMessage {
+  let formattedTime = "Recently"
+  try {
+    if (msg.created_at) {
+      formattedTime = formatDistanceToNow(new Date(msg.created_at.replace(' ', 'T')), { addSuffix: true })
+    }
+  } catch (e) {
+    console.error("Date formatting error:", e)
+  }
+
+  const senderId = msg.sender_id || msg.user_id || "";
+  const text = msg.body || msg.content || msg.message || "";
+
+  return {
+    id: msg.id ? msg.id.toString() : `msg-${Date.now()}`,
+    senderId: senderId.toString(),
+    text: text,
+    timestamp: formattedTime,
+    isRead: !!msg.is_read
   }
 }
 
@@ -70,7 +108,7 @@ function normalizeParticipant(user: ApiUser): ChatParticipant {
  * Normalizes an API conversation to the frontend ChatConversation type
  */
 function normalizeConversation(conv: ApiConversation): ChatConversation {
-  const lastActivity = conv.last_message_sent_at || conv.updated_at
+  const lastActivity = conv.last_message_sent_at || conv.updated_at || conv.created_at
   let formattedTime = "Recently"
   
   try {
@@ -86,7 +124,7 @@ function normalizeConversation(conv: ApiConversation): ChatConversation {
     participants: (conv.participants || []).map(normalizeParticipant),
     unreadCount: conv.is_unread ? 1 : 0,
     updatedAt: formattedTime,
-    lastMessage: undefined 
+    lastMessage: conv.last_message ? normalizeMessage(conv.last_message) : undefined 
   }
 }
 
@@ -95,20 +133,11 @@ function normalizeConversation(conv: ApiConversation): ChatConversation {
  */
 export async function getConversations(params?: Record<string, any>): Promise<ChatConversation[]> {
   try {
-    const response = await apiClient.get("/conversations", { 
-      params: {
-        per_page: 50,
-        ...params
-      }
-    })
+    const response = await apiClient.get("/conversations", { params })
+    const data = response.data?.data || response.data || []
+    if (!Array.isArray(data)) return []
     
-    const rawData = response.data?.data
-    
-    if (Array.isArray(rawData)) {
-      return rawData.map(normalizeConversation)
-    }
-    
-    return []
+    return data.map(normalizeConversation)
   } catch (error) {
     console.error("Failed to fetch conversations:", error)
     return []
@@ -118,17 +147,25 @@ export async function getConversations(params?: Record<string, any>): Promise<Ch
 /**
  * Create a new conversation
  */
-export async function createConversation(participantIds: number[], name?: string): Promise<ChatConversation | null> {
+export async function createConversation(participantIds: (string|number)[], name?: string): Promise<ChatConversation | null> {
   try {
     const response = await apiClient.post("/conversations", {
-      participant_ids: participantIds,
-      name
-    })
-    const data = response.data?.data
-    return data ? normalizeConversation(data) : null
-  } catch (error) {
-    console.error("Failed to create conversation:", error)
-    return null
+      participant_ids: participantIds.map(id => Number(id))
+    });
+
+    const apiData = response.data?.data || response.data;
+    
+    if (apiData && apiData.id) {
+      return normalizeConversation(apiData);
+    }
+    
+    return null;
+  } catch (error: any) {
+    console.error("Failed to create conversation:", error);
+    if (error.response) {
+      console.error("API Response Error:", error.response.data);
+    }
+    return null;
   }
 }
 
@@ -138,27 +175,18 @@ export async function createConversation(participantIds: number[], name?: string
 export async function getMessages(conversationId: string): Promise<ChatMessage[]> {
   try {
     const response = await apiClient.get(`/conversations/${conversationId}/messages`)
-    const rawMessages = response.data?.data || []
+    const data = response.data?.data || response.data || []
+    if (!Array.isArray(data)) return []
     
-    if (Array.isArray(rawMessages)) {
-      return rawMessages
-        .slice()
-        .sort((a: any, b: any) => {
-          const aTime = a?.created_at ? new Date(a.created_at).getTime() : 0
-          const bTime = b?.created_at ? new Date(b.created_at).getTime() : 0
-          return aTime - bTime
-        })
-        .map((m: any) => ({
-        id: m.id.toString(),
-        senderId: m.sender_id.toString(),
-        text: m.body || m.content || m.message || "",
-        timestamp: m.created_at ? formatDistanceToNow(new Date(m.created_at), { addSuffix: true }) : "",
-        isRead: !!m.read_at,
-        attachments: m.attachments
-      }))
-    }
+    // Sort messages ascending (oldest first, newest last)
+    const sortedData = [...data].sort((a: any, b: any) => {
+      if (a.created_at && b.created_at) {
+        return new Date(a.created_at.replace(' ', 'T')).getTime() - new Date(b.created_at.replace(' ', 'T')).getTime()
+      }
+      return Number(a.id) - Number(b.id)
+    })
     
-    return []
+    return sortedData.map((msg: any) => normalizeMessage(msg))
   } catch (error) {
     console.error("Failed to fetch messages:", error)
     return []
@@ -170,36 +198,29 @@ export async function getMessages(conversationId: string): Promise<ChatMessage[]
  */
 export async function sendMessage(conversationId: string, text: string, files?: File[]): Promise<ChatMessage | null> {
   try {
-    const formData = new FormData()
-    formData.append("body", text)
+    let response;
     
-    if (files && files.length > 0) {
-      files.forEach((file, index) => {
-        formData.append(`attachments[${index}]`, file)
+    if (files && files.length) {
+      const formData = new FormData()
+      formData.append("body", text)
+      files.forEach((f, idx) => {
+        formData.append(`attachments[${idx}]`, f)
       })
+      response = await apiClient.post(`/conversations/${conversationId}/messages`, formData)
+    } else {
+      response = await apiClient.post(`/conversations/${conversationId}/messages`, { body: text })
     }
-
-    const response = await apiClient.post(`/conversations/${conversationId}/messages`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data"
-      }
-    })
     
-    const m = response.data?.data
-    if (m) {
-      return {
-        id: m.id.toString(),
-        senderId: m.sender_id.toString(),
-        text: m.body || m.content || m.message || "",
-        timestamp: "Just now",
-        isRead: true,
-        attachments: m.attachments
-      }
+    const data = response.data?.data || response.data
+    
+    if (data && data.id) {
+      return normalizeMessage(data)
     }
-    return null
+    
+    return null;
   } catch (error) {
     console.error("Failed to send message:", error)
-    return null
+    return null;
   }
 }
 
@@ -208,10 +229,10 @@ export async function sendMessage(conversationId: string, text: string, files?: 
  */
 export async function markAsRead(conversationId: string): Promise<boolean> {
   try {
-    await apiClient.post(`/conversations/${conversationId}/read`)
-    return true
-  } catch (error) {
-    console.error("Failed to mark as read:", error)
-    return false
+    await apiClient.put(`/conversations/${conversationId}/read`);
+    return true;
+  } catch (e) {
+    // Ignore if endpoint doesn't exist
+    return false;
   }
 }

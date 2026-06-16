@@ -14,6 +14,7 @@ export interface Supplier {
     countryCode: string
   }
   reviewed: boolean
+  verified?: boolean
   reviewedLevel: "basic" | "standard" | "premium" | "enterprise"
   yearEstablished: number
   employeeCount: string
