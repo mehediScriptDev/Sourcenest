@@ -1,29 +1,61 @@
 "use client"
 
+import Link from "next/link"
+import { Suspense, useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import AdditionalInformationSubmit from "@/components/manufacturers/additional-information-submit"
+import {
+  resolveAdditionalInfoRequest,
+} from "@/lib/additional-information-storage"
+import type { AdditionalInformationRequest } from "@/lib/api/manufacturer-additional-information"
 import { 
   CheckCircle2, 
   Clock, 
   AlertCircle, 
   MessageSquare, 
-  Upload, 
   LogOut, 
   Building2, 
   ShieldCheck, 
   Mail,
-  FileQuestion,
-  FileWarning
+  FileWarning,
+  XCircle
 } from "lucide-react"
 
-export default function ManufacturerAccountReviewPage() {
+function ManufacturerAccountReviewContent() {
+  const { user, logout } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [additionalInfoRequest, setAdditionalInfoRequest] =
+    useState<AdditionalInformationRequest | null>(null)
+
+  useEffect(() => {
+    const urlToken = searchParams.get("token")
+    const resolved = resolveAdditionalInfoRequest(urlToken)
+    setAdditionalInfoRequest(resolved?.status === "pending" ? resolved : null)
+  }, [searchParams])
+
+  const handleSignOut = () => {
+    logout()
+    router.push("/auth/signin?role=manufacturer")
+  }
+
+  const status = user?.manufacturerStatus || "pending"
+  const isNeedsInfo = status === "needs_more_info"
+  const isRejected = status === "rejected"
+  const isSuspended = status === "suspended"
+  const isApproved = status === "approved"
+  const isPending = status === "pending" || status === "pending_approval"
+
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-linear-to-b from-muted/50 to-muted/20">
       {/* Header / Navbar */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <span className="text-sm font-bold text-primary-foreground">SN</span>
@@ -31,20 +63,28 @@ export default function ManufacturerAccountReviewPage() {
             <span className="font-serif text-lg font-medium">SourceNest</span>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Building2 className="h-4 w-4" />
-              <span>TechGear Manufacturing Ltd.</span>
-            </div>
-            <Button variant="ghost" size="sm" className="gap-2">
-              <LogOut className="h-4 w-4" />
-              Sign Out
-            </Button>
+            {user && (
+              <div className="hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
+                <Building2 className="h-4 w-4" />
+                <span>{user.company || "Manufacturer"}</span>
+              </div>
+            )}
+            {user ? (
+              <Button variant="ghost" size="sm" className="gap-2" onClick={handleSignOut}>
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </Button>
+            ) : (
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/auth/signin?role=manufacturer">Sign In</Link>
+              </Button>
+            )}
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container max-w-5xl py-8 md:py-12">
+      <main className="container mx-auto max-w-5xl px-4 py-8 md:px-8 md:py-12">
         {/* Page Title & Status Overview */}
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
@@ -55,92 +95,155 @@ export default function ManufacturerAccountReviewPage() {
           </div>
           
           {/* Main Status Badge */}
-          <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-500/20 dark:bg-amber-500/10">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400">
-              <Clock className="h-5 w-5" />
+          <div className={`flex items-center gap-4 rounded-xl border px-5 py-4 shadow-sm ${
+            isPending ? "border-amber-200/60 bg-linear-to-r from-amber-50 to-amber-100/50 dark:border-amber-500/20 dark:from-amber-500/10 dark:to-amber-500/5" :
+            isNeedsInfo ? "border-blue-200/60 bg-linear-to-r from-blue-50 to-blue-100/50 dark:border-blue-500/20 dark:from-blue-500/10 dark:to-blue-500/5" :
+            "border-red-200/60 bg-linear-to-r from-red-50 to-red-100/50 dark:border-red-500/20 dark:from-red-500/10 dark:to-red-500/5"
+          }`}>
+            <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
+              isPending ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400" :
+              isNeedsInfo ? "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400" :
+              "bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400"
+            }`}>
+              {isPending && <Clock className="h-5 w-5" />}
+              {isNeedsInfo && <AlertCircle className="h-5 w-5" />}
+              {(isRejected || isSuspended) && <XCircle className="h-5 w-5" />}
             </div>
             <div>
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Application Status</p>
-              <h2 className="text-lg font-bold text-amber-900 dark:text-amber-400">Action Required</h2>
+              <p className={`text-sm font-medium ${
+                isPending ? "text-amber-800 dark:text-amber-300" :
+                isNeedsInfo ? "text-blue-800 dark:text-blue-300" :
+                "text-red-800 dark:text-red-300"
+              }`}>Application Status</p>
+              <h2 className="text-lg font-bold">
+                {isPending && "Under Review"}
+                {isNeedsInfo && "Action Required"}
+                {isRejected && "Rejected"}
+                {isSuspended && "Suspended"}
+              </h2>
             </div>
           </div>
         </div>
+
+        {additionalInfoRequest && (
+          <div className="mb-8">
+            {!user ? (
+              <Card className="border-amber-200 shadow-md">
+                <CardHeader>
+                  <CardTitle className="text-lg">Additional Information Required</CardTitle>
+                  <CardDescription>
+                    Sign in to submit the documents and responses requested by the admin team.
+                  </CardDescription>
+                </CardHeader>
+                <CardFooter>
+                  <Button asChild>
+                    <Link
+                      href={`/auth/signin?role=manufacturer&redirect=${encodeURIComponent(
+                        `/review?token=${additionalInfoRequest.token}`
+                      )}`}
+                    >
+                      Sign In to Respond
+                    </Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            ) : (
+              <AdditionalInformationSubmit
+                request={additionalInfoRequest}
+                onSuccess={() => setAdditionalInfoRequest(null)}
+              />
+            )}
+          </div>
+        )}
 
         <div className="grid gap-6 md:grid-cols-3">
           {/* Left Column: Requirements & Messages */}
           <div className="space-y-6 md:col-span-2">
             
             {/* What is required section */}
-            <Card className="border-l-4 border-l-amber-500 shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+            {isPending && (
+              <Card className="overflow-hidden border-l-4 border-l-amber-500 shadow-md">
+                <CardHeader className="pb-3">
                   <div className="flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5 text-amber-500" />
+                    <Clock className="h-5 w-5 text-amber-500" />
+                    <CardTitle className="text-lg">Review in Progress</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Your registration is currently being verified by our compliance team.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Thank you for submitting your application! We are checking your business documents and manufacturing details to ensure a safe and secure marketplace. This process normally takes 1-2 business days.
+                  </p>
+                  <div className="rounded-lg border border-amber-200/50 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20 text-sm text-amber-900 dark:text-amber-200">
+                    <p className="font-semibold flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                      Subscription / Payment Registered
+                    </p>
+                    <p className="mt-1 text-xs opacity-90">
+                      Your subscription selection and transaction details have been received. Once your application is approved, your account will be activated and your subscription plan will become active. No further payment action is needed.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {isNeedsInfo && (
+              <Card className="overflow-hidden border-l-4 border-l-blue-500 shadow-md">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5 text-blue-500" />
                     <CardTitle className="text-lg">Required Actions</CardTitle>
                   </div>
-                  <Badge variant="outline" className="bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                    2 Pending Tasks
-                  </Badge>
-                </div>
-                <CardDescription>
-                  Please provide the following information to proceed with your approval.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                
-                {/* Task 1 */}
-                <div className="rounded-lg border bg-card p-4 transition-all hover:bg-muted/50">
-                  <div className="flex items-start gap-4">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <FileWarning className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium text-foreground">Business License</h4>
-                        <Badge variant="secondary" className="text-xs">Document</Badge>
+                  <CardDescription>
+                    The admin team has requested modifications or documents to proceed.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-lg border bg-card p-4">
+                    <div className="flex items-start gap-4">
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                        <FileWarning className="h-4 w-4" />
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        The business license you uploaded is expired. Please upload a valid, current business registration document.
-                      </p>
-                      <div className="pt-2">
-                        <Button size="sm" className="gap-2">
-                          <Upload className="h-4 w-4" />
-                          Upload Document
-                        </Button>
+                      <div className="flex-1 space-y-1">
+                        <h4 className="font-medium text-foreground">Verify Registration Details</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Please review the messages from the administrator below and verify that your uploaded company documents are correct.
+                        </p>
                       </div>
                     </div>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            )}
 
-                {/* Task 2 */}
-                <div className="rounded-lg border bg-card p-4 transition-all hover:bg-muted/50">
-                  <div className="flex items-start gap-4">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <FileQuestion className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium text-foreground">Facility Photos</h4>
-                        <Badge variant="secondary" className="text-xs">Information</Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Please provide 2-3 additional photos of your main manufacturing floor showing equipment.
-                      </p>
-                      <div className="pt-2">
-                        <Button size="sm" variant="outline" className="gap-2 border-primary text-primary hover:bg-primary/5">
-                          <Upload className="h-4 w-4" />
-                          Upload Photos
-                        </Button>
-                      </div>
-                    </div>
+            {(isRejected || isSuspended) && (
+              <Card className="overflow-hidden border-l-4 border-l-red-500 shadow-md">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-5 w-5 text-red-500" />
+                    <CardTitle className="text-lg">Account {isRejected ? "Rejected" : "Suspended"}</CardTitle>
                   </div>
-                </div>
-
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {isRejected 
+                      ? "Unfortunately, your application did not pass our moderation check. This may be due to incomplete factory images, invalid business registration, or compliance mismatch."
+                      : "Your account has been suspended by the platform administrator."}
+                  </p>
+                  <div className="rounded-lg border border-red-200/50 bg-red-50/50 p-4 dark:border-red-900/50 dark:bg-red-950/20 text-sm text-red-900 dark:text-red-200">
+                    <p className="font-semibold">Need Help?</p>
+                    <p className="mt-1 text-xs opacity-90">
+                      If you believe this is in error or you want to request another review, please send a message to support or contact admin@sourcenest.com.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Admin Communications */}
-            <Card className="shadow-sm">
+            <Card className="overflow-hidden shadow-md">
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <MessageSquare className="h-5 w-5 text-primary" />
@@ -152,40 +255,28 @@ export default function ManufacturerAccountReviewPage() {
                 <div className="space-y-6">
                   {/* Message Thread */}
                   <div className="relative pl-6 after:absolute after:bottom-0 after:left-[11px] after:top-2 after:w-px after:bg-border">
-                    {/* Message 1 */}
-                    <div className="relative mb-6">
+                    <div className="relative">
                       <div className="absolute -left-6 mt-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground ring-4 ring-background">
                         <ShieldCheck className="h-3 w-3" />
                       </div>
                       <div className="rounded-lg rounded-tl-none bg-muted/50 p-4">
                         <div className="mb-2 flex items-center justify-between">
                           <span className="font-medium text-sm">System Admin</span>
-                          <span className="text-xs text-muted-foreground">Today, 10:45 AM</span>
+                          <span className="text-xs text-muted-foreground">
+                            {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "Just now"}
+                          </span>
                         </div>
                         <p className="text-sm text-foreground">
-                          Hello TechGear team, we are currently reviewing your application. Everything looks good so far, but we noticed your business license expires next week. Could you provide an updated copy? Also, some photos of your main assembly line would be helpful.
+                          {isPending && "Hello! We are currently reviewing your application. We will check your license and factory photos and activate your subscription once verified. Thank you for your patience!"}
+                          {isNeedsInfo && "Hello! We need some more verification details. Please verify your business license and website address."}
+                          {isRejected && "Hello, your application did not meet our verification requirements. Please contact compliance for details."}
+                          {isSuspended && "Your account has been suspended due to policy violations. Please contact support."}
                         </p>
-                      </div>
-                    </div>
-
-                    {/* Notification Event */}
-                    <div className="relative">
-                      <div className="absolute -left-6 mt-1 flex h-6 w-6 items-center justify-center rounded-full bg-muted ring-4 ring-background">
-                        <Mail className="h-3 w-3 text-muted-foreground" />
-                      </div>
-                      <div className="flex items-center gap-2 py-1 pl-2">
-                        <p className="text-xs text-muted-foreground">An email notification was sent to your registered address.</p>
                       </div>
                     </div>
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="border-t bg-muted/20 px-6 py-4">
-                <Button variant="outline" className="w-full gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Reply to Admin
-                </Button>
-              </CardFooter>
             </Card>
           </div>
 
@@ -193,7 +284,7 @@ export default function ManufacturerAccountReviewPage() {
           <div className="space-y-6">
             
             {/* Progress Tracker */}
-            <Card className="shadow-sm">
+            <Card className="overflow-hidden shadow-md">
               <CardHeader>
                 <CardTitle className="text-lg">Review Progress</CardTitle>
               </CardHeader>
@@ -204,24 +295,41 @@ export default function ManufacturerAccountReviewPage() {
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
                         <CheckCircle2 className="h-5 w-5" />
                       </div>
-                      <div className="h-full w-px bg-emerald-200 dark:bg-emerald-800" />
+                      <div className={`h-full w-px ${isPending ? "bg-amber-200 dark:bg-amber-800" : "bg-emerald-200 dark:bg-emerald-800"}`} />
                     </div>
                     <div className="pb-6">
                       <p className="font-medium text-sm">Application Submitted</p>
-                      <p className="text-xs text-muted-foreground mt-1">Oct 24, 2026</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "Recently"}
+                      </p>
                     </div>
                   </div>
 
                   <div className="flex gap-4">
                     <div className="flex flex-col items-center">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600 ring-4 ring-amber-50 dark:bg-amber-500/20 dark:text-amber-400 dark:ring-amber-500/10">
-                        <div className="h-2.5 w-2.5 rounded-full bg-amber-600 dark:bg-amber-400 animate-pulse" />
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-full ring-4 ${
+                        isPending ? "bg-amber-100 text-amber-600 ring-amber-50 dark:bg-amber-500/20 dark:text-amber-400 dark:ring-amber-500/10" :
+                        isNeedsInfo ? "bg-blue-100 text-blue-600 ring-blue-50 dark:bg-blue-500/20 dark:text-blue-400 dark:ring-blue-500/10" :
+                        isApproved ? "bg-emerald-100 text-emerald-600 ring-emerald-50" :
+                        "bg-red-100 text-red-600 ring-red-50 dark:bg-red-500/20 dark:text-red-400"
+                      }`}>
+                        {isPending && <div className="h-2.5 w-2.5 rounded-full bg-amber-600 dark:bg-amber-400 animate-pulse" />}
+                        {isNeedsInfo && <div className="h-2.5 w-2.5 rounded-full bg-blue-600 animate-pulse" />}
+                        {(isRejected || isSuspended) && <div className="h-2.5 w-2.5 rounded-full bg-red-600" />}
                       </div>
                       <div className="h-full w-px bg-border" />
                     </div>
                     <div className="pb-6">
-                      <p className="font-medium text-sm text-amber-700 dark:text-amber-400">Initial Review</p>
-                      <p className="text-xs text-muted-foreground mt-1">Action Required</p>
+                      <p className="font-medium text-sm">
+                        {isPending && "Initial Review"}
+                        {isNeedsInfo && "More Info Requested"}
+                        {(isRejected || isSuspended) && "Review Terminated"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {isPending && "Under Review"}
+                        {isNeedsInfo && "Action Required"}
+                        {(isRejected || isSuspended) && "Rejected/Suspended"}
+                      </p>
                     </div>
                   </div>
 
@@ -252,7 +360,7 @@ export default function ManufacturerAccountReviewPage() {
             </Card>
 
             {/* Submitted Info Summary */}
-            <Card className="shadow-sm">
+            <Card className="overflow-hidden shadow-md">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                   Your Details
@@ -261,17 +369,24 @@ export default function ManufacturerAccountReviewPage() {
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Company</span>
-                  <span className="font-medium">TechGear Mfg.</span>
+                  <span className="font-medium text-foreground">{user?.company || "—"}</span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Email</span>
-                  <span className="font-medium">contact@techgear.com</span>
+                  <span className="font-medium text-foreground">{user?.email || "—"}</span>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Name</span>
+                  <span className="font-medium text-foreground">{user?.name || "—"}</span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Submitted on</span>
-                  <span className="font-medium">Oct 24, 2026</span>
+                  <span className="font-medium text-foreground">
+                    {user?.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' }) : "—"}
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -280,5 +395,13 @@ export default function ManufacturerAccountReviewPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function ManufacturerAccountReviewPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-muted/20" />}>
+      <ManufacturerAccountReviewContent />
+    </Suspense>
   )
 }

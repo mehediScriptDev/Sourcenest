@@ -6,11 +6,11 @@ import { ArrowLeft, Home } from "lucide-react"
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-50 to-slate-100 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background to-muted/40 px-4">
       <div className="max-w-md w-full text-center space-y-8">
         {/* 404 Display */}
         <div className="space-y-4">
-          <div className="text-8xl font-bold text-transparent bg-clip-text bg-linear-to-r from-blue-600 to-purple-600">
+          <div className="text-8xl font-serif font-bold text-transparent bg-clip-text bg-linear-to-r from-secondary to-primary">
             404
           </div>
           <h1 className="text-4xl font-serif font-bold text-foreground">
@@ -23,9 +23,9 @@ export default function NotFound() {
 
         {/* Illustration */}
         <div className="py-8">
-          <div className="w-32 h-32 mx-auto bg-slate-200 rounded-full flex items-center justify-center">
+          <div className="w-32 h-32 mx-auto bg-muted rounded-full flex items-center justify-center">
             <svg
-              className="w-16 h-16 text-slate-400"
+              className="w-16 h-16 text-muted-foreground/60"
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -62,26 +62,26 @@ export default function NotFound() {
         </div>
 
         {/* Helpful Links */}
-        <div className="pt-8 border-t border-slate-200">
+        <div className="pt-8 border-t border-border">
           <p className="text-sm text-muted-foreground mb-4">
             You might find what you're looking for:
           </p>
           <div className="space-y-2">
             <Link
               href="/"
-              className="block text-sm text-blue-600 hover:text-blue-700 font-medium transition"
+              className="block text-sm text-secondary hover:text-primary font-medium transition"
             >
               → Home Page
             </Link>
             <Link
               href="/search"
-              className="block text-sm text-blue-600 hover:text-blue-700 font-medium transition"
+              className="block text-sm text-secondary hover:text-primary font-medium transition"
             >
               → Search Products
             </Link>
             <Link
               href="/contact"
-              className="block text-sm text-blue-600 hover:text-blue-700 font-medium transition"
+              className="block text-sm text-secondary hover:text-primary font-medium transition"
             >
               → Contact Us
             </Link>

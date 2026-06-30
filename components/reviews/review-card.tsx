@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Star, ThumbsUp, CheckCircle, Flag, MessageSquare } from "lucide-react"
+import { Star, CheckCircle } from "lucide-react"
 import type { Review } from "@/lib/data/reviews"
 
 interface ReviewCardProps {
@@ -12,15 +12,7 @@ interface ReviewCardProps {
 }
 
 export function ReviewCard({ review, showSupplierResponse = true }: ReviewCardProps) {
-  const [helpful, setHelpful] = useState(review.helpful)
-  const [hasVoted, setHasVoted] = useState(false)
-
-  const handleHelpful = () => {
-    if (!hasVoted) {
-      setHelpful(prev => prev + 1)
-      setHasVoted(true)
-    }
-  }
+  // State for helpful votes has been removed
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -36,7 +28,7 @@ export function ReviewCard({ review, showSupplierResponse = true }: ReviewCardPr
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-4">
           {/* Avatar */}
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
             {review.buyerName.split(" ").map(n => n[0]).join("")}
           </div>
           
@@ -98,39 +90,9 @@ export function ReviewCard({ review, showSupplierResponse = true }: ReviewCardPr
         </div>
       )}
 
-      {/* Supplier Response */}
-      {showSupplierResponse && review.supplierResponse && (
-        <div className="mt-4 rounded-lg bg-muted/50 p-4 border-l-4 border-secondary">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-secondary" />
-            <span className="font-semibold text-sm text-foreground">Supplier Response</span>
-            <span className="text-xs text-muted-foreground">
-              {formatDate(review.supplierResponse.date)}
-            </span>
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {review.supplierResponse.content}
-          </p>
-        </div>
-      )}
+      {/* Supplier response has been removed */}
 
-      {/* Actions */}
-      <div className="mt-4 flex items-center gap-4 pt-4 border-t border-border">
-        <Button
-          variant="ghost"
-          size="sm"
-          className={`gap-2 ${hasVoted ? "text-secondary" : ""}`}
-          onClick={handleHelpful}
-          disabled={hasVoted}
-        >
-          <ThumbsUp className={`h-4 w-4 ${hasVoted ? "fill-current" : ""}`} />
-          Helpful ({helpful})
-        </Button>
-        <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
-          <Flag className="h-4 w-4" />
-          Report
-        </Button>
-      </div>
+      {/* Actions (Removed Helpful and Report buttons) */}
     </div>
   )
 }

@@ -898,8 +898,10 @@ const es = {
         price: "自定义",
         cta: "联系销售"
       },
-      billedAnnually: "按年计费 (${price}/月)",
-      pricePerCycle: "{cycle}"
+      billedAnnually: "每年计费（${price}/月）",
+      pricePerCycle: "{cycle}",
+      free: "免费",
+      noPlans: "当前没有可用的定价计划。"
     },
     approval: {
       title: "需要批准",
@@ -959,6 +961,7 @@ const es = {
       success: "支付成功！",
       transactionId: "交易 ID：",
       redirecting: "正在重定向到注册...",
+      redirectingDashboard: "正在重定向到您的仪表板...",
       failed: "支付失败",
       tryAgain: "重试",
       priceInfo: "{plan} 计划（{cycle}）",

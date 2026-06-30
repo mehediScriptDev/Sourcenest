@@ -400,6 +400,9 @@ function NewRFQForm() {
                     <SelectItem value="kg">KG</SelectItem>
                     <SelectItem value="meters">Meters</SelectItem>
                     <SelectItem value="cartons">Cartons</SelectItem>
+                    <SelectItem value="pallets">Pallets</SelectItem>
+                    <SelectItem value="20ft container">20ft Container</SelectItem>
+                    <SelectItem value="40ft container">40ft Container</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -438,58 +440,42 @@ export default function AdminFiltersPage() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
-                <Filter className="h-5 w-5 text-secondary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{filterTypeCount}</p>
-                <p className="text-sm text-muted-foreground">Filter Categories</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-                <Package className="h-5 w-5 text-blue-700" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{totalOptionsCount}</p>
-                <p className="text-sm text-muted-foreground">Total Options</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100">
-                <Filter className="h-5 w-5 text-emerald-700" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{enabledCount}</p>
-                <p className="text-sm text-muted-foreground">Enabled</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100">
-                <Filter className="h-5 w-5 text-amber-700" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{disabledCount}</p>
-                <p className="text-sm text-muted-foreground">Disabled</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <AdminStatCard
+          title="Filter Categories"
+          value={filterTypeCount}
+          icon={Filter}
+          iconClassName="text-secondary"
+          iconWrapperClassName="bg-secondary/10"
+          layout="horizontal"
+          contentClassName="p-6"
+        />
+        <AdminStatCard
+          title="Total Options"
+          value={totalOptionsCount}
+          icon={Package}
+          iconClassName="text-blue-700"
+          iconWrapperClassName="bg-blue-100"
+          layout="horizontal"
+          contentClassName="p-6"
+        />
+        <AdminStatCard
+          title="Enabled"
+          value={enabledCount}
+          icon={Filter}
+          iconClassName="text-emerald-700"
+          iconWrapperClassName="bg-emerald-100"
+          layout="horizontal"
+          contentClassName="p-6"
+        />
+        <AdminStatCard
+          title="Disabled"
+          value={disabledCount}
+          icon={Filter}
+          iconClassName="text-amber-700"
+          iconWrapperClassName="bg-amber-100"
+          layout="horizontal"
+          contentClassName="p-6"
+        />
       </div>
 
       {/* Filter Categories Tabs */}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -13,7 +13,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Star, AlertCircle } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Star, AlertCircle, Loader2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 
 interface ProductReviewFormProps {
@@ -42,39 +49,91 @@ export function ProductReviewForm({
   const [hoverRating, setHoverRating] = useState(0)
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
+  const [orderId, setOrderId] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-
-  const handleSubmit = async () => {
-    if (rating === 0 || !content.trim()) return
-    
-    setIsSubmitting(true)
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    if (onSubmit) {
-      onSubmit({
-        rating,
-        title,
-        content
-      })
-    }
-    
-    setSubmitted(true)
-    setIsSubmitting(false)
-    
-    // Reset and close after delay
-    setTimeout(() => {
-      setRating(0)
-      setTitle("")
-      setContent("")
-      setSubmitted(false)
-      onOpenChange(false)
-    }, 2000)
-  }
+  const [error, setError] = useState<string | null>(null)
+  
+  const [orders, setOrders] = useState<any[]>([])
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false)
+  const [hasFetchedOrders, setHasFetchedOrders] = useState(false)
 
   const isBuyer = user?.role === "buyer"
+
+  // Fetch user's completed orders for this product when form opens
+  useEffect(() => {
+    if (open && isBuyer && !hasFetchedOrders) {
+      setIsLoadingOrders(true)
+      import("@/lib/api/orders").then(({ getBuyerOrders }) => {
+        getBuyerOrders({ product_id: parseInt(productId), status: "completed" })
+          .then((res) => {
+            if (res.success && res.data) {
+              setOrders(res.data)
+              if (res.data.length > 0) {
+                setOrderId(res.data[0].id.toString())
+              }
+            }
+            setHasFetchedOrders(true)
+            setIsLoadingOrders(false)
+          })
+          .catch(() => {
+            setHasFetchedOrders(true)
+            setIsLoadingOrders(false)
+          })
+      })
+    }
+  }, [open, isBuyer, productId, hasFetchedOrders])
+
+  useEffect(() => {
+    if (!open) {
+      setHasFetchedOrders(false)
+      setOrders([])
+      setError(null)
+    }
+  }, [open])
+
+  const handleSubmit = async () => {
+    if (rating === 0 || !content.trim() || !orderId.trim()) return
+    
+    setIsSubmitting(true)
+    setError(null)
+    
+    // Using dynamically imported API to avoid circular deps or missing imports
+    const { createProductReview } = await import("@/lib/api/orders")
+    
+    const response = await createProductReview(parseInt(productId), {
+      order_id: parseInt(orderId),
+      rating,
+      comment: content,
+      // title is not supported by API yet, but we keep it in UI
+    })
+    
+    if (response.success) {
+      if (onSubmit) {
+        onSubmit({
+          rating,
+          title,
+          content
+        })
+      }
+      
+      setSubmitted(true)
+      setIsSubmitting(false)
+      
+      // Reset and close after delay
+      setTimeout(() => {
+        setRating(0)
+        setTitle("")
+        setContent("")
+        setOrderId("")
+        setSubmitted(false)
+        onOpenChange(false)
+      }, 2000)
+    } else {
+      setError(response.message || "Failed to submit review. Please check your Order ID and try again.")
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -104,6 +163,22 @@ export function ProductReviewForm({
             <p className="mt-2 text-muted-foreground">
               Only buyers can leave reviews for products.
             </p>
+          </div>
+        ) : isLoadingOrders ? (
+          <div className="py-12 flex flex-col items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="mt-4 text-sm text-muted-foreground">Verifying purchase history...</p>
+          </div>
+        ) : hasFetchedOrders && orders.length === 0 ? (
+          <div className="py-8 text-center">
+            <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground/50" />
+            <h3 className="mt-4 font-semibold text-foreground">Purchase Required</h3>
+            <p className="mt-2 text-muted-foreground">
+              Only customers with a completed order can leave a review.
+            </p>
+            <Button className="mt-6" variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
           </div>
         ) : submitted ? (
           <div className="py-8 text-center">
@@ -149,6 +224,33 @@ export function ProductReviewForm({
                     </span>
                   )}
                 </div>
+              </div>
+
+              {error && (
+                <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  {error}
+                </div>
+              )}
+
+              {/* Order ID */}
+              <div>
+                <Label htmlFor="review-order-id">Select Order *</Label>
+                <Select value={orderId} onValueChange={setOrderId}>
+                  <SelectTrigger id="review-order-id" className="mt-2">
+                    <SelectValue placeholder="Select an order to review" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {orders.map((order) => (
+                      <SelectItem key={order.id} value={order.id.toString()}>
+                        Order #{order.orderNumber} ({new Date(order.createdAt).toLocaleDateString()})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Select the completed order you wish to review.
+                </p>
               </div>
 
               {/* Review Title */}

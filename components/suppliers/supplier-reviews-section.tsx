@@ -11,8 +11,7 @@ import {
 } from "@/components/ui/select"
 import { ReviewCard } from "@/components/reviews/review-card"
 import { RatingSummary } from "@/components/reviews/rating-summary"
-import { ReviewForm } from "@/components/reviews/review-form"
-import { Star, PenLine, MessageSquareText } from "lucide-react"
+import { Star, MessageSquareText } from "lucide-react"
 import type { Review } from "@/lib/data/reviews"
 
 interface SupplierReviewsSectionProps {
@@ -40,7 +39,6 @@ export function SupplierReviewsSection({
   reviews,
   ratingSummary
 }: SupplierReviewsSectionProps) {
-  const [showReviewForm, setShowReviewForm] = useState(false)
   const [sortBy, setSortBy] = useState<SortOption>("newest")
   const [filterRating, setFilterRating] = useState<string>("all")
 
@@ -60,10 +58,7 @@ export function SupplierReviewsSection({
       }
     })
 
-  const handleReviewSubmit = () => {
-    // In production, this would refresh the reviews list
-    console.log("Review submitted")
-  }
+
 
   return (
     <div className="space-y-8">
@@ -75,15 +70,6 @@ export function SupplierReviewsSection({
             total={ratingSummary.total}
             distribution={ratingSummary.distribution}
           />
-          
-          <Button 
-            onClick={() => setShowReviewForm(true)}
-            className="gap-2 self-start"
-            size="lg"
-          >
-            <PenLine className="h-4 w-4" />
-            Write a Review
-          </Button>
         </div>
       </div>
 
@@ -138,15 +124,6 @@ export function SupplierReviewsSection({
                 : "Be the first to share your experience with this supplier"
               }
             </p>
-            {filterRating === "all" && (
-              <Button 
-                onClick={() => setShowReviewForm(true)}
-                className="mt-4 gap-2"
-              >
-                <PenLine className="h-4 w-4" />
-                Write the First Review
-              </Button>
-            )}
           </div>
         )}
       </div>
@@ -160,14 +137,6 @@ export function SupplierReviewsSection({
         </div>
       )}
 
-      {/* Review Form Dialog */}
-      <ReviewForm
-        supplierId={supplierId}
-        supplierName={supplierName}
-        open={showReviewForm}
-        onOpenChange={setShowReviewForm}
-        onSubmit={handleReviewSubmit}
-      />
     </div>
   )
 }

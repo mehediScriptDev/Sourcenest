@@ -115,6 +115,9 @@ export default function SignUpPage() {
         additionalNotes: formData.additionalNotes,
         agreeTerms: formData.agreeTerms,
         deviceName,
+        transactionId: typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("transactionId") || undefined : undefined,
+        planId: typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("plan") || undefined : undefined,
+        promoId: typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("promo") || undefined : undefined,
       })
       
       if (result.success) {

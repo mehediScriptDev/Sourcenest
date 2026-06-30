@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
@@ -16,11 +16,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { suppliers } from "@/lib/data/suppliers"
 import { industries } from "@/lib/data/industries"
 import { countries as allCountries, popularManufacturingCountries, exportMarketRegions } from "@/lib/data/countries"
 import { SupplierActionButtons } from "@/components/suppliers/supplier-action-buttons"
 import { CompareBar } from "@/components/suppliers/compare-bar"
+import { getPublicSuppliers, Supplier as ApiSupplier } from "@/lib/api/public-suppliers"
+import { Supplier } from "@/lib/data/suppliers"
 import { 
   Search, 
   Filter, 
@@ -31,7 +32,8 @@ import {
   CheckCircle,
   ChevronRight,
   X,
-  Factory
+  Factory,
+  Loader2
 } from "lucide-react"
 
 const reviewLevels = [
@@ -62,6 +64,37 @@ const moqRanges = [
 // Get popular manufacturing countries for quick filter
 const popularCountries = allCountries.filter(c => popularManufacturingCountries.includes(c.code))
 
+function mapApiSupplierToMockSupplier(apiSupplier: ApiSupplier): Supplier {
+  return {
+    id: apiSupplier.id.toString(),
+    name: apiSupplier.name,
+    slug: apiSupplier.slug,
+    description: apiSupplier.short_description || "",
+    shortDescription: apiSupplier.short_description || "",
+    industry: apiSupplier.industry || "Unknown",
+    industrySlug: apiSupplier.industry_slug || "unknown",
+    categories: [],
+    location: {
+      city: apiSupplier.location.city || "",
+      country: apiSupplier.location.country || "",
+      countryCode: apiSupplier.location.country_code || ""
+    },
+    reviewed: apiSupplier.reviewed,
+    reviewedLevel: (apiSupplier.reviewed_level as any) || "standard",
+    yearEstablished: 0,
+    employeeCount: "",
+    productCount: apiSupplier.product_count,
+    rating: apiSupplier.rating,
+    reviewCount: apiSupplier.review_count,
+    responseRate: apiSupplier.response_rate ? parseInt(apiSupplier.response_rate) : 0,
+    responseTime: apiSupplier.response_time || "N/A",
+    onTimeDelivery: apiSupplier.on_time_delivery ? parseInt(apiSupplier.on_time_delivery) : 0,
+    certifications: apiSupplier.certifications || [],
+    mainProducts: apiSupplier.main_products || [],
+    exportMarkets: apiSupplier.export_markets || [],
+  }
+}
+
 export default function SuppliersPage() {
   const { t } = useTranslation()
   const [searchQuery, setSearchQuery] = useState("")
@@ -73,30 +106,43 @@ export default function SuppliersPage() {
   const [reviewedOnly, setReviewedOnly] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
 
-  const filteredSuppliers = suppliers.filter(supplier => {
-    if (searchQuery && !supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
-        !supplier.mainProducts.some(p => p.toLowerCase().includes(searchQuery.toLowerCase()))) {
-      return false
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalSuppliers, setTotalSuppliers] = useState(0)
+
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      setIsLoading(true)
+      const res = await getPublicSuppliers({
+        page: currentPage,
+        search: searchQuery || undefined,
+        industry: selectedIndustry !== "all" ? selectedIndustry : undefined,
+        country: selectedCountry !== "all" ? selectedCountry : undefined,
+        certification: selectedCertification !== "all" ? selectedCertification : undefined,
+        moq: selectedMoq !== "all" ? selectedMoq : undefined,
+        export_market: selectedExportMarket !== "all" ? selectedExportMarket : undefined,
+        reviewed: reviewedOnly ? true : undefined,
+      })
+
+      if (res && res.data) {
+        setSuppliers(res.data.map(mapApiSupplierToMockSupplier))
+        setTotalPages(res.meta.last_page)
+        setTotalSuppliers(res.meta.total)
+      } else {
+        setSuppliers([])
+        setTotalSuppliers(0)
+      }
+      setIsLoading(false)
     }
-    if (selectedIndustry && selectedIndustry !== "all" && supplier.industrySlug !== selectedIndustry) {
-      return false
-    }
-    if (selectedCountry && selectedCountry !== "all" && supplier.location.countryCode !== selectedCountry) {
-      return false
-    }
-    if (selectedCertification && selectedCertification !== "all" && 
-        !supplier.certifications.some(c => c.toLowerCase().includes(selectedCertification.toLowerCase()))) {
-      return false
-    }
-    if (selectedExportMarket && selectedExportMarket !== "all" &&
-        !supplier.exportMarkets.some(m => m.toLowerCase().includes(selectedExportMarket.toLowerCase()))) {
-      return false
-    }
-    if (reviewedOnly && !supplier.reviewed) {
-      return false
-    }
-    return true
-  })
+
+    const timerId = setTimeout(() => {
+      fetchSuppliers()
+    }, 400)
+
+    return () => clearTimeout(timerId)
+  }, [searchQuery, selectedIndustry, selectedCountry, selectedCertification, selectedMoq, selectedExportMarket, reviewedOnly, currentPage])
 
   const clearFilters = () => {
     setSearchQuery("")
@@ -106,6 +152,7 @@ export default function SuppliersPage() {
     setSelectedMoq("all")
     setSelectedExportMarket("all")
     setReviewedOnly(false)
+    setCurrentPage(1)
   }
 
   const hasActiveFilters = searchQuery || selectedIndustry !== "all" || selectedCountry !== "all" || 
@@ -123,7 +170,7 @@ export default function SuppliersPage() {
                 {t?.landing?.suppliers?.pageTitle || "Find Reviewed Suppliers"}
               </h1>
               <p className="mx-auto mt-4 max-w-2xl text-lg text-primary-foreground/80">
-                {(t?.landing?.suppliers?.pageSubtitle || "{count}+ reviewed manufacturers from around the world").replace("{count}", suppliers.length.toLocaleString())}
+                {(t?.landing?.suppliers?.pageSubtitle || "Explore reviewed manufacturers from around the world").replace("{count}", totalSuppliers.toString())}
               </p>
             </div>
 
@@ -136,7 +183,10 @@ export default function SuppliersPage() {
                     type="text"
                     placeholder={t?.landing?.suppliers?.searchPlaceholder || "Search suppliers, products, or categories..."}
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      setCurrentPage(1)
+                    }}
                     className="h-12 bg-background pl-12 text-base"
                   />
                 </div>
@@ -176,7 +226,7 @@ export default function SuppliersPage() {
                     {/* Industry Filter */}
                     <div>
                       <label className="text-sm font-medium text-foreground">{t?.landing?.suppliers?.industryLabel || "Industry"}</label>
-                      <Select value={selectedIndustry} onValueChange={setSelectedIndustry}>
+                      <Select value={selectedIndustry} onValueChange={(val) => { setSelectedIndustry(val); setCurrentPage(1); }}>
                         <SelectTrigger className="mt-2">
                           <SelectValue placeholder={t?.landing?.suppliers?.allIndustries || "All Industries"} />
                         </SelectTrigger>
@@ -194,7 +244,7 @@ export default function SuppliersPage() {
                     {/* Country Filter */}
                     <div>
                       <label className="text-sm font-medium text-foreground">{t?.landing?.suppliers?.countryLabel || "Country"}</label>
-                      <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+                      <Select value={selectedCountry} onValueChange={(val) => { setSelectedCountry(val); setCurrentPage(1); }}>
                         <SelectTrigger className="mt-2">
                           <SelectValue placeholder={t?.landing?.suppliers?.allCountries || "All Countries"} />
                         </SelectTrigger>
@@ -219,7 +269,7 @@ export default function SuppliersPage() {
                     {/* Certification Filter */}
                     <div>
                       <label className="text-sm font-medium text-foreground">{t?.landing?.suppliers?.certificationLabel || "Certification"}</label>
-                      <Select value={selectedCertification} onValueChange={setSelectedCertification}>
+                      <Select value={selectedCertification} onValueChange={(val) => { setSelectedCertification(val); setCurrentPage(1); }}>
                         <SelectTrigger className="mt-2">
                           <SelectValue placeholder={t?.landing?.suppliers?.anyCertification || "Any Certification"} />
                         </SelectTrigger>
@@ -237,7 +287,7 @@ export default function SuppliersPage() {
                     {/* MOQ Filter */}
                     <div>
                       <label className="text-sm font-medium text-foreground">{t?.landing?.suppliers?.minimumOrderLabel || "Minimum Order"}</label>
-                      <Select value={selectedMoq} onValueChange={setSelectedMoq}>
+                      <Select value={selectedMoq} onValueChange={(val) => { setSelectedMoq(val); setCurrentPage(1); }}>
                         <SelectTrigger className="mt-2">
                           <SelectValue placeholder={t?.landing?.suppliers?.anyMOQ || "Any MOQ"} />
                         </SelectTrigger>
@@ -255,7 +305,7 @@ export default function SuppliersPage() {
                     {/* Export Market Filter */}
                     <div>
                       <label className="text-sm font-medium text-foreground">{t?.landing?.suppliers?.exportMarketLabel || "Export Market"}</label>
-                      <Select value={selectedExportMarket} onValueChange={setSelectedExportMarket}>
+                      <Select value={selectedExportMarket} onValueChange={(val) => { setSelectedExportMarket(val); setCurrentPage(1); }}>
                         <SelectTrigger className="mt-2">
                           <SelectValue placeholder={t?.landing?.suppliers?.anyRegion || "Any Region"} />
                         </SelectTrigger>
@@ -275,7 +325,7 @@ export default function SuppliersPage() {
                       <Checkbox 
                         id="reviewed" 
                         checked={reviewedOnly}
-                        onCheckedChange={(checked) => setReviewedOnly(checked as boolean)}
+                        onCheckedChange={(checked) => { setReviewedOnly(checked as boolean); setCurrentPage(1); }}
                       />
                       <label htmlFor="reviewed" className="text-sm text-foreground cursor-pointer">
                         {t?.landing?.suppliers?.reviewedSuppliersOnly || "Reviewed suppliers only"}
@@ -290,7 +340,7 @@ export default function SuppliersPage() {
                 {/* Results Header */}
                 <div className="mb-6 flex items-center justify-between">
                   <p className="text-muted-foreground">
-                    <span className="font-medium text-foreground">{filteredSuppliers.length}</span> {t?.landing?.suppliers?.suppliersFound || "suppliers found"}
+                    <span className="font-medium text-foreground">{totalSuppliers}</span> {t?.landing?.suppliers?.suppliersFound || "suppliers found"}
                   </p>
                   <Select defaultValue="relevance">
                     <SelectTrigger className="w-44">
@@ -312,7 +362,7 @@ export default function SuppliersPage() {
                     {searchQuery && (
                       <Badge variant="secondary" className="gap-1">
                         {t?.landing?.suppliers?.search || "Search:"} {searchQuery}
-                        <button onClick={() => setSearchQuery("")}>
+                        <button onClick={() => { setSearchQuery(""); setCurrentPage(1); }}>
                           <X className="h-3 w-3" />
                         </button>
                       </Badge>
@@ -320,7 +370,7 @@ export default function SuppliersPage() {
                     {selectedIndustry !== "all" && (
                       <Badge variant="secondary" className="gap-1">
                         {industries.find(i => i.slug === selectedIndustry)?.name}
-                        <button onClick={() => setSelectedIndustry("all")}>
+                        <button onClick={() => { setSelectedIndustry("all"); setCurrentPage(1); }}>
                           <X className="h-3 w-3" />
                         </button>
                       </Badge>
@@ -328,7 +378,7 @@ export default function SuppliersPage() {
                     {selectedCountry !== "all" && (
                       <Badge variant="secondary" className="gap-1">
                         {allCountries.find(c => c.code === selectedCountry)?.name}
-                        <button onClick={() => setSelectedCountry("all")}>
+                        <button onClick={() => { setSelectedCountry("all"); setCurrentPage(1); }}>
                           <X className="h-3 w-3" />
                         </button>
                       </Badge>
@@ -336,7 +386,7 @@ export default function SuppliersPage() {
                     {reviewedOnly && (
                       <Badge variant="secondary" className="gap-1">
                         {t?.landing?.suppliers?.reviewedOnly || "Reviewed Only"}
-                        <button onClick={() => setReviewedOnly(false)}>
+                        <button onClick={() => { setReviewedOnly(false); setCurrentPage(1); }}>
                           <X className="h-3 w-3" />
                         </button>
                       </Badge>
@@ -344,106 +394,138 @@ export default function SuppliersPage() {
                   </div>
                 )}
 
-                {/* Supplier Cards */}
-                <div className="space-y-4">
-                  {filteredSuppliers.map((supplier) => (
-                    <Link
-                      key={supplier.id}
-                      href={`/suppliers/${supplier.slug}`}
-                      className="group block rounded-xl border border-border bg-card p-5 transition-all hover:border-secondary hover:shadow-md"
-                    >
-                      <div className="flex flex-col gap-6 sm:flex-row">
-                        {/* Logo Placeholder */}
-                        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-muted">
-                          <Factory className="h-10 w-10 text-muted-foreground" />
-                        </div>
+                {/* Loading State */}
+                {isLoading ? (
+                  <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-border">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Supplier Cards */}
+                    <div className="space-y-4">
+                      {suppliers.map((supplier) => (
+                        <Link
+                          key={supplier.id}
+                          href={`/suppliers/${supplier.slug}`}
+                          className="group block rounded-xl border border-border bg-card p-5 transition-all hover:border-secondary hover:shadow-md"
+                        >
+                          <div className="flex flex-col gap-6 sm:flex-row">
+                            {/* Logo Placeholder */}
+                            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-muted">
+                              <Factory className="h-10 w-10 text-muted-foreground" />
+                            </div>
 
-                        {/* Content */}
-                        <div className="flex-1">
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-semibold text-foreground group-hover:text-secondary">
-                                  {supplier.name}
-                                </h3>
-                                {supplier.reviewed && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    <CheckCircle className="mr-1 h-3 w-3" />
-                                    {t?.landing?.suppliers?.reviewedBadge || "Reviewed"}
-                                  </Badge>
+                            {/* Content */}
+                            <div className="flex-1">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-semibold text-foreground group-hover:text-secondary">
+                                      {supplier.name}
+                                    </h3>
+                                    {supplier.reviewed && (
+                                      <Badge variant="secondary" className="text-xs">
+                                        <CheckCircle className="mr-1 h-3 w-3" />
+                                        {t?.landing?.suppliers?.reviewedBadge || "Reviewed"}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                      <MapPin className="h-4 w-4" />
+                                      {supplier.location.city}, {supplier.location.country}
+                                    </span>
+                                    <span>{supplier.industry}</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <SupplierActionButtons supplier={supplier} variant="icon" />
+                                  <ChevronRight className="hidden h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1 sm:block" />
+                                </div>
+                              </div>
+
+                              <p className="mt-3 text-sm text-muted-foreground line-clamp-2">
+                                {supplier.shortDescription}
+                              </p>
+
+                              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+                                <div className="flex items-center gap-1">
+                                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                                  <span className="font-medium text-foreground">{supplier.rating}</span>
+                                  <span className="text-muted-foreground">({supplier.reviewCount})</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-muted-foreground">
+                                  <Clock className="h-4 w-4" />
+                                  {supplier.responseTime}
+                                </div>
+                                <div className="flex items-center gap-1 text-muted-foreground">
+                                  <Package className="h-4 w-4" />
+                                  {supplier.productCount.toLocaleString()} {t?.landing?.suppliers?.productsLabel || "products"}
+                                </div>
+                              </div>
+
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {supplier.mainProducts.slice(0, 4).map((product) => (
+                                  <span 
+                                    key={product}
+                                    className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                                  >
+                                    {product}
+                                  </span>
+                                ))}
+                                {supplier.mainProducts.length > 4 && (
+                                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                                    +{supplier.mainProducts.length - 4} {t?.landing?.suppliers?.moreProducts?.split("{count}")[1] || "more"}
+                                  </span>
                                 )}
                               </div>
-                              <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-                                <span className="flex items-center gap-1">
-                                  <MapPin className="h-4 w-4" />
-                                  {supplier.location.city}, {supplier.location.country}
-                                </span>
-                                <span>{supplier.industry}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <SupplierActionButtons supplier={supplier} variant="icon" />
-                              <ChevronRight className="hidden h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1 sm:block" />
                             </div>
                           </div>
+                        </Link>
+                      ))}
+                    </div>
 
-                          <p className="mt-3 text-sm text-muted-foreground line-clamp-2">
-                            {supplier.shortDescription}
-                          </p>
-
-                          <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
-                            <div className="flex items-center gap-1">
-                              <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                              <span className="font-medium text-foreground">{supplier.rating}</span>
-                              <span className="text-muted-foreground">({supplier.reviewCount})</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-muted-foreground">
-                              <Clock className="h-4 w-4" />
-                              {supplier.responseTime}
-                            </div>
-                            <div className="flex items-center gap-1 text-muted-foreground">
-                              <Package className="h-4 w-4" />
-                              {supplier.productCount.toLocaleString()} {t?.landing?.suppliers?.productsLabel || "products"}
-                            </div>
-                          </div>
-
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {supplier.mainProducts.slice(0, 4).map((product) => (
-                              <span 
-                                key={product}
-                                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-                              >
-                                {product}
-                              </span>
-                            ))}
-                            {supplier.mainProducts.length > 4 && (
-                              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                                +{supplier.mainProducts.length - 4} {t?.landing?.suppliers?.moreProducts?.split("{count}")[1] || "more"}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                    {/* Empty State */}
+                    {suppliers.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-border py-16 text-center">
+                        <Factory className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                        <h3 className="mt-4 font-semibold text-foreground">{t?.landing?.suppliers?.noSuppliersFound || "No suppliers found"}</h3>
+                        <p className="mt-2 text-muted-foreground">
+                          {t?.landing?.suppliers?.adjustSearchFilters || "Try adjusting your search or filter criteria"}
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          className="mt-4"
+                          onClick={clearFilters}
+                        >
+                          {t?.landing?.suppliers?.clearAllFilters || "Clear all filters"}
+                        </Button>
                       </div>
-                    </Link>
-                  ))}
-                </div>
+                    )}
 
-                {/* Empty State */}
-                {filteredSuppliers.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-border py-16 text-center">
-                    <Factory className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                    <h3 className="mt-4 font-semibold text-foreground">{t?.landing?.suppliers?.noSuppliersFound || "No suppliers found"}</h3>
-                    <p className="mt-2 text-muted-foreground">
-                      {t?.landing?.suppliers?.adjustSearchFilters || "Try adjusting your search or filter criteria"}
-                    </p>
-                    <Button 
-                      variant="outline" 
-                      className="mt-4"
-                      onClick={clearFilters}
-                    >
-                      {t?.landing?.suppliers?.clearAllFilters || "Clear all filters"}
-                    </Button>
-                  </div>
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                      <div className="mt-8 flex justify-center gap-2">
+                        <Button
+                          variant="outline"
+                          disabled={currentPage === 1}
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        >
+                          Previous
+                        </Button>
+                        <div className="flex items-center justify-center px-4">
+                          <span className="text-sm font-medium">Page {currentPage} of {totalPages}</span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          disabled={currentPage === totalPages}
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

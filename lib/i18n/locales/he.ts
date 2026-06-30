@@ -960,6 +960,7 @@ const he = {
       success: "התשלום בוצע בהצלחה!",
       transactionId: "מזהה עסקה:",
       redirecting: "מפנה להרשמה...",
+      redirectingDashboard: "מפנה ללוח הבקרה שלך...",
       failed: "התשלום נכשל",
       tryAgain: "נסה שוב",
       priceInfo: "תוכנית {plan} ({cycle})",

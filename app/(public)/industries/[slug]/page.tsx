@@ -135,13 +135,11 @@ export default function IndustryPage() {
               id: String(sub.id),
               name: sub.name,
               slug: sub.slug || sub.name.toLowerCase().replace(/\s+/g, '-'),
-              description: "Explore a wide range of products and suppliers in this category",
-              productCount: Math.floor(Math.random() * 10000) + 5000,
-              subcategories: [
-                sub.name.split(' ')[0],
-                idx % 2 === 0 ? 'Premium' : 'Standard',
-                idx % 3 === 0 ? 'Eco-Friendly' : 'Industrial',
-              ],
+              description: sub.description || "Explore a wide range of products and suppliers in this category",
+              productCount: (sub as any).product_count || 0,
+              subcategories: Array.isArray(sub.tags) && sub.tags.length > 0 
+                ? sub.tags 
+                : [], // Removed fake static tags
             }))
           : [],
       }
@@ -464,7 +462,7 @@ export default function IndustryPage() {
                     {industry.categories.map((category) => (
                       <Link
                         key={category.id}
-                        href={`/products?category=${category.slug}`}
+                        href={`/products?category=${industry.slug}`}
                         className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-secondary hover:shadow-md"
                       >
                         <h3 className="font-semibold text-foreground group-hover:text-secondary">
@@ -609,7 +607,7 @@ export default function IndustryPage() {
               {filteredProducts.map((product) => (
                 <Link
                   key={product.id}
-                  href={`/products/${product.slug}`}
+                  href={`/products/${product.id}`}
                   className="group overflow-hidden rounded-xl border border-border bg-card transition-all hover:shadow-md"
                 >
                   <div className="aspect-square bg-muted p-4">

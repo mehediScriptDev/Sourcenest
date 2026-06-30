@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { suppliers, getSupplierBySlug } from "@/lib/data/suppliers"
 import { getProduct, type Product } from "@/lib/api/products"
+import { getProductBySlug } from "@/lib/data/products"
 import { useAuth } from "@/lib/auth-context"
 import { createConversation, sendMessage } from "@/lib/api/messages"
 import { 
@@ -19,7 +20,9 @@ import {
   CheckCircle,
   Send,
   Star,
-  Loader2
+  Loader2,
+  X,
+  Package
 } from "lucide-react"
 
 function NewMessageForm() {
@@ -27,6 +30,8 @@ function NewMessageForm() {
   const router = useRouter()
   const supplierSlug = searchParams.get('supplier')
   const productSlug = searchParams.get('product')
+  const fallbackImg = searchParams.get('productImage')
+  const fallbackDesc = searchParams.get('productDesc')
   const supplier = supplierSlug ? getSupplierBySlug(supplierSlug) : null
   const [subject, setSubject] = useState("")
   const [message, setMessage] = useState("")
@@ -34,6 +39,8 @@ function NewMessageForm() {
   const [searchQuery, setSearchQuery] = useState("")
   const [showSupplierSearch, setShowSupplierSearch] = useState(!supplier)
   const [loadingProduct, setLoadingProduct] = useState(!!productSlug)
+  const [productData, setProductData] = useState<any | null>(null)
+  const [includeProductReference, setIncludeProductReference] = useState(false)
 
   useEffect(() => {
     if (productSlug) {
@@ -41,31 +48,29 @@ function NewMessageForm() {
         setLoadingProduct(true)
         const response = await getProduct(productSlug)
         if (response.success && response.data) {
-          const product = response.data
-          setSubject(`Inquiry about ${product.name}`)
-          setMessage(`Hello,
-
-I am interested in your product "${product.name}".
-Product Link: ${window.location.origin}/products/${product.slug || product.id}
-
-
-
-Could you please provide more details regarding pricing, minimum order quantity, and available shipping options?
-
-I look forward to hearing from you soon.
-
-Best regards.`)
+          const prod = response.data
+          setProductData({
+            name: prod.name,
+            description: prod.description,
+            minOrder: prod.pricing_quantities?.minimum_order_quantity ? `${prod.pricing_quantities.minimum_order_quantity} ${prod.pricing_quantities.unit || 'pcs'}` : undefined,
+            price: prod.price_display || (prod.price?.amount ? `$${prod.price.amount}` : undefined),
+            url: `${window.location.origin}/products/${prod.id || prod.slug}`,
+            images: prod.images?.length ? prod.images : (prod.image ? [prod.image] : undefined)
+          })
+          setIncludeProductReference(true)
+          setSubject(`Inquiry about ${prod.name}`)
+          setMessage(`Hello,\n\nI am interested in your product "${prod.name}".\n\nCould you please provide more details regarding pricing, minimum order quantity, and available shipping options?\n\nI look forward to hearing from you soon.\n\nBest regards.`)
 
           if (!supplier) {
-            const found = suppliers.find(s => s.slug === product.supplierSlug || s.id === product.supplierId)
+            const found = suppliers.find(s => s.slug === prod.supplierSlug || s.id === prod.supplierId)
             if (found) {
               setSelectedSupplier(found)
               setShowSupplierSearch(false)
             } else {
               setSelectedSupplier({
-                id: product.supplierId || "1",
-                name: product.supplierName || "Admin (SourceNest Support)",
-                slug: product.supplierSlug || "admin",
+                id: prod.supplierId || "1",
+                name: prod.supplierName || "Admin (SourceNest Support)",
+                slug: prod.supplierSlug || "admin",
                 description: "Platform Administration and Support",
                 shortDescription: "Platform Admin",
                 industry: "Support",
@@ -90,6 +95,32 @@ Best regards.`)
                 mainProducts: [],
                 exportMarkets: []
               })
+              setShowSupplierSearch(false)
+            }
+          }
+        } else {
+          // Fallback to dummy data or query params
+          const dummyProd = getProductBySlug(productSlug)
+          const finalName = dummyProd?.name || searchParams.get('productName') || productSlug || "Product"
+          const finalDesc = dummyProd?.shortDescription || dummyProd?.description || fallbackDesc || "No description available"
+          const finalImg = dummyProd?.images || (fallbackImg ? [fallbackImg] : undefined)
+
+          setProductData({
+            name: finalName,
+            description: finalDesc,
+            minOrder: dummyProd?.moq ? `${dummyProd.moq} ${dummyProd.moqUnit || 'pcs'}` : undefined,
+            price: dummyProd?.price ? `$${dummyProd.price.min}` : undefined,
+            url: `${window.location.origin}/products/${productSlug}`,
+            images: finalImg
+          })
+          setIncludeProductReference(true)
+          setSubject(`Inquiry about ${finalName}`)
+          setMessage(`Hello,\n\nI am interested in your product "${finalName}".\n\nCould you please provide more details regarding pricing, minimum order quantity, and available shipping options?\n\nI look forward to hearing from you soon.\n\nBest regards.`)
+
+          if (!supplier && dummyProd) {
+            const found = suppliers.find(s => s.slug === dummyProd.supplierSlug || s.id === dummyProd.supplierId)
+            if (found) {
+              setSelectedSupplier(found)
               setShowSupplierSearch(false)
             }
           }
@@ -123,8 +154,14 @@ Best regards.`)
     try {
       const currentUserId = user?.id?.toString() || "buyer-1"
       const conv = await createConversation([selectedSupplier.id, currentUserId], subject)
+      
+      let finalMessage = message
+      if (includeProductReference && productData) {
+         finalMessage = `[Product Reference: ${productData.name}]\nLink: ${window.location.origin}/products/${productData.slug || productData.id}\n\n${message}`
+      }
+
       if (conv) {
-        await sendMessage(conv.id, message)
+        await sendMessage(conv.id, finalMessage)
       }
       router.push('/messages')
     } catch (error) {
@@ -280,14 +317,60 @@ Best regards.`)
           <label htmlFor="message" className="text-sm font-medium text-foreground">
             Message
           </label>
-          <Textarea
-            id="message"
-            placeholder="Write your message to the supplier..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            className="mt-3 min-h-[200px]"
-            required
-          />
+          <div className="mt-3 overflow-hidden rounded-md border border-input focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
+            {includeProductReference && productData && (
+              <div className="border-b border-border bg-muted/30 p-3">
+                <div className="group relative flex items-start gap-4 rounded-lg border border-border/50 bg-background p-3 shadow-sm transition-all hover:border-border hover:shadow-md">
+                  <button 
+                    type="button" 
+                    onClick={() => setIncludeProductReference(false)}
+                    className="absolute right-2 top-2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    title="Remove product reference"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-border bg-muted">
+                    {productData.images && productData.images[0] ? (
+                      <img
+                        src={productData.images[0]}
+                        alt={productData.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-muted">
+                        <Package className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col justify-center py-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Product Reference</span>
+                    <h4 className="font-medium text-foreground line-clamp-1 pr-6 text-sm">{productData.name}</h4>
+                    {productData.description && (
+                      <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">{productData.description}</p>
+                    )}
+                    <div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
+                      {productData.pricing_quantities?.minimum_order_quantity ? (
+                        <span>Min. Order: {productData.pricing_quantities.minimum_order_quantity} {productData.pricing_quantities.unit || 'pcs'}</span>
+                      ) : null}
+                      {(productData.price_display || productData.price?.amount) ? (
+                         <span className="font-medium text-foreground">
+                           {productData.price_display || `$${productData.price.amount}`}
+                         </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <Textarea
+              id="message"
+              placeholder="Write your message to the supplier..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="min-h-[200px] resize-y border-0 focus-visible:ring-0 rounded-none"
+              required
+            />
+          </div>
           <p className="mt-2 text-xs text-muted-foreground">
             Include details about the products you are interested in, quantities, and any specific requirements.
           </p>

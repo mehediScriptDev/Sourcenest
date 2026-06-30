@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -44,8 +45,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { getAllReviewsForAdmin, Review } from "@/lib/data/reviews"
-import { suppliers } from "@/lib/data/suppliers"
+import {
+  getAdminReviewsStats,
+  getAdminReviews,
+  updateAdminReviewStatus,
+  deleteAdminReview,
+  BackendReview,
+  AdminReviewsStatsData
+} from "@/lib/api/admin-product-reviews"
 import {
   Search,
   Star,
@@ -67,44 +74,107 @@ const statusConfig = {
 }
 
 export default function AdminReviewsPage() {
-  const [reviews, setReviews] = useState<Review[]>(getAllReviewsForAdmin())
+  const [reviews, setReviews] = useState<BackendReview[]>([])
+  const [loadingReviews, setLoadingReviews] = useState(true)
+  const [totalReviews, setTotalReviews] = useState(0)
+  const [lastPage, setLastPage] = useState(1)
+  const [perPage, setPerPage] = useState(15)
+
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [ratingFilter, setRatingFilter] = useState<string>("all")
-  const [selectedReview, setSelectedReview] = useState<Review | null>(null)
+  const [selectedReview, setSelectedReview] = useState<BackendReview | null>(null)
   const [showViewDialog, setShowViewDialog] = useState(false)
-  const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null)
+  const [deleteReviewId, setDeleteReviewId] = useState<number | null>(null)
+  const [page, setPage] = useState<number>(1)
 
-  const filteredReviews = reviews.filter(review => {
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      if (!review.buyerName.toLowerCase().includes(query) &&
-          !review.content.toLowerCase().includes(query) &&
-          !(review.buyerCompany?.toLowerCase().includes(query))) {
-        return false
+  const [stats, setStats] = useState<AdminReviewsStatsData | null>(null)
+  const [loadingStats, setLoadingStats] = useState(true)
+
+  const loadStats = async () => {
+    try {
+      setLoadingStats(true)
+      const res = await getAdminReviewsStats()
+      if (res.success && res.data) {
+        setStats(res.data)
+      }
+    } catch (error) {
+      console.error("Error fetching admin reviews stats:", error)
+    } finally {
+      setLoadingStats(false)
+    }
+  }
+
+  useEffect(() => {
+    loadStats()
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    async function loadReviews() {
+      try {
+        setLoadingReviews(true)
+        const res = await getAdminReviews(page, {
+          status: statusFilter,
+          rating: ratingFilter,
+          search: searchQuery,
+        })
+        if (active && res.success) {
+          const mappedReviews = res.data.map(r => {
+            if (r.status === "flagged") {
+              return { ...r, status: "published" as const, status_label: "Published" }
+            }
+            return r
+          })
+          setReviews(mappedReviews)
+          if (res.meta) {
+            setTotalReviews(res.meta.total)
+            setLastPage(res.meta.lastPage)
+            setPerPage(res.meta.perPage)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching admin reviews list:", error)
+      } finally {
+        if (active) {
+          setLoadingReviews(false)
+        }
       }
     }
-    if (statusFilter !== "all" && review.status !== statusFilter) {
-      return false
+    loadReviews()
+    return () => {
+      active = false
     }
-    if (ratingFilter !== "all" && review.rating !== parseInt(ratingFilter)) {
-      return false
-    }
-    return true
-  })
+  }, [page, statusFilter, ratingFilter, searchQuery])
 
-  const getSupplierName = (supplierId: string) => {
-    return suppliers.find(s => s.id === supplierId)?.name || "Unknown Supplier"
+  useEffect(() => {
+    setPage(1)
+  }, [searchQuery, statusFilter, ratingFilter])
+
+  const updateReviewStatus = async (reviewId: number, status: BackendReview["status"]) => {
+    try {
+      const res = await updateAdminReviewStatus(reviewId, status)
+      if (res.success) {
+        setReviews(prev => prev.map(r => 
+          r.id === reviewId ? { ...r, status, status_label: status.charAt(0).toUpperCase() + status.slice(1) } : r
+        ))
+        loadStats()
+      }
+    } catch (error) {
+      console.error("Error updating review status:", error)
+    }
   }
 
-  const updateReviewStatus = (reviewId: string, status: Review["status"]) => {
-    setReviews(prev => prev.map(r => 
-      r.id === reviewId ? { ...r, status } : r
-    ))
-  }
-
-  const deleteReview = (reviewId: string) => {
-    setReviews(prev => prev.filter(r => r.id !== reviewId))
+  const deleteReview = async (reviewId: number) => {
+    try {
+      const res = await deleteAdminReview(reviewId)
+      if (res.success) {
+        setReviews(prev => prev.filter(r => r.id !== reviewId))
+        loadStats()
+      }
+    } catch (error) {
+      console.error("Error deleting review:", error)
+    }
     setDeleteReviewId(null)
   }
 
@@ -114,13 +184,6 @@ export default function AdminReviewsPage() {
       month: "short",
       day: "numeric"
     })
-  }
-
-  const stats = {
-    total: reviews.length,
-    published: reviews.filter(r => r.status === "published").length,
-    pending: reviews.filter(r => r.status === "pending").length,
-    flagged: reviews.filter(r => r.status === "flagged").length,
   }
 
   return (
@@ -137,51 +200,34 @@ export default function AdminReviewsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Reviews</p>
-              <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-              <MessageSquare className="h-5 w-5 text-muted-foreground" />
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Published</p>
-              <p className="text-2xl font-bold text-green-600">{stats.published}</p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Pending Review</p>
-              <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Flagged</p>
-              <p className="text-2xl font-bold text-red-600">{stats.flagged}</p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
-              <Flag className="h-5 w-5 text-red-600" />
-            </div>
-          </div>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <AdminStatCard
+          title="Total Reviews"
+          value={
+            loadingStats ? (
+              <span className="inline-block h-6 w-12 bg-muted animate-pulse rounded" />
+            ) : (
+              stats?.total_reviews ?? 0
+            )
+          }
+          icon={MessageSquare}
+          layout="spaceBetween"
+        />
+        <AdminStatCard
+          title="Published"
+          value={
+            loadingStats ? (
+              <span className="inline-block h-6 w-12 bg-muted animate-pulse rounded" />
+            ) : (
+              (stats?.published ?? 0) + (stats?.flagged ?? 0)
+            )
+          }
+          valueClassName="text-green-600"
+          icon={CheckCircle}
+          iconClassName="text-green-600"
+          iconWrapperClassName="bg-green-100"
+          layout="spaceBetween"
+        />
       </div>
 
       {/* Filters */}
@@ -204,7 +250,6 @@ export default function AdminReviewsPage() {
             <SelectItem value="published">Published</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="hidden">Hidden</SelectItem>
-            <SelectItem value="flagged">Flagged</SelectItem>
           </SelectContent>
         </Select>
         <Select value={ratingFilter} onValueChange={setRatingFilter}>
@@ -237,101 +282,137 @@ export default function AdminReviewsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredReviews.map((review) => {
-              const StatusIcon = statusConfig[review.status].icon
-              return (
-                <TableRow key={review.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{review.buyerName}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {review.buyerCompany}
+            {loadingReviews ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-12">
+                  <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    <span>Loading reviews...</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : reviews.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-12 text-center">
+                  <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                  <h3 className="mt-4 font-semibold text-foreground">No reviews found</h3>
+                  <p className="mt-2 text-muted-foreground">
+                    Try adjusting your search or filter criteria
+                  </p>
+                </TableCell>
+              </TableRow>
+            ) : (
+              reviews.map((review) => {
+                const config = statusConfig[review.status]
+                const StatusIcon = config ? config.icon : MessageSquare
+                return (
+                  <TableRow key={review.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{review.reviewer.full_name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {review.reviewer.company_name}
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">{getSupplierName(review.supplierId)}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                      <span className="font-medium">{review.rating}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="max-w-xs">
-                    <p className="truncate text-sm text-muted-foreground">
-                      {review.title || review.content.substring(0, 50)}...
-                    </p>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-muted-foreground">
-                      {formatDate(review.date)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={statusConfig[review.status].color}>
-                      <StatusIcon className="mr-1 h-3 w-3" />
-                      {statusConfig[review.status].label}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => {
-                          setSelectedReview(review)
-                          setShowViewDialog(true)
-                        }}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {review.status !== "published" && (
-                          <DropdownMenuItem onClick={() => updateReviewStatus(review.id, "published")}>
-                            <CheckCircle className="mr-2 h-4 w-4" />
-                            Approve
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">{review.supplier.company_name}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                        <span className="font-medium">{review.rating}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="max-w-xs">
+                      <p className="truncate text-sm text-muted-foreground">
+                        {review.title || review.comment.substring(0, 50)}...
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground">
+                        {formatDate(review.created_at)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={config ? config.color : "bg-gray-100 text-gray-700"}>
+                        <StatusIcon className="mr-1 h-3 w-3" />
+                        {config ? config.label : review.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => {
+                            setSelectedReview(review)
+                            setShowViewDialog(true)
+                          }}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View Details
                           </DropdownMenuItem>
-                        )}
-                        {review.status !== "hidden" && (
-                          <DropdownMenuItem onClick={() => updateReviewStatus(review.id, "hidden")}>
-                            <EyeOff className="mr-2 h-4 w-4" />
-                            Hide
+                          <DropdownMenuSeparator />
+                          {review.status !== "published" && (
+                            <DropdownMenuItem onClick={() => updateReviewStatus(review.id, "published")}>
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Approve
+                            </DropdownMenuItem>
+                          )}
+                          {review.status !== "hidden" && (
+                            <DropdownMenuItem onClick={() => updateReviewStatus(review.id, "hidden")}>
+                              <EyeOff className="mr-2 h-4 w-4" />
+                              Hide
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            className="text-destructive"
+                            onClick={() => setDeleteReviewId(review.id)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
                           </DropdownMenuItem>
-                        )}
-                        {review.status !== "flagged" && (
-                          <DropdownMenuItem onClick={() => updateReviewStatus(review.id, "flagged")}>
-                            <Flag className="mr-2 h-4 w-4" />
-                            Flag for Review
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          className="text-destructive"
-                          onClick={() => setDeleteReviewId(review.id)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
           </TableBody>
         </Table>
 
-        {filteredReviews.length === 0 && (
-          <div className="py-12 text-center">
-            <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 font-semibold text-foreground">No reviews found</h3>
-            <p className="mt-2 text-muted-foreground">
-              Try adjusting your search or filter criteria
-            </p>
+        {/* Pagination */}
+        {!loadingReviews && reviews.length > 0 && (
+          <div className="px-4 py-3 border-t">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Showing {(page - 1) * perPage + 1} - {Math.min(page * perPage, totalReviews)} of {totalReviews}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                >
+                  Previous
+                </Button>
+                <div className="text-sm text-muted-foreground">Page {page} / {lastPage}</div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={page >= lastPage}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -350,12 +431,12 @@ export default function AdminReviewsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Reviewer</p>
-                  <p className="font-medium">{selectedReview.buyerName}</p>
-                  <p className="text-sm text-muted-foreground">{selectedReview.buyerCompany}</p>
+                  <p className="font-medium">{selectedReview.reviewer.full_name}</p>
+                  <p className="text-sm text-muted-foreground">{selectedReview.reviewer.company_name}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Supplier</p>
-                  <p className="font-medium">{getSupplierName(selectedReview.supplierId)}</p>
+                  <p className="font-medium">{selectedReview.supplier.company_name}</p>
                 </div>
               </div>
 
@@ -384,35 +465,37 @@ export default function AdminReviewsPage() {
 
               <div>
                 <p className="text-sm text-muted-foreground">Review Content</p>
-                <p className="mt-1 text-foreground">{selectedReview.content}</p>
+                <p className="mt-1 text-foreground">{selectedReview.comment}</p>
               </div>
 
-              {selectedReview.orderDetails && (
+              {selectedReview.order && (
                 <div className="rounded-lg bg-muted p-4">
                   <p className="text-sm font-medium text-foreground">Order Information</p>
                   <div className="mt-2 grid grid-cols-3 gap-4 text-sm">
                     <div>
                       <p className="text-muted-foreground">Category</p>
-                      <p>{selectedReview.orderDetails.productCategory}</p>
+                      <p>{selectedReview.product?.category || "N/A"}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Order Value</p>
-                      <p>{selectedReview.orderDetails.orderValue}</p>
+                      <p>
+                        ${Number(selectedReview.order.total_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} {selectedReview.order.currency_code}
+                      </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Order Date</p>
-                      <p>{formatDate(selectedReview.orderDetails.orderDate)}</p>
+                      <p>{formatDate(selectedReview.order.created_at)}</p>
                     </div>
                   </div>
                 </div>
               )}
 
               <div className="flex items-center justify-between pt-4 border-t">
-                <Badge className={statusConfig[selectedReview.status].color}>
-                  {statusConfig[selectedReview.status].label}
+                <Badge className={statusConfig[selectedReview.status]?.color || "bg-gray-100 text-gray-700"}>
+                  {statusConfig[selectedReview.status]?.label || selectedReview.status}
                 </Badge>
                 <span className="text-sm text-muted-foreground">
-                  Submitted: {formatDate(selectedReview.date)}
+                  Submitted: {formatDate(selectedReview.created_at)}
                 </span>
               </div>
             </div>
@@ -421,16 +504,6 @@ export default function AdminReviewsPage() {
             <Button variant="outline" onClick={() => setShowViewDialog(false)}>
               Close
             </Button>
-            {selectedReview?.status !== "published" && (
-              <Button onClick={() => {
-                if (selectedReview) {
-                  updateReviewStatus(selectedReview.id, "published")
-                  setShowViewDialog(false)
-                }
-              }}>
-                Approve Review
-              </Button>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

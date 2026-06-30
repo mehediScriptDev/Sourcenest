@@ -33,6 +33,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency } from "@/lib/orders-context"
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
 
 const statusStyles: Record<RfqStatus, { color: string; icon: typeof Clock }> = {
   pending: { color: "bg-amber-100 text-amber-700", icon: Clock },
@@ -182,24 +183,29 @@ export function RfqList({ config }: { config: RfqListConfig }) {
         )}
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-xs text-muted-foreground">Total RFQs</p>
-          <p className="mt-1 font-serif text-2xl font-medium text-foreground">{myRfqs.length}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-xs text-muted-foreground">Active</p>
-          <p className="mt-1 font-serif text-2xl font-medium text-foreground">{activeCount}</p>
-        </div>
-        <div className="col-span-2 rounded-xl border border-border bg-card p-4 sm:col-span-1">
-          <p className="text-xs text-muted-foreground">Total Target Value</p>
-          <p className="mt-1 font-serif text-2xl font-medium text-foreground">
-            {formatCurrency(
-              myRfqs.reduce((sum, r) => sum + (r.targetPrice * r.quantity), 0),
-              myRfqs[0]?.targetCurrencyCode ?? "USD",
-            )}
-          </p>
-        </div>
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <AdminStatCard
+          title="Total RFQs"
+          value={myRfqs.length}
+          layout="vertical"
+          contentClassName="pt-6 pb-6 px-6"
+        />
+        <AdminStatCard
+          title="Active"
+          value={activeCount}
+          layout="vertical"
+          contentClassName="pt-6 pb-6 px-6"
+        />
+        <AdminStatCard
+          title="Total Target Value"
+          value={formatCurrency(
+            myRfqs.reduce((sum, r) => sum + (r.targetPrice * r.quantity), 0),
+            myRfqs[0]?.targetCurrencyCode ?? "USD",
+          )}
+          layout="vertical"
+          className="sm:col-span-1 col-span-full"
+          contentClassName="pt-6 pb-6 px-6"
+        />
       </div>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row">

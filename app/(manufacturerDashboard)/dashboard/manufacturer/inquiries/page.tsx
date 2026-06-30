@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import ManufacturerStatCard from "@/components/manufacturer/manufacturer-stat-card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
@@ -89,22 +90,22 @@ export default function ManufacturerInquiriesPage() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-2xl font-bold text-foreground">{inquiries.length}</div>
-          <p className="text-sm text-muted-foreground">Total Inquiries</p>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-2xl font-bold text-secondary">{inquiries.filter(i => i.status === "pending").length}</div>
-          <p className="text-sm text-muted-foreground">Pending</p>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-2xl font-bold text-emerald-600">{inquiries.filter(i => i.status === "quoted").length}</div>
-          <p className="text-sm text-muted-foreground">Quoted</p>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-2xl font-bold text-blue-600">{inquiries.filter(i => i.status === "accepted").length}</div>
-          <p className="text-sm text-muted-foreground">Accepted</p>
-        </div>
+        <ManufacturerStatCard
+          title="Total Inquiries"
+          value={inquiries.length}
+        />
+        <ManufacturerStatCard
+          title="Pending"
+          value={<span className="text-secondary">{inquiries.filter(i => i.status === "pending").length}</span>}
+        />
+        <ManufacturerStatCard
+          title="Quoted"
+          value={<span className="text-emerald-600">{inquiries.filter(i => i.status === "quoted").length}</span>}
+        />
+        <ManufacturerStatCard
+          title="Accepted"
+          value={<span className="text-blue-600">{inquiries.filter(i => i.status === "accepted").length}</span>}
+        />
       </div>
 
       {/* Filters */}

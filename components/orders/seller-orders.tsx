@@ -35,6 +35,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import ManufacturerStatCard from "@/components/manufacturer/manufacturer-stat-card"
 
 const statusStyles: Record<string, { color: string; icon: typeof Clock }> = {
   created: { color: "bg-blue-100 text-blue-700", icon: Clock },
@@ -223,20 +224,19 @@ export function SellerOrdersList({ config }: { config: SellerConfig }) {
 
       {stats && (
         <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground">Total {config.nounPlural}</p>
-            <p className="mt-1 font-serif text-2xl font-medium text-foreground">{stats.total}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground">Active</p>
-            <p className="mt-1 font-serif text-2xl font-medium text-foreground">{stats.active}</p>
-          </div>
-          <div className="col-span-2 rounded-xl border border-border bg-card p-4 sm:col-span-1">
-            <p className="text-xs text-muted-foreground">Total value</p>
-            <p className="mt-1 font-serif text-2xl font-medium text-foreground">
-              {formatCurrency(stats.totalValue, "USD")}
-            </p>
-          </div>
+          <ManufacturerStatCard
+            title={`Total ${config.nounPlural}`}
+            value={stats.total}
+          />
+          <ManufacturerStatCard
+            title="Active"
+            value={stats.active}
+          />
+          <ManufacturerStatCard
+            className="col-span-2 sm:col-span-1"
+            title="Total value"
+            value={formatCurrency(stats.totalValue, "USD")}
+          />
         </div>
       )}
 

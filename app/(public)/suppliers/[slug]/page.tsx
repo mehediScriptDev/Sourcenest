@@ -6,9 +6,7 @@ import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { suppliers, getSupplierBySlug } from "@/lib/data/suppliers"
-import { getProductsBySupplier } from "@/lib/data/products"
-import { getReviewsBySupplier, getSupplierRatingSummary } from "@/lib/data/reviews"
+import { getPublicSupplierDetails, getPublicSupplierProducts, getPublicSupplierReviews, getPublicSupplierCatalogs, getPublicSupplierCertifications, Supplier as ApiSupplier } from "@/lib/api/public-suppliers"
 import { SupplierReviewsSection } from "@/components/suppliers/supplier-reviews-section"
 import { SupplierPageActions } from "@/components/suppliers/supplier-page-actions"
 import { CompareBar } from "@/components/suppliers/compare-bar"
@@ -39,15 +37,10 @@ import {
   Camera
 } from "lucide-react"
 
-export async function generateStaticParams() {
-  return suppliers.map((supplier) => ({
-    slug: supplier.slug,
-  }))
-}
-
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
-  const supplier = getSupplierBySlug(slug)
+  const res = await getPublicSupplierDetails(slug)
+  const supplier = res?.data
   
   if (!supplier) {
     return { title: "Supplier Not Found" }
@@ -55,21 +48,115 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   return {
     title: supplier.name,
-    description: supplier.shortDescription,
+    description: supplier.short_description || "",
   }
 }
 
 export default async function SupplierPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const supplier = getSupplierBySlug(slug)
-
-  if (!supplier) {
+  const res = await getPublicSupplierDetails(slug)
+  
+  if (!res || !res.data) {
     notFound()
   }
 
-  const supplierProducts = getProductsBySupplier(slug)
-  const supplierReviews = getReviewsBySupplier(supplier.id)
-  const ratingSummary = getSupplierRatingSummary(supplier.id)
+  const apiSupplier = res.data
+
+  // Map API data to the old format
+  const supplier = {
+    id: apiSupplier.id.toString(),
+    name: apiSupplier.name,
+    slug: apiSupplier.slug,
+    description: apiSupplier.long_description || apiSupplier.short_description || "",
+    shortDescription: apiSupplier.short_description || "",
+    industry: apiSupplier.industry || "Unknown",
+    industrySlug: apiSupplier.industry_slug || "unknown",
+    categories: [],
+    location: {
+      city: apiSupplier.location.city || "",
+      country: apiSupplier.location.country || "",
+      countryCode: apiSupplier.location.country_code || ""
+    },
+    reviewed: apiSupplier.reviewed,
+    reviewedLevel: (apiSupplier.reviewed_level as "basic" | "standard" | "premium" | "enterprise") || "standard",
+    yearEstablished: parseInt(apiSupplier.year_established || "2000") || 2000,
+    employeeCount: apiSupplier.employee_count || "Unknown",
+    annualRevenue: apiSupplier.revenue || undefined,
+    productCount: apiSupplier.product_count || 0,
+    rating: apiSupplier.rating || 0,
+    reviewCount: apiSupplier.review_count || 0,
+    responseRate: apiSupplier.response_rate ? parseInt(apiSupplier.response_rate) : 0,
+    responseTime: apiSupplier.response_time || "N/A",
+    onTimeDelivery: apiSupplier.on_time_delivery ? parseInt(apiSupplier.on_time_delivery) : 0,
+    certifications: apiSupplier.certifications || [],
+    mainProducts: apiSupplier.main_products || [],
+    exportMarkets: apiSupplier.export_markets || [],
+    businessType: apiSupplier.business_type ? [apiSupplier.business_type as any] : [],
+    capabilities: (apiSupplier.capabilities as ("oem" | "odm" | "private-label" | "customization")[]) || [],
+    languages: apiSupplier.languages || [],
+    paymentTerms: apiSupplier.payment_terms || [],
+    factoryPhotos: apiSupplier.factory_photos || [],
+    minOrderValue: apiSupplier.min_order_value ? `$${apiSupplier.min_order_value}` : undefined,
+  }
+
+  const productsRes = await getPublicSupplierProducts(apiSupplier.id.toString())
+  const apiProducts = productsRes?.data || []
+
+  // We use apiProducts directly now
+
+  const reviewsRes = await getPublicSupplierReviews(apiSupplier.id.toString())
+  const apiReviews = reviewsRes?.data.reviews || []
+  const apiReviewStats = reviewsRes?.data.review_stats || {
+    average_rating: 0,
+    total_reviews: 0,
+    breakdown: [
+      { rating: 5, count: 0, percentage: 0 },
+      { rating: 4, count: 0, percentage: 0 },
+      { rating: 3, count: 0, percentage: 0 },
+      { rating: 2, count: 0, percentage: 0 },
+      { rating: 1, count: 0, percentage: 0 }
+    ]
+  }
+
+  const catalogsRes = await getPublicSupplierCatalogs(apiSupplier.id.toString())
+  const apiCatalogs = catalogsRes?.data || []
+
+  const certsRes = await getPublicSupplierCertifications(apiSupplier.id.toString())
+  const apiCertifications = certsRes?.data?.profile_certifications || supplier.certifications || []
+
+  // Map API reviews to expected format for the section
+  const supplierReviews: any[] = apiReviews.map(r => ({
+    id: r.id.toString(),
+    supplierId: apiSupplier.id.toString(),
+    buyerId: r.reviewer.id.toString(),
+    buyerName: `${r.reviewer.first_name} ${r.reviewer.last_name}`,
+    buyerCompany: r.reviewer.company_name,
+    buyerCountry: r.reviewer.country,
+    rating: r.rating,
+    title: r.title,
+    content: r.comment,
+    date: r.created_at,
+    helpful: 0,
+    reviewed: true,
+    status: "published" as const,
+    orderDetails: r.order ? {
+      productCategory: "Mixed",
+      orderValue: `${r.order.total_amount} ${r.order.currency_code}`,
+      orderDate: r.created_at
+    } : undefined
+  }))
+
+  const ratingSummary = {
+    average: apiReviewStats.average_rating,
+    total: apiReviewStats.total_reviews,
+    distribution: {
+      5: apiReviewStats.breakdown.find(b => b.rating === 5)?.count || 0,
+      4: apiReviewStats.breakdown.find(b => b.rating === 4)?.count || 0,
+      3: apiReviewStats.breakdown.find(b => b.rating === 3)?.count || 0,
+      2: apiReviewStats.breakdown.find(b => b.rating === 2)?.count || 0,
+      1: apiReviewStats.breakdown.find(b => b.rating === 1)?.count || 0
+    }
+  }
 
   const reviewBadgeColors = {
     basic: "bg-gray-100 text-gray-700",
@@ -105,7 +192,7 @@ export default async function SupplierPage({ params }: { params: Promise<{ slug:
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
                 {/* Logo Placeholder */}
-                <div className="flex h-24 w-24 flex-shrink-0 items-center justify-center rounded-2xl bg-muted">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl bg-muted">
                   <Factory className="h-12 w-12 text-muted-foreground" />
                 </div>
                 
@@ -200,7 +287,7 @@ export default async function SupplierPage({ params }: { params: Promise<{ slug:
             <Tabs defaultValue="overview" className="space-y-8">
               <TabsList className="w-full justify-start overflow-x-auto">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="products">Products ({supplierProducts.length})</TabsTrigger>
+                <TabsTrigger value="products">Products ({apiProducts.length})</TabsTrigger>
                 <TabsTrigger value="catalog">Factory Catalog</TabsTrigger>
                 <TabsTrigger value="certifications">Certifications</TabsTrigger>
                 <TabsTrigger value="reviews">Reviews</TabsTrigger>
@@ -427,39 +514,71 @@ export default async function SupplierPage({ params }: { params: Promise<{ slug:
               {/* Products Tab */}
               <TabsContent value="products">
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {supplierProducts.map((product) => (
+                  {apiProducts.map((product) => (
                     <Link
                       key={product.id}
-                      href={`/products/${product.slug}`}
-                      className="group rounded-xl border border-border bg-card overflow-hidden transition-all hover:shadow-md"
+                      href={`/products/${product.id}`}
+                      className="group overflow-hidden rounded-xl border border-border bg-card transition-all hover:shadow-md"
                     >
-                      <div className="aspect-[4/3] bg-muted flex items-center justify-center">
-                        <Package className="h-12 w-12 text-muted-foreground/30" />
+                      {/* Product Image */}
+                      <div className="relative aspect-4/3 bg-muted">
+                        {product.image ? (
+                          <img 
+                            src={product.image} 
+                            alt={product.name} 
+                            className="absolute inset-0 h-full w-full object-cover" 
+                          />
+                        ) : product.images && product.images.length > 0 ? (
+                          <img 
+                            src={product.images[0].url} 
+                            alt={product.name} 
+                            className="absolute inset-0 h-full w-full object-cover" 
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Package className="h-12 w-12 text-muted-foreground/30" />
+                          </div>
+                        )}
+                        {/* {product.category && (
+                          <Badge className="absolute left-3 top-3">{product.category.name}</Badge>
+                        )} */}
                       </div>
+
                       <div className="p-4">
                         <h3 className="font-semibold text-foreground group-hover:text-secondary line-clamp-2">
                           {product.name}
                         </h3>
-                        <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
-                          {product.shortDescription}
+                        
+                        <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                          {product.description}
                         </p>
-                        {product.price && (
-                          <div className="mt-3 text-sm">
-                            <span className="font-semibold text-foreground">
-                              ${product.price.min.toFixed(2)} - ${product.price.max.toFixed(2)}
+
+                        {product.pricing_quantities ? (
+                          <div className="mt-3">
+                            <span className="text-lg font-semibold text-foreground">
+                              ${parseFloat(product.pricing_quantities.min_price?.price?.amount || "0").toFixed(2)} - ${parseFloat(product.pricing_quantities.max_price?.price?.amount || "0").toFixed(2)}
                             </span>
-                            <span className="text-muted-foreground"> / {product.price.unit}</span>
+                            <span className="text-sm text-muted-foreground"> / {product.pricing_quantities.unit}</span>
+                          </div>
+                        ) : product.price ? (
+                          <div className="mt-3">
+                            <span className="text-lg font-semibold text-foreground">
+                              ${parseFloat(product.price.amount || "0").toFixed(2)}
+                            </span>
+                          </div>
+                        ) : null}
+
+                        {product.pricing_quantities && (
+                          <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+                            <span>MOQ: {product.pricing_quantities.minimum_order_quantity}</span>
                           </div>
                         )}
-                        <div className="mt-2 text-sm text-muted-foreground">
-                          MOQ: {product.moq} {product.moqUnit}
-                        </div>
                       </div>
                     </Link>
                   ))}
                 </div>
 
-                {supplierProducts.length === 0 && (
+                {apiProducts.length === 0 && (
                   <div className="rounded-xl border border-dashed border-border py-16 text-center">
                     <Package className="mx-auto h-12 w-12 text-muted-foreground/50" />
                     <h3 className="mt-4 font-semibold text-foreground">No products listed yet</h3>
@@ -472,136 +591,81 @@ export default async function SupplierPage({ params }: { params: Promise<{ slug:
 
               {/* Factory Catalog Tab */}
               <TabsContent value="catalog">
-                <div className="grid gap-8 lg:grid-cols-3">
-                  {/* Catalog Preview */}
-                  <div className="lg:col-span-2">
-                    <div className="rounded-xl border border-border bg-card overflow-hidden">
-                      {/* Catalog Header */}
-                      <div className="border-b border-border bg-muted/50 px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <BookOpen className="h-5 w-5 text-secondary" />
-                          <h2 className="font-semibold text-lg text-foreground">Factory Catalog</h2>
-                        </div>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Browse {supplier.name}&apos;s complete product catalog
-                        </p>
-                      </div>
-
-                      {/* Catalog Preview Grid */}
-                      <div className="p-6">
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                          {[1, 2, 3, 4, 5, 6].map((page) => (
-                            <div key={page} className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-border bg-muted">
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <Image className="h-8 w-8 text-muted-foreground/30" />
-                              </div>
-                              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/90 to-transparent p-3">
-                                <span className="text-xs font-medium text-foreground">Page {page}</span>
-                              </div>
-                              {page === 1 && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-background/60 opacity-0 transition-opacity group-hover:opacity-100">
-                                  <Eye className="h-6 w-6 text-secondary" />
-                                </div>
-                              )}
+                {apiCatalogs.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border py-16 text-center">
+                    <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                    <h3 className="mt-4 font-semibold text-foreground">No Catalogs Available</h3>
+                    <p className="mt-2 text-muted-foreground">
+                      This supplier has not uploaded any catalogs yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-6">
+                    {apiCatalogs.map((catalog) => (
+                      <div key={catalog.id} className="rounded-xl border border-border bg-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary/10 shrink-0">
+                            <BookOpen className="h-6 w-6 text-secondary" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground">{catalog.name}</h3>
+                            <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
+                              <span>PDF Document</span>
+                              <span className="h-3 w-px bg-border" />
+                              <span>{catalog.file_size}</span>
+                              <span className="h-3 w-px bg-border" />
+                              <span>Updated {new Date(catalog.updated_at).toLocaleDateString()}</span>
                             </div>
-                          ))}
+                          </div>
                         </div>
-
-                        {/* View More */}
-                        <p className="mt-4 text-center text-sm text-muted-foreground">
-                          Showing 6 of 24 pages
-                        </p>
+                        <div className="flex gap-3">
+                          <Button variant="outline" className="gap-2" size="sm" asChild>
+                            <Link href={catalog.file_path} target="_blank" rel="noopener noreferrer">
+                              <Eye className="h-4 w-4" />
+                              View
+                            </Link>
+                          </Button>
+                          <Button className="gap-2" size="sm" asChild>
+                            <Link href={catalog.file_path} target="_blank" rel="noopener noreferrer" download>
+                              <Download className="h-4 w-4" />
+                              Download
+                            </Link>
+                          </Button>
+                        </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-
-                  {/* Catalog Actions Sidebar */}
-                  <div className="space-y-6">
-                    {/* Download Card */}
-                    <div className="rounded-xl border border-border bg-card p-6">
-                      <h3 className="font-semibold text-foreground">Get the Full Catalog</h3>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Download or view the complete factory catalog with all products, specifications, and pricing information.
-                      </p>
-
-                      <div className="mt-6 space-y-3">
-                        <Button className="w-full gap-2" size="lg">
-                          <Eye className="h-4 w-4" />
-                          View Catalog Online
-                        </Button>
-                        <Button variant="outline" className="w-full gap-2" size="lg">
-                          <Download className="h-4 w-4" />
-                          Download Catalog (PDF)
-                        </Button>
-                      </div>
-
-                      <div className="mt-4 flex items-center justify-center gap-4 text-xs text-muted-foreground">
-                        <span>PDF Format</span>
-                        <span className="h-3 w-px bg-border" />
-                        <span>12.5 MB</span>
-                        <span className="h-3 w-px bg-border" />
-                        <span>24 Pages</span>
-                      </div>
-                    </div>
-
-                    {/* Catalog Details */}
-                    <div className="rounded-xl border border-border bg-card p-6">
-                      <h3 className="font-semibold text-foreground">Catalog Details</h3>
-                      <dl className="mt-4 space-y-3 text-sm">
-                        <div className="flex justify-between">
-                          <dt className="text-muted-foreground">Last Updated</dt>
-                          <dd className="font-medium text-foreground">March 2026</dd>
-                        </div>
-                        <div className="flex justify-between">
-                          <dt className="text-muted-foreground">Language</dt>
-                          <dd className="font-medium text-foreground">English</dd>
-                        </div>
-                        <div className="flex justify-between">
-                          <dt className="text-muted-foreground">Products Featured</dt>
-                          <dd className="font-medium text-foreground">{supplier.productCount}+</dd>
-                        </div>
-                        <div className="flex justify-between">
-                          <dt className="text-muted-foreground">Includes Pricing</dt>
-                          <dd className="font-medium text-foreground">Yes</dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    {/* Request Custom Catalog */}
-                    <div className="rounded-xl border border-dashed border-border bg-muted/50 p-6 text-center">
-                      <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
-                      <h3 className="mt-3 font-semibold text-foreground">Need a Custom Catalog?</h3>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Request a catalog tailored to your specific product requirements.
-                      </p>
-                      <Button variant="outline" className="mt-4 gap-2" size="sm" asChild>
-                        <Link href={`/messages/new?supplier=${supplier.slug}&subject=Custom%20Catalog%20Request`}>
-                          <MessageSquare className="h-4 w-4" />
-                          Request Custom Catalog
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                )}
               </TabsContent>
+
 
               {/* Certifications Tab */}
               <TabsContent value="certifications">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {supplier.certifications.map((cert) => (
-                    <div key={cert} className="rounded-xl border border-border bg-card p-5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary/10">
-                          <Shield className="h-6 w-6 text-secondary" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-foreground">{cert}</h3>
-                          <p className="text-sm text-muted-foreground">Reviewed certification</p>
+                {apiCertifications.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border py-16 text-center">
+                    <Shield className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                    <h3 className="mt-4 font-semibold text-foreground">No Certifications Available</h3>
+                    <p className="mt-2 text-muted-foreground">
+                      This supplier has not added any approved certifications yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {apiCertifications.map((cert) => (
+                      <div key={cert} className="rounded-xl border border-border bg-card p-5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary/10 shrink-0">
+                            <Shield className="h-6 w-6 text-secondary" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground">{cert}</h3>
+                            <p className="text-sm text-muted-foreground">Reviewed certification</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </TabsContent>
 
               {/* Reviews Tab */}

@@ -35,7 +35,6 @@ import {
   Scale
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getReviewsByProduct, getProductRatingSummary } from "@/lib/data/reviews"
 import { ProductReviewsSection } from "@/components/products/product-reviews-section"
 
 export default function ProductPage() {
@@ -323,7 +322,7 @@ export default function ProductPage() {
                       </Link>
                     </Button>
                     <Button variant="outline" size="lg" className="flex-1" asChild>
-                      <Link href={`${dashboardPath}?supplier=${product.supplierId || product.supplierSlug || "admin"}&product=${product.slug}&productName=${encodeURIComponent(product.name)}&prefill=1`}>
+                      <Link href={`${dashboardPath}?supplier=${product.supplierId || product.supplierSlug || "admin"}&product=${product.id}&productName=${encodeURIComponent(product.name)}&productImage=${encodeURIComponent(product.images?.[0] || (product as any).image || '')}&productDesc=${encodeURIComponent(product.description || '')}&prefill=1`}>
                         <MessageSquare className="mr-2 h-4 w-4" />
                         Contact Supplier
                       </Link>
@@ -526,8 +525,46 @@ export default function ProductPage() {
             <ProductReviewsSection
               productId={product.id.toString()}
               productName={product.name}
-              reviews={getReviewsByProduct(product.id.toString())}
-              ratingSummary={getProductRatingSummary(product.id.toString())}
+              reviews={
+                product.reviews
+                  ? product.reviews.map(pr => ({
+                      id: pr.id.toString(),
+                      supplierId: product.supplierId || "",
+                      productId: product.id.toString(),
+                      buyerId: pr.reviewer.id.toString(),
+                      buyerName: `${pr.reviewer.first_name} ${pr.reviewer.last_name}`,
+                      buyerCompany: pr.reviewer.company_name,
+                      buyerCountry: pr.reviewer.country,
+                      rating: pr.rating,
+                      title: pr.title,
+                      content: pr.comment,
+                      date: pr.created_at,
+                      reviewed: true,
+                      helpful: 0,
+                      status: "published",
+                      orderDetails: {
+                        productCategory: product.category.name,
+                        orderValue: pr.order.total_amount.toString(),
+                        orderDate: pr.created_at
+                      }
+                    }))
+                  : []
+              }
+              ratingSummary={
+                product.review_stats
+                  ? {
+                      average: product.review_stats.average_rating,
+                      total: product.review_stats.total_reviews,
+                      distribution: {
+                        5: product.review_stats.breakdown.find(b => b.rating === 5)?.count || 0,
+                        4: product.review_stats.breakdown.find(b => b.rating === 4)?.count || 0,
+                        3: product.review_stats.breakdown.find(b => b.rating === 3)?.count || 0,
+                        2: product.review_stats.breakdown.find(b => b.rating === 2)?.count || 0,
+                        1: product.review_stats.breakdown.find(b => b.rating === 1)?.count || 0
+                      }
+                    }
+                  : { average: 0, total: 0, distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } }
+              }
             />
           </div>
         </section>

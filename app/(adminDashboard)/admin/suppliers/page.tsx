@@ -30,8 +30,10 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { fetchSuppliers, deleteManufacturer } from "@/lib/api/admin-manufacturer-registrations"
+import { fetchSuppliers, deleteManufacturer, rejectManufacturer } from "@/lib/api/admin-manufacturer-registrations"
 import type { ManufacturerApplication, ManufacturerRegistrationResponse } from "@/lib/api/admin-manufacturer-registrations"
+import { getConversations } from "@/lib/api/messages"
+import { apiClient } from "@/lib/api/client"
 import { 
   Search,
   Factory,
@@ -56,6 +58,8 @@ import {
   Loader2
 } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
 
 type SupplierStatus = "draft" | "pending" | "approved" | "rejected" | "suspended" | "needs_info" | "active" | "deactivated"
 
@@ -88,7 +92,9 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
 const PER_PAGE = 10
 
 export default function AdminSuppliersPage() {
+  const { user } = useAuth()
   const { toast } = useToast()
+  const router = useRouter()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -101,6 +107,8 @@ export default function AdminSuppliersPage() {
   const [rejectReason, setRejectReason] = useState("")
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<(string | number) | null>(null)
+  const [rejecting, setRejecting] = useState<boolean>(false)
+  const [sendingMessage, setSendingMessage] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
 
   // Load suppliers from API
@@ -110,7 +118,7 @@ export default function AdminSuppliersPage() {
         setLoading(true)
         const response = await fetchSuppliers(currentPage, PER_PAGE)
         // Filter out pending status
-        const filtered = response.data.filter(row => row.status !== "pending")
+        const filtered = response.data.filter(row => (row.manufacture_status || row.status) !== "pending")
         setSuppliers(filtered)
       } catch (err) {
         toast({
@@ -132,7 +140,8 @@ export default function AdminSuppliersPage() {
     if (searchQuery && !name.includes(searchQuery.toLowerCase()) && !company.includes(searchQuery.toLowerCase())) {
       return false
     }
-    if (statusFilter !== "all" && supplier.status !== statusFilter) return false
+    const rowStatus = (supplier.manufacture_status || supplier.status || "draft").toLowerCase()
+    if (statusFilter !== "all" && rowStatus !== statusFilter) return false
     return true
   })
 
@@ -199,6 +208,47 @@ export default function AdminSuppliersPage() {
     setShowRejectDialog(true)
   }
 
+  const handleSendMessageAction = async (supplier: Supplier) => {
+    setSendingMessage(true)
+    try {
+      toast({
+        title: "Opening Conversation",
+        description: "Please wait while we set up the chat...",
+      })
+      const adminId = user?.id || 1
+      
+      // First, check if a conversation already exists with this supplier
+      const existingConvs = await getConversations()
+      const existingConv = existingConvs.find(c => 
+        c.participants.some(p => String(p.id) === String(supplier.id))
+      )
+      
+      if (existingConv) {
+        router.push(`/admin/messages?conversation=${existingConv.id}`)
+        return
+      }
+
+      // If not, create a new one
+      const response = await apiClient.post("/conversations", {
+        participant_ids: [Number(adminId), Number(supplier.id)]
+      })
+      const apiData = response.data?.data || response.data
+      
+      if (apiData && apiData.id) {
+        router.push(`/admin/messages?conversation=${apiData.id}`)
+      } else {
+        throw new Error(`Unexpected response: ${JSON.stringify(response.data)}`)
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: (error.response?.data?.message || JSON.stringify(error.response?.data)) || error.message || "Failed to open conversation.",
+        variant: "destructive",
+      })
+      setSendingMessage(false)
+    }
+  }
+
   const submitInfoRequest = () => {
     if (currentSupplier) {
       // Mark as needs_info (would need API call in real implementation)
@@ -210,14 +260,34 @@ export default function AdminSuppliersPage() {
     }
   }
 
-  const submitRejection = () => {
-    if (currentSupplier) {
-      // Mark as rejected (would need API call in real implementation)
+  const submitRejection = async () => {
+    if (!currentSupplier) return
+    if (!rejectReason.trim()) {
+      toast({
+        title: "Error",
+        description: "Please provide a reason for rejection.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setRejecting(true)
+    try {
+      await rejectManufacturer(currentSupplier.id, rejectReason)
+      setSuppliers(prev => prev.filter(s => s.id !== currentSupplier.id))
       setShowRejectDialog(false)
       toast({
         title: "Success",
-        description: "Supplier rejected",
+        description: "Supplier rejected successfully",
       })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reject supplier.",
+        variant: "destructive",
+      })
+    } finally {
+      setRejecting(false)
     }
   }
 
@@ -304,7 +374,7 @@ export default function AdminSuppliersPage() {
           {filteredSuppliers.map((supplier) => {
             const displayName = [supplier.first_name, supplier.last_name].filter(Boolean).join(" ") || "—"
             const displayCompany = supplier.company_name || supplier.company?.company_name || "—"
-            const statusKey = supplier.status || "draft"
+            const statusKey = (supplier.manufacture_status || supplier.status || "draft").toLowerCase()
             const config = statusConfig[statusKey] || statusConfig.draft
 
             return (
@@ -352,22 +422,26 @@ export default function AdminSuppliersPage() {
                           <Eye className="mr-2 h-4 w-4" />
                           View Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleSendMessageAction(supplier)} disabled={sendingMessage}>
                           <MessageSquare className="mr-2 h-4 w-4" />
-                          Send Message
+                          {sendingMessage ? "Opening..." : "Send Message"}
                         </DropdownMenuItem>
+                        {/* 
                         <DropdownMenuItem onClick={() => openInfoRequest(supplier)}>
                           <FileQuestion className="mr-2 h-4 w-4 text-blue-600" />
                           Request More Info
                         </DropdownMenuItem>
+                        */}
                         <DropdownMenuItem onClick={() => openReject(supplier)}>
                           <X className="mr-2 h-4 w-4 text-red-600" />
                           Reject
                         </DropdownMenuItem>
+                        {/*
                         <DropdownMenuItem>
                           <Ban className="mr-2 h-4 w-4 text-orange-600" />
                           Suspend
                         </DropdownMenuItem>
+                        */}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
                           className="text-destructive"
@@ -409,8 +483,8 @@ export default function AdminSuppliersPage() {
                   </h3>
                   <p className="text-sm text-muted-foreground">{currentSupplier.company_name || currentSupplier.company?.company_name}</p>
                 </div>
-                <Badge className={statusConfig[currentSupplier.status || "draft"].color}>
-                  {statusConfig[currentSupplier.status || "draft"].label}
+                <Badge className={(statusConfig[(currentSupplier.manufacture_status || currentSupplier.status)?.toLowerCase() || "draft"] || statusConfig.draft).color}>
+                  {(statusConfig[(currentSupplier.manufacture_status || currentSupplier.status)?.toLowerCase() || "draft"] || statusConfig.draft).label}
                 </Badge>
               </div>
 
@@ -481,8 +555,17 @@ export default function AdminSuppliersPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={submitRejection}>Reject Supplier</Button>
+            <Button variant="outline" onClick={() => setShowRejectDialog(false)} disabled={rejecting}>Cancel</Button>
+            <Button variant="destructive" onClick={submitRejection} disabled={rejecting}>
+              {rejecting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                "Reject Supplier"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -95,6 +95,37 @@ export interface ShippingMethod {
   name: string
 }
 
+export interface ReviewStats {
+  average_rating: number
+  total_reviews: number
+  breakdown: {
+    rating: number
+    count: number
+    percentage: number
+  }[]
+}
+
+export interface ProductReview {
+  id: number
+  rating: number
+  title: string
+  comment: string
+  created_at: string
+  reviewer: {
+    id: number
+    first_name: string
+    last_name: string
+    company_name: string
+    country: string
+  }
+  order: {
+    id: number
+    total_amount: number
+    currency_code: string
+    status: string
+  }
+}
+
 export interface Product {
   id: number
   name: string
@@ -115,6 +146,8 @@ export interface Product {
   supplierId?: string
   supplierSlug?: string
   supplierName?: string
+  categoryId?: number | string
+  subCategoryId?: number | string
   category: Category
   sub_category: SubCategory
   images: string[]
@@ -125,6 +158,8 @@ export interface Product {
   shipping_packaging: ShippingPackaging
   available_options: string | null
   shipping_methods: ShippingMethod[]
+  review_stats?: ReviewStats
+  reviews?: ProductReview[]
 }
 
 export interface ProductsMetadata {
@@ -322,8 +357,10 @@ export async function getProduct(slug: string): Promise<GetProductResponse> {
     }
     
     return response.data
-  } catch (error) {
-    console.error(`Error fetching product ${slug}:`, error)
+  } catch (error: any) {
+    if (error?.response?.status !== 404) {
+      console.error(`Error fetching product ${slug}:`, error)
+    }
     return {
       success: false,
       message: getApiErrorMessage(error) || "Product not found.",
@@ -380,6 +417,8 @@ function normalizeProduct(payload: unknown): Product {
       product.supplier_name ?? product.supplierName ?? supplier.name,
       ""
     ) || undefined,
+    categoryId: (product.category_id ?? product.categoryId ?? toRecord(product.category).id) as string | number | undefined,
+    subCategoryId: (product.sub_category_id ?? product.subCategoryId ?? toRecord(product.sub_category).id) as string | number | undefined,
     category: normalizeCategory(product.category),
     sub_category: normalizeSubCategory(product.sub_category),
     images: Array.isArray(product.images) 
@@ -434,6 +473,8 @@ function normalizeProduct(payload: unknown): Product {
     shipping_methods: Array.isArray(product.shipping_methods)
       ? (product.shipping_methods as ShippingMethod[])
       : [],
+    review_stats: product.review_stats ? (product.review_stats as ReviewStats) : undefined,
+    reviews: Array.isArray(product.reviews) ? (product.reviews as ProductReview[]) : undefined,
   }
 }
 

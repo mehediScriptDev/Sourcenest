@@ -46,8 +46,14 @@ export interface PricingPlan {
   updated_at: string | null
   features?: Array<{
     id: number
+    label?: string
     input_type: string
     value: string
+    features?: {
+      id: number
+      name: string
+      key: string
+    }
   }>
 }
 
@@ -67,6 +73,7 @@ export interface CreatePlanPayload {
   features: Array<{
     id: number
     input_type: string
+    label?: string
     value: string
   }>
 }
@@ -137,6 +144,7 @@ export interface UpdatePlanPayload {
   features: Array<{
     id: number
     input_type: string
+    label?: string
     value: string
   }>
 }

@@ -135,10 +135,10 @@ export default function MessagesPage() {
     avatar: user?.avatar
   }
 
-  const handleSendMessage = async (text: string) => {
-    if (!selectedConvId) return
+  const handleSendMessage = async (text: string, files?: File[]) => {
+    if (!selectedConvId) return false
 
-    const sentMsg = await sendMessage(selectedConvId, text)
+    const sentMsg = await sendMessage(selectedConvId, text, files)
     if (sentMsg) {
       setMessages(prev => [...prev, sentMsg])
       setConversations(prev => prev.map(c => 
@@ -146,7 +146,9 @@ export default function MessagesPage() {
           ? { ...c, lastMessage: sentMsg, updatedAt: "Just now" } 
           : c
       ))
+      return true
     }
+    return false
   }
 
   const handleSelectConversation = async (conv: ChatConversation) => {

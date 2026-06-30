@@ -67,13 +67,13 @@ export function ProductActionButtons({
     return (
       <div className={cn("flex flex-col gap-3", className)}>
         <Button variant="outline" className="flex-1 gap-2 border-primary/20 text-primary hover:bg-primary/5" asChild>
-          <Link href={`/messages/new?supplier=${product.supplierSlug}&product=${product.slug}`}>
+          <Link href={`/messages/new?supplier=${product.supplierSlug}&product=${product.id}&productName=${encodeURIComponent(product.name)}&productImage=${encodeURIComponent(product.images?.[0] || (product as any).image || '')}&productDesc=${encodeURIComponent(product.shortDescription || product.description || '')}`}>
             <MessageSquare className="h-4 w-4" />
             Contact Supplier
           </Link>
         </Button>
         <Button size="lg" variant="outline" className="gap-2" asChild>
-          <Link href={`/rfq/new?supplier=${product.supplierSlug}&product=${product.slug}`}>
+          <Link href={`/rfq/new?supplier=${product.supplierSlug}&product=${product.id}`}>
             <FileText className="h-4 w-4" />
             Request Quote
           </Link>

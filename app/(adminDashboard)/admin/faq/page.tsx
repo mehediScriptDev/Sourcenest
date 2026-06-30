@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+
 import {
   Dialog,
   DialogContent,
@@ -603,35 +605,33 @@ export default function AdminFaqPage() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Categories</CardTitle>
-            <FolderPlus className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalCategories}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Questions</CardTitle>
-            <HelpCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalFaqs}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Questions/Category</CardTitle>
-            <MessageSquareText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {totalCategories > 0 ? (totalFaqs / totalCategories).toFixed(1) : 0}
-            </div>
-          </CardContent>
-        </Card>
+        <AdminStatCard
+          title="Total Categories"
+          value={totalCategories}
+          icon={FolderPlus}
+          iconClassName="text-muted-foreground"
+          iconWrapperClassName="bg-transparent h-auto w-auto"
+          layout="spaceBetween"
+          contentClassName="p-6"
+        />
+        <AdminStatCard
+          title="Total Questions"
+          value={totalFaqs}
+          icon={HelpCircle}
+          iconClassName="text-muted-foreground"
+          iconWrapperClassName="bg-transparent h-auto w-auto"
+          layout="spaceBetween"
+          contentClassName="p-6"
+        />
+        <AdminStatCard
+          title="Avg Questions/Category"
+          value={totalCategories > 0 ? (totalFaqs / totalCategories).toFixed(1) : 0}
+          icon={MessageSquareText}
+          iconClassName="text-muted-foreground"
+          iconWrapperClassName="bg-transparent h-auto w-auto"
+          layout="spaceBetween"
+          contentClassName="p-6"
+        />
       </div>
 
       {/* Categories List */}

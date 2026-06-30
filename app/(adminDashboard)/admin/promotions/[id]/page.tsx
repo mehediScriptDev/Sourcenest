@@ -32,17 +32,54 @@ import {
   Factory
 } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
-import { fetchAdminPromotionById, fetchAdminPromotionParticipants, type Promotion, type PromotionParticipant } from "@/lib/api/admin-promotions"
+import { fetchAdminPromotionById, fetchAdminPromotionParticipants, enrollAdminPromotionParticipant, type Promotion, type PromotionParticipant } from "@/lib/api/admin-promotions"
+import { useToast } from "@/hooks/use-toast"
 
 export default function PromotionDetailsPage() {
   const params = useParams()
   const router = useRouter()
   const promotionId = params.id as string
+  const { toast } = useToast()
 
   const [promotion, setPromotion] = useState<Promotion | null>(null)
   const [participants, setParticipants] = useState<PromotionParticipant[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [approvingUserId, setApprovingUserId] = useState<number | null>(null)
+
+  const handleApproveParticipant = async (userId: number) => {
+    setApprovingUserId(userId)
+    toast({
+      title: "Approving participant...",
+      description: "Please wait while we process the promotion enrollment.",
+    })
+    
+    const res = await enrollAdminPromotionParticipant(promotionId, userId)
+    setApprovingUserId(null)
+    
+    if (res.success) {
+      toast({
+        title: "Success",
+        description: res.message || "Participant enrollment approved successfully.",
+      })
+      const [promoRes, partsRes] = await Promise.all([
+        fetchAdminPromotionById(promotionId),
+        fetchAdminPromotionParticipants(promotionId)
+      ])
+      if (promoRes.success && promoRes.data.promotion) {
+        setPromotion(promoRes.data.promotion)
+      }
+      if (partsRes.success) {
+        setParticipants(partsRes.data)
+      }
+    } else {
+      toast({
+        title: "Error",
+        description: res.message || "Failed to approve participant.",
+        variant: "destructive",
+      })
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -248,6 +285,22 @@ export default function PromotionDetailsPage() {
                       {p.joined_at ? new Date(p.joined_at).toLocaleDateString() : "—"}
                     </TableCell>
                     <TableCell className="text-right">
+                      {!(String(p.status).toLowerCase() === "approved" || String(p.status) === "1") && (
+                        <Button 
+                          variant="default" 
+                          size="sm" 
+                          className="bg-secondary text-secondary-foreground hover:bg-secondary/90 mr-2 h-8 px-2 text-xs"
+                          disabled={approvingUserId === p.user_id}
+                          onClick={() => handleApproveParticipant(p.user_id)}
+                        >
+                          {approvingUserId === p.user_id ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : (
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                          )}
+                          Approve
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm">
                         <Eye className="h-4 w-4" />
                       </Button>

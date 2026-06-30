@@ -91,7 +91,7 @@ export default function BuyerSavedPage() {
                   className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex items-start gap-4">
-                    <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-muted">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-muted">
                       <Factory className="h-7 w-7 text-muted-foreground" />
                     </div>
                     <div>
@@ -181,7 +181,7 @@ export default function BuyerSavedPage() {
                   className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex items-start gap-4">
-                    <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-muted">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-muted">
                       <Package className="h-7 w-7 text-muted-foreground" />
                     </div>
                     <div>
@@ -201,7 +201,7 @@ export default function BuyerSavedPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Saved {formatTimeAgo(product.savedAt)}</span>
                     <Button variant="outline" size="sm" asChild>
-                      <Link href={`/products/${product.slug}`}>
+                      <Link href={`/products/${product.id}`}>
                         View Product
                         <ExternalLink className="ml-2 h-3 w-3" />
                       </Link>

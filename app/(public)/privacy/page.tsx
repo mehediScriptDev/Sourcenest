@@ -34,12 +34,12 @@ export default function PrivacyPage() {
             
             <h2 className="mt-8 font-serif text-2xl font-medium text-foreground">4. Information Sharing</h2>
             <p className="mt-4 text-muted-foreground leading-relaxed">
-              Information may be shared between users, with service providers, or as required by law.
+              Information may be shared between users, or as required by law.
             </p>
             
             <h2 className="mt-8 font-serif text-2xl font-medium text-foreground">5. Supplier Information Disclaimer</h2>
             <p className="mt-4 text-muted-foreground leading-relaxed">
-              Supplier information is provided by users. SourceNest does not verify or guarantee the accuracy, completeness, reliability, or legality of such information. Users are solely responsible for verifying any information before relying on it.
+              Supplier information is provided by users. SourceNest does not review or warrant the accuracy, completeness, reliability, or legality of such information. Users are solely responsible for reviewing any information before relying on it.
             </p>
             
             <h2 className="mt-8 font-serif text-2xl font-medium text-foreground">6. No Responsibility for Interactions</h2>

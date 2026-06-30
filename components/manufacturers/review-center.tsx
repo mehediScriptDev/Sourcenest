@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +23,7 @@ import {
   Send,
   Image as ImageIcon,
   Trash2,
+  FileText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
@@ -32,7 +34,20 @@ import {
   type ReviewRequestStatus,
 } from "@/lib/api/admin-reviews"
 import {
-  fetchMyReviewRequests,
+  fetchManufacturerReviewCenter,
+  type ReviewCenterUser,
+  type ReviewCenterVerification,
+} from "@/lib/api/manufacturer-review-center"
+import type { AdditionalInformationRequest } from "@/lib/api/manufacturer-additional-information"
+import {
+  storeAdditionalInfoRequest,
+  clearAdditionalInfoStorage,
+  getActionableAdditionalInfoRequests,
+  getStoredAdditionalInfoRequest,
+  isAdditionalInfoPending,
+} from "@/lib/additional-information-storage"
+import AdditionalInformationSubmit from "@/components/manufacturers/additional-information-submit"
+import {
   submitReviewCaptures,
 } from "@/lib/api/manufacturer-reviews"
 import LiveCapture, { type CapturedPhoto } from "./live-capture"
@@ -81,11 +96,174 @@ function statusStyle(status: ReviewRequestStatus) {
   }
 }
 
+function verificationStyle(status: string) {
+  switch (status) {
+    case "approved":
+      return {
+        badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+        border: "border-emerald-200/60 dark:border-emerald-500/20",
+        icon: CheckCircle2,
+        iconColor: "text-emerald-600",
+      }
+    case "needs_more_info":
+      return {
+        badge: "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
+        border: "border-blue-200/60 dark:border-blue-500/20",
+        icon: AlertCircle,
+        iconColor: "text-blue-600",
+      }
+    case "rejected":
+    case "suspended":
+      return {
+        badge: "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300",
+        border: "border-red-200/60 dark:border-red-500/20",
+        icon: AlertCircle,
+        iconColor: "text-red-600",
+      }
+    default:
+      return {
+        badge: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
+        border: "border-amber-200/60 dark:border-amber-500/20",
+        icon: Clock,
+        iconColor: "text-amber-600",
+      }
+  }
+}
+
+function additionalInfoStatusStyle(status: string) {
+  switch (status) {
+    case "submitted":
+      return "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300"
+    case "completed":
+    case "approved":
+      return "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300"
+    case "expired":
+    case "rejected":
+      return "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300"
+    default:
+      return "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300"
+  }
+}
+
+function formatReviewDate(dateStr?: string) {
+  if (!dateStr) return ""
+  try {
+    return format(new Date(dateStr), "MMM d, yyyy")
+  } catch {
+    return dateStr
+  }
+}
+
+function additionalInfoHistoryNote(status: string) {
+  switch (status) {
+    case "submitted":
+      return "Your response was sent to the admin team. They will review it and contact you if anything else is needed."
+    case "completed":
+    case "approved":
+      return "This request was reviewed and closed by the admin team."
+    case "expired":
+      return "This request expired before a response was submitted. Contact support if you still need to send documents."
+    case "rejected":
+      return "The admin rejected this submission. Watch for a new request or contact support."
+    default:
+      return null
+  }
+}
+
+function AdditionalInfoRequestDetails({
+  request,
+}: {
+  request: AdditionalInformationRequest
+}) {
+  const historyNote = !isAdditionalInfoPending(request.status)
+    ? additionalInfoHistoryNote(request.status)
+    : null
+
+  return (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 flex-1 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge className={cn("font-semibold", additionalInfoStatusStyle(request.status))}>
+            {request.status_label}
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            Requested by {request.requested_by.name}
+          </span>
+        </div>
+
+        <div className="rounded-lg border bg-muted/30 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            What the admin is asking for
+          </p>
+          <p className="mt-2 text-sm font-medium text-foreground">{request.message}</p>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            You can send
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {request.allowed_type_labels.map((label) => (
+              <Badge key={label} variant="outline" className="text-xs">
+                {label}
+              </Badge>
+            ))}
+          </div>
+          {isAdditionalInfoPending(request.status) && (
+            <p className="text-xs text-muted-foreground">
+              Photos and videos must be captured live from your camera on this site. Old files cannot be uploaded.
+            </p>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          <Clock className="mr-1 inline h-3 w-3" />
+          Requested {formatReviewDate(request.created_at)}
+          {request.expires_at && ` • Expires ${formatReviewDate(request.expires_at)}`}
+          {request.submitted_at && ` • Submitted ${formatReviewDate(request.submitted_at)}`}
+        </p>
+
+        {historyNote && (
+          <p className="rounded-lg border border-blue-200/60 bg-blue-50/50 px-3 py-2 text-xs text-blue-900 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-200">
+            {historyNote}
+          </p>
+        )}
+
+        {!isAdditionalInfoPending(request.status) && request.responses.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              What you submitted
+            </p>
+            <div className="space-y-1.5">
+              {request.responses.map((response, index) => (
+                <div
+                  key={response.id ?? `${response.type}-${index}`}
+                  className="flex items-center gap-2 rounded-md border px-3 py-2 text-xs"
+                >
+                  <Badge variant="outline" className="capitalize">
+                    {response.type}
+                  </Badge>
+                  <span className="truncate text-muted-foreground">
+                    {response.message || response.file_url || response.url || "File attached"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function ReviewCenter() {
   const { toast } = useToast()
   const [reviews, setReviews] = useState<ReviewRequest[]>([])
+  const [user, setUser] = useState<ReviewCenterUser | null>(null)
+  const [verification, setVerification] = useState<ReviewCenterVerification | null>(null)
+  const [additionalRequests, setAdditionalRequests] = useState<AdditionalInformationRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [showCompleted, setShowCompleted] = useState(false)
 
@@ -100,12 +278,33 @@ export default function ReviewCenter() {
   const loadReviews = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await fetchMyReviewRequests()
-      setReviews(response.data || [])
+      const response = await fetchManufacturerReviewCenter()
+      const data = response.data
+      setUser(data.user)
+      setVerification(data.verification)
+      const apiRequests = [...(data.additional_information_requests || [])].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+      setAdditionalRequests(apiRequests)
+      setReviews(data.review_requests || [])
+
+      const pending = apiRequests.find((request) => isAdditionalInfoPending(request.status))
+      if (pending) {
+        storeAdditionalInfoRequest(pending)
+      } else {
+        const stored = getStoredAdditionalInfoRequest()
+        const matched = stored
+          ? apiRequests.find((request) => request.token === stored.token)
+          : null
+        if (matched && !isAdditionalInfoPending(matched.status)) {
+          clearAdditionalInfoStorage()
+        }
+      }
     } catch {
       toast({
         title: "Error",
-        description: "Failed to load review requests.",
+        description: "Failed to load review center.",
         variant: "destructive",
       })
     } finally {
@@ -125,6 +324,22 @@ export default function ReviewCenter() {
   const completedReviews = reviews.filter(
     (r) => r.status === "approved" || r.status === "rejected" || r.status === "completed"
   )
+  const actionableAdditionalRequests = getActionableAdditionalInfoRequests(additionalRequests)
+  const latestAdditionalRequest = additionalRequests[0] ?? null
+  const otherAdditionalRequests = additionalRequests.filter(
+    (request) =>
+      !actionableAdditionalRequests.some((active) => active.token === request.token)
+  )
+
+  const hasContent =
+    Boolean(verification) ||
+    additionalRequests.length > 0 ||
+    pendingReviews.length > 0 ||
+    activeReviews.length > 0 ||
+    completedReviews.length > 0
+
+  const verificationUi = verification ? verificationStyle(verification.manufacture_status) : null
+  const VerificationIcon = verificationUi?.icon ?? Clock
 
   // Start capture
   const startCapture = (review: ReviewRequest) => {
@@ -200,14 +415,7 @@ export default function ReviewCenter() {
     }
   }
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return ""
-    try {
-      return format(new Date(dateStr), "MMM d, yyyy")
-    } catch {
-      return dateStr
-    }
-  }
+  const formatDate = formatReviewDate
 
   // ─── Live capture mode ───────────────────────────────────────────────────────
 
@@ -360,30 +568,130 @@ export default function ReviewCenter() {
           Review Center
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground md:text-base">
-          Complete pending review requests to proceed with your verification
+          {actionableAdditionalRequests.length > 0
+            ? "The admin team needs more information. Use the form below to respond with text, documents, or live camera capture."
+            : latestAdditionalRequest
+              ? "View your admin requests below. Open the submission form to use the live camera."
+              : "Track your verification status and past admin requests."}
         </p>
+        {latestAdditionalRequest && (
+          <div className="mt-4">
+            <Button asChild size="lg">
+              <Link
+                href={`/dashboard/manufacturer/review-center/submit${
+                  latestAdditionalRequest.token
+                    ? `?token=${encodeURIComponent(latestAdditionalRequest.token)}`
+                    : ""
+                }`}
+              >
+                <Camera className="mr-2 h-5 w-5" />
+                Open Camera &amp; Submit Form
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
 
       {loading ? (
         <Card>
           <CardContent className="flex flex-col items-center py-16 text-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="mt-4 font-medium text-foreground">Loading reviews...</p>
+            <p className="mt-4 font-medium text-foreground">Loading review center...</p>
           </CardContent>
         </Card>
-      ) : pendingReviews.length === 0 && activeReviews.length === 0 && completedReviews.length === 0 ? (
+      ) : !hasContent ? (
         <Card>
           <CardContent className="flex flex-col items-center py-16 text-center">
             <ScanEye className="h-12 w-12 text-muted-foreground/40" />
-            <p className="mt-4 font-medium text-foreground">No review requests</p>
+            <p className="mt-4 font-medium text-foreground">No review activity</p>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-              You don&apos;t have any review requests at the moment. You&apos;ll be notified when
-              the admin requests a review.
+              You don&apos;t have any review requests or additional information requests at the moment.
             </p>
           </CardContent>
         </Card>
       ) : (
         <>
+          {actionableAdditionalRequests.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                <AlertCircle className="h-4 w-4" />
+                Action Required — Submit Below ({actionableAdditionalRequests.length})
+              </h2>
+              {actionableAdditionalRequests.map((request) => (
+                <Card
+                  key={request.id || request.token}
+                  id="additional-info-submit"
+                  className="overflow-hidden border-l-4 border-l-amber-500 shadow-md"
+                >
+                  <CardContent className="space-y-6 p-4 sm:p-6">
+                    <AdditionalInfoRequestDetails request={request} />
+                    <AdditionalInformationSubmit
+                      request={request}
+                      embedded
+                      onSuccess={() => void loadReviews()}
+                    />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {verification && verificationUi && (
+            <Card className={cn("overflow-hidden border", verificationUi.border)}>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={cn("font-semibold", verificationUi.badge)}>
+                        <VerificationIcon className={cn("mr-1 h-3 w-3", verificationUi.iconColor)} />
+                        {verification.manufacture_status_label}
+                      </Badge>
+                      {user?.company_name && (
+                        <span className="text-sm text-muted-foreground">{user.company_name}</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Submitted {formatDate(verification.submitted_at || undefined)}
+                      {verification.manufacture_status_at &&
+                        ` • Updated ${formatDate(verification.manufacture_status_at)}`}
+                    </p>
+                    {verification.rejection_reason && (
+                      <div className="rounded-lg bg-red-50/50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-300">
+                        <span className="font-semibold">Reason: </span>
+                        {verification.rejection_reason}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {otherAdditionalRequests.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                <FileText className="h-4 w-4" />
+                Past Requests ({otherAdditionalRequests.length})
+              </h2>
+              <div className="grid gap-3">
+                {otherAdditionalRequests.map((request) => (
+                  <Card key={request.id} className="opacity-90">
+                    <CardContent className="space-y-4 p-4 sm:p-5">
+                      <AdditionalInfoRequestDetails request={request} />
+                      <Button asChild variant="outline" size="sm">
+                        <Link
+                          href={`/dashboard/manufacturer/review-center/submit?token=${encodeURIComponent(request.token)}`}
+                        >
+                          <Camera className="mr-2 h-4 w-4" />
+                          Open submission form
+                        </Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Pending / Action Required */}
           {pendingReviews.length > 0 && (
             <div className="space-y-3">

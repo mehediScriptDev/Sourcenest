@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
 import { useAuth } from "./auth-context"
+import { apiClient } from "@/lib/api/client"
 
 export type PlanId = "free" | "starter" | "growth" | "enterprise"
 
@@ -44,6 +45,17 @@ export interface SubscriptionPlan {
   yearlyPrice: number | null
   limits: PlanLimits
   features: PlanFeatures
+  rawFeatures?: Array<{
+    id: number
+    label?: string
+    input_type: string
+    value: string
+    features?: {
+      id: number
+      name: string
+      key: string
+    }
+  }>
 }
 
 export interface SubscriptionUsage {
@@ -61,6 +73,10 @@ export interface Subscription {
   currentPeriodStart: string
   currentPeriodEnd: string
   cancelAtPeriodEnd: boolean
+  daysRemaining?: number
+  priceAmount?: string
+  priceCurrency?: string
+  autoRenew?: boolean
 }
 
 // Plan definitions
@@ -234,6 +250,14 @@ interface SubscriptionContextType {
   upgradePlan: (planId: PlanId) => Promise<boolean>
   downgradePlan: (planId: PlanId) => Promise<boolean>
   cancelSubscription: () => Promise<boolean>
+  subscribeToPlan: (payload: {
+    plan_id: number
+    payment_method: string
+    billing_interval: string
+    payment_id: string
+    auto_renew: boolean
+    paid_amount: number
+  }) => Promise<{ success: boolean; message: string }>
   
   // Usage tracking
   incrementUsage: (key: keyof SubscriptionUsage) => void
@@ -241,6 +265,96 @@ interface SubscriptionContextType {
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined)
+
+function transformBackendPlanToSubscriptionPlan(backendPlan: any): SubscriptionPlan {
+  const mappedId = backendPlan.name.toLowerCase() as PlanId;
+  
+  // Fallback default plan configuration
+  const defaultPlan = plans[mappedId] || plans.starter;
+  
+  // Clone limits and features from default fallback definitions
+  const limits: PlanLimits = { ...defaultPlan.limits };
+  const features: PlanFeatures = { ...defaultPlan.features };
+
+  if (Array.isArray(backendPlan.features)) {
+    backendPlan.features.forEach((feature: any) => {
+      const key = feature.features?.key;
+      const isBoolean = feature.input_type === "boolean";
+      const value = feature.value;
+      const numericVal = parseInt(value, 10);
+      const isEnabled = isBoolean ? value === "1" : !isNaN(numericVal) && numericVal > 0;
+
+      if (key === "product_limit") {
+        limits.products = isNaN(numericVal) ? 0 : (numericVal === -1 ? -1 : numericVal);
+        if (limits.products > 0 || limits.products === -1) {
+          features.productListings = true;
+        }
+      } else if (key === "team_users_limit") {
+        limits.teamMembers = isNaN(numericVal) ? 1 : numericVal;
+        if (limits.teamMembers > 1 || limits.teamMembers === -1) {
+          features.multipleTeamUsers = true;
+        }
+      } else if (key === "inquiry_limit" || key === "inquiries_limit") {
+        limits.inquiriesPerMonth = isNaN(numericVal) ? -1 : numericVal;
+      } else if (key === "message_limit" || key === "messages_limit") {
+        limits.messagesPerMonth = isNaN(numericVal) ? -1 : numericVal;
+      } else if (key === "company_profile") {
+        features.companyProfile = isEnabled;
+      } else if (key === "internal_messaging") {
+        features.internalMessaging = isEnabled;
+      } else if (key === "inquiry_rfq_inbox") {
+        features.inquiryInbox = isEnabled;
+        features.rfqReception = isEnabled;
+      } else if (key === "catalog_upload") {
+        features.catalogUpload = isEnabled;
+        limits.catalogUploads = isEnabled ? 10 : 0;
+      } else if (key === "certifications_section") {
+        features.certificationsSection = isEnabled;
+      } else if (key === "export_markets_section") {
+        features.exportMarketsSection = isEnabled;
+      } else if (key === "basic_analytics") {
+        features.basicAnalytics = isEnabled;
+      } else if (key === "advanced_analytics") {
+        features.advancedAnalytics = isEnabled;
+      } else if (key === "priority_search_visibility") {
+        features.prioritySearchVisibility = isEnabled;
+      } else if (key === "featured_supplier_badge") {
+        features.featuredSupplierBadge = isEnabled;
+      } else if (key === "dedicated_account_manager") {
+        features.dedicatedAccountManager = isEnabled;
+      } else if (key === "api_access") {
+        features.apiAccess = isEnabled;
+      }
+    });
+  }
+
+  // Adjust inquiries / messages based on plans if not defined explicitly by backend features
+  if (limits.inquiriesPerMonth === 0) {
+    if (mappedId === "starter") limits.inquiriesPerMonth = 50;
+    else if (mappedId === "growth") limits.inquiriesPerMonth = 200;
+    else if (mappedId === "enterprise") limits.inquiriesPerMonth = -1;
+  }
+  if (limits.messagesPerMonth === 0) {
+    if (mappedId === "starter") limits.messagesPerMonth = 100;
+    else if (mappedId === "growth") limits.messagesPerMonth = 500;
+    else if (mappedId === "enterprise") limits.messagesPerMonth = -1;
+  }
+
+  if (mappedId !== "free") {
+    features.reviewedBadge = true;
+  }
+
+  return {
+    id: mappedId,
+    name: backendPlan.name,
+    description: backendPlan.description || "",
+    monthlyPrice: parseFloat(backendPlan.monthly_price?.amount || "0"),
+    yearlyPrice: parseFloat(backendPlan.yearly_price?.amount || "0"),
+    limits,
+    features,
+    rawFeatures: backendPlan.features
+  };
+}
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
@@ -253,10 +367,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     catalogsUploaded: 0
   })
   const [isLoading, setIsLoading] = useState(true)
+  const [availablePlans, setAvailablePlans] = useState<Record<PlanId, SubscriptionPlan>>(plans)
 
   // Load subscription data based on user
   useEffect(() => {
-    const loadSubscription = () => {
+    const loadSubscription = async () => {
       setIsLoading(true)
       
       if (!user) {
@@ -272,59 +387,154 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      // For manufacturers, load their subscription from localStorage (demo)
-      const storedSub = localStorage.getItem(`sourcenest_subscription_${user.id}`)
-      const storedUsage = localStorage.getItem(`sourcenest_usage_${user.id}`)
-      
-      if (storedSub) {
-        try {
-          setSubscription(JSON.parse(storedSub))
-        } catch {
-          // Default subscription for demo
-          const defaultSub: Subscription = {
-            planId: "growth",
-            status: "active",
-            billingCycle: "monthly",
-            currentPeriodStart: "2026-03-01",
-            currentPeriodEnd: "2026-04-01",
-            cancelAtPeriodEnd: false
-          }
-          setSubscription(defaultSub)
-          localStorage.setItem(`sourcenest_subscription_${user.id}`, JSON.stringify(defaultSub))
+      // Fetch from backend
+      let subData: any = null
+      try {
+        const plansResponse = await apiClient.get('/plans').catch((err) => {
+          console.error("Failed to fetch plans:", err);
+          return null;
+        });
+
+        if (plansResponse && plansResponse.data?.success && Array.isArray(plansResponse.data?.data)) {
+          const fetchedPlans = plansResponse.data.data;
+          const mappedPlans: Record<PlanId, SubscriptionPlan> = { ...plans };
+          fetchedPlans.forEach((bp: any) => {
+            const sp = transformBackendPlanToSubscriptionPlan(bp);
+            if (sp.id) {
+              mappedPlans[sp.id] = sp;
+            }
+          });
+          setAvailablePlans(mappedPlans);
         }
-      } else {
-        // Default subscription for demo (Growth plan)
-        const defaultSub: Subscription = {
-          planId: "growth",
-          status: "active",
-          billingCycle: "monthly",
-          currentPeriodStart: "2026-03-01",
-          currentPeriodEnd: "2026-04-01",
-          cancelAtPeriodEnd: false
-        }
-        setSubscription(defaultSub)
-        localStorage.setItem(`sourcenest_subscription_${user.id}`, JSON.stringify(defaultSub))
+      } catch (e) {
+        console.error("Error loading plans:", e);
       }
 
+      let hasSubscription = false
+      try {
+        const response = await apiClient.get('/manufacturer/subscriptions')
+        if (response.data?.success && response.data?.data) {
+          subData = response.data.data
+          let mappedPlanId: PlanId = "growth"
+          if (subData.plan?.name) {
+            const name = subData.plan.name.toLowerCase()
+            if (["starter", "growth", "enterprise"].includes(name)) {
+              mappedPlanId = name as PlanId
+            }
+          }
+          
+          setSubscription({
+            planId: mappedPlanId,
+            status: subData.status,
+            billingCycle: subData.billing_interval === "year" ? "yearly" : "monthly",
+            currentPeriodStart: subData.starts_at,
+            currentPeriodEnd: subData.ends_at,
+            cancelAtPeriodEnd: !subData.auto_renew,
+            daysRemaining: subData.days_remaining,
+            priceAmount: subData.billing_interval === "year"
+              ? subData.plan?.yearly_price?.amount
+              : subData.plan?.monthly_price?.amount,
+            priceCurrency: subData.billing_interval === "year"
+              ? (subData.plan?.yearly_price?.currency || "USD")
+              : (subData.plan?.monthly_price?.currency || "USD"),
+            autoRenew: subData.auto_renew
+          })
+          hasSubscription = true
+        } else {
+          setSubscription(null)
+        }
+      } catch (error: any) {
+        // A 404 means no subscription yet.
+        // A 403 might mean the manufacturer is pending approval or doesn't have access.
+        const status = error?.response?.status;
+        if (status !== 404 && status !== 403) {
+          console.error("Failed to fetch subscription:", error)
+        }
+        setSubscription(null)
+      }
+
+      if (!hasSubscription) {
+        try {
+          const promoAppRes = await apiClient.get('/manufacturer/promotions/my-application')
+          if (promoAppRes.data?.success && promoAppRes.data?.data) {
+            const promoAppData = promoAppRes.data.data
+            const appStatus = promoAppData.application?.status?.toLowerCase()
+            const planName = promoAppData.promotion?.plan?.name?.toLowerCase() || "growth"
+            
+            let mappedPlanId: PlanId = "growth"
+            if (["starter", "growth", "enterprise", "free"].includes(planName)) {
+              mappedPlanId = planName as PlanId
+            }
+
+            setSubscription({
+              planId: mappedPlanId,
+              status: appStatus === "approved" ? "active" : "trialing",
+              billingCycle: "monthly",
+              currentPeriodStart: promoAppData.application?.joined_at || new Date().toISOString().split("T")[0],
+              currentPeriodEnd: promoAppData.application?.trial_ends_at || new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+              cancelAtPeriodEnd: false,
+              daysRemaining: 180,
+              priceAmount: "0.00",
+              priceCurrency: "USD",
+              autoRenew: false
+            })
+
+            // Construct mock subData so metrics work correctly
+            subData = {
+              status: appStatus === "approved" ? "active" : "trialing",
+              billing_interval: "month",
+              starts_at: promoAppData.application?.joined_at || new Date().toISOString().split("T")[0],
+              ends_at: promoAppData.application?.trial_ends_at || new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+              auto_renew: false,
+              days_remaining: 180,
+              plan: promoAppData.promotion?.plan
+            }
+          }
+        } catch (promoErr) {
+          console.error("Failed to fetch promotion application:", promoErr)
+        }
+      }
+
+      // Fetch dynamic usage metrics from manufacturer dashboard statistics
+      let backendProductsCount = subData?.manufacturer?.total_products ?? 0
+      let backendInquiriesCount = 0
+      let backendMessagesCount = 0
+
+      try {
+        const dashResponse = await apiClient.get('/manufacturer/dashboard').catch(() => null)
+        if (dashResponse?.data?.success && dashResponse?.data?.data) {
+          const dashData = dashResponse.data.data
+          backendInquiriesCount = dashData.stats?.new_inquiries_30d?.value ?? 0
+          backendMessagesCount = dashData.quick_stats?.unread_messages ?? 0
+        }
+      } catch (err) {
+        console.error("Failed to load dashboard metrics:", err)
+      }
+
+      const storedUsage = localStorage.getItem(`sourcenest_usage_${user.id}`)
       if (storedUsage) {
         try {
-          setUsage(JSON.parse(storedUsage))
-        } catch {
-          // Default usage
+          const parsedUsage = JSON.parse(storedUsage)
           setUsage({
-            productsUsed: 47,
-            inquiriesThisMonth: 128,
-            messagesThisMonth: 234,
+            ...parsedUsage,
+            productsUsed: backendProductsCount,
+            inquiriesThisMonth: backendInquiriesCount,
+            messagesThisMonth: backendMessagesCount
+          })
+        } catch {
+          setUsage({
+            productsUsed: backendProductsCount,
+            inquiriesThisMonth: backendInquiriesCount,
+            messagesThisMonth: backendMessagesCount,
             teamMembersUsed: 2,
             catalogsUploaded: 3
           })
         }
       } else {
-        // Default usage for demo
         const defaultUsage: SubscriptionUsage = {
-          productsUsed: 47,
-          inquiriesThisMonth: 128,
-          messagesThisMonth: 234,
+          productsUsed: backendProductsCount,
+          inquiriesThisMonth: backendInquiriesCount,
+          messagesThisMonth: backendMessagesCount,
           teamMembersUsed: 2,
           catalogsUploaded: 3
         }
@@ -341,7 +551,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [user])
 
   // Get current plan
-  const plan = subscription ? plans[subscription.planId] : (user?.role === "buyer" ? plans.free : null)
+  const plan = subscription ? availablePlans[subscription.planId] : (user?.role === "buyer" ? availablePlans.free : null)
 
   // Check if user has a specific feature
   const hasFeature = (feature: keyof PlanFeatures): boolean => {
@@ -431,10 +641,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }
 
   // Get a specific plan
-  const getPlan = (planId: PlanId): SubscriptionPlan => plans[planId]
+  const getPlan = (planId: PlanId): SubscriptionPlan => availablePlans[planId]
 
   // Get all plans
-  const getAllPlans = (): SubscriptionPlan[] => Object.values(plans)
+  const getAllPlans = (): SubscriptionPlan[] => Object.values(availablePlans)
 
   // Get current plan ID
   const getCurrentPlanId = (): PlanId => {
@@ -502,6 +712,70 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     return true
   }
 
+  // Subscribe to plan via backend
+  const subscribeToPlan = async (payload: {
+    plan_id: number
+    payment_method: string
+    billing_interval: string
+    payment_id: string
+    auto_renew: boolean
+    paid_amount: number
+  }): Promise<{ success: boolean; message: string }> => {
+    try {
+      console.log("[SubscriptionContext] POST /manufacturer/subscriptions/subscribe", payload)
+      const response = await apiClient.post('/manufacturer/subscriptions/subscribe', payload)
+      console.log("[SubscriptionContext] Subscribe response:", response.data)
+      const success = response?.data?.success ?? true
+      const message = response?.data?.message || "Subscription activated successfully"
+
+      // On success, re-fetch the subscription from the backend so the UI updates
+      if (success) {
+        try {
+          console.log("[SubscriptionContext] Re-fetching subscription after successful subscribe...")
+          const subResponse = await apiClient.get('/manufacturer/subscriptions')
+          console.log("[SubscriptionContext] Refetch response:", subResponse.data)
+          if (subResponse.data?.success && subResponse.data?.data) {
+            const subData = subResponse.data.data
+            let mappedPlanId: PlanId = "growth"
+            if (subData.plan?.name) {
+              const name = subData.plan.name.toLowerCase()
+              if (["starter", "growth", "enterprise"].includes(name)) {
+                mappedPlanId = name as PlanId
+              }
+            }
+            console.log("[SubscriptionContext] Setting subscription state with planId:", mappedPlanId, "status:", subData.status)
+            setSubscription({
+              planId: mappedPlanId,
+              status: subData.status,
+              billingCycle: subData.billing_interval === "year" ? "yearly" : "monthly",
+              currentPeriodStart: subData.starts_at,
+              currentPeriodEnd: subData.ends_at,
+              cancelAtPeriodEnd: !subData.auto_renew,
+              daysRemaining: subData.days_remaining,
+              priceAmount: subData.billing_interval === "year"
+                ? subData.plan?.yearly_price?.amount
+                : subData.plan?.monthly_price?.amount,
+              priceCurrency: subData.billing_interval === "year"
+                ? (subData.plan?.yearly_price?.currency || "USD")
+                : (subData.plan?.monthly_price?.currency || "USD"),
+              autoRenew: subData.auto_renew
+            })
+          } else {
+            console.warn("[SubscriptionContext] Refetch returned no subscription data")
+          }
+        } catch (refetchErr) {
+          console.error("[SubscriptionContext] Failed to refetch subscription after subscribe:", refetchErr)
+        }
+      }
+
+      return { success, message }
+    } catch (error: any) {
+      console.error("[SubscriptionContext] Subscribe API error:", error?.response?.data || error)
+      const msg = error?.response?.data?.message || "Failed to activate subscription"
+      return { success: false, message: msg }
+    }
+  }
+
   // Increment usage
   const incrementUsage = (key: keyof SubscriptionUsage) => {
     if (!user) return
@@ -545,6 +819,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       upgradePlan,
       downgradePlan,
       cancelSubscription,
+      subscribeToPlan,
       incrementUsage,
       resetMonthlyUsage
     }}>

@@ -10,7 +10,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+
 import {
   Dialog,
   DialogContent,
@@ -622,28 +624,25 @@ export default function AdminInsightsPage() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{articles.length}</div>
-            <p className="text-sm text-muted-foreground">Total Articles</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-emerald-600">
-              {articles.filter(a => a.status === "published").length}
-            </div>
-            <p className="text-sm text-muted-foreground">Published</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">
-              {articles.reduce((acc, a) => acc + a.views, 0).toLocaleString()}
-            </div>
-            <p className="text-sm text-muted-foreground">Total Views</p>
-          </CardContent>
-        </Card>
+        <AdminStatCard
+          title="Total Articles"
+          value={articles.length}
+          layout="vertical"
+          contentClassName="pt-6 pb-6 px-6"
+        />
+        <AdminStatCard
+          title="Published"
+          value={articles.filter(a => a.status === "published").length}
+          valueClassName="text-emerald-600"
+          layout="vertical"
+          contentClassName="pt-6 pb-6 px-6"
+        />
+        <AdminStatCard
+          title="Total Views"
+          value={articles.reduce((acc, a) => acc + a.views, 0).toLocaleString()}
+          layout="vertical"
+          contentClassName="pt-6 pb-6 px-6"
+        />
       </div>
 
       {/* Filters */}

@@ -699,7 +699,7 @@ const en = {
       mostPopular: "Most Popular",
       productsFound: "products found",
       sortDisplay: "Sort:",
-      verified: "Verified",
+      verified: "Reviewed",
       moqLabel: "MOQ:",
       daysLabel: "days",
       inquiriesLabel: "inquiries",
@@ -893,7 +893,7 @@ const en = {
         catalogUpload: "Catalog upload",
         certificationsAndMarkets: "Certifications & Export markets",
         advancedAnalytics: "Advanced analytics",
-        prioritySearch: "Priority search visibility",
+        prioritySearch: "Priority visibility",
         featuredBadge: "Featured supplier badge",
         teamUsers3: "Multiple team users (3)"
       }
@@ -912,7 +912,7 @@ const en = {
       basicAnalytics: "Basic analytics",
       advancedAnalytics: "Advanced analytics",
       enterpriseAnalytics: "Enterprise analytics",
-      prioritySearchVisibility: "Priority search visibility",
+      prioritySearchVisibility: "Priority visibility",
       premiumSearchPlacement: "Premium search placement",
       featuredSupplierBadge: "Featured supplier badge",
       multipleTeamUsers: "Multiple team users",
@@ -951,7 +951,9 @@ const en = {
         cta: "Contact Sales"
       },
       billedAnnually: "Billed annually (${price}/month)",
-      pricePerCycle: "{cycle}"
+      pricePerCycle: "{cycle}",
+      free: "Free",
+      noPlans: "No pricing plans available at this time."
     },
     approval: {
       title: "Approval Required",
@@ -989,7 +991,7 @@ const en = {
       q3: "Can I upgrade or downgrade my plan?",
       a3: "Yes, you can change your plan at any time. When upgrading, you'll be charged the prorated difference. When downgrading, the new rate applies at your next billing cycle.",
       q4: "What is the Founding Manufacturer program?",
-      a4: "The Founding Manufacturer program is a limited offer for the first 300 manufacturers who join SourceNest. As a founding member, you get 6 months of free access to our full Growth plan ($299/month value) - including up to 100 products, advanced analytics, priority search visibility, featured supplier badge, and multiple team users. No credit card required to start.",
+      a4: "The Founding Manufacturer program is a limited offer for the first 300 manufacturers who join SourceNest. As a founding member, you get 6 months of free access to our full Growth plan ($299/month value) - including up to 100 products, advanced analytics, priority visibility, featured supplier badge, and multiple team users. No credit card required to start.",
       q5: "What happens after my 6-month free period ends?",
       a5: "After your 6-month free period ends, you'll need to choose and pay for one of our plans (Starter, Growth, or Enterprise) to continue using the platform. We'll send you reminders before your free period expires so you have plenty of time to choose the right plan for your business.",
       q6: "Is the Founding Manufacturer program still available?",
@@ -1011,6 +1013,7 @@ const en = {
       success: "Payment Successful!",
       transactionId: "Transaction ID:",
       redirecting: "Redirecting to sign up...",
+      redirectingDashboard: "Redirecting to your dashboard...",
       failed: "Payment Failed",
       tryAgain: "Try Again",
       priceInfo: "{plan} Plan ({cycle})",

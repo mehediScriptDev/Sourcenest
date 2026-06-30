@@ -259,3 +259,27 @@ export async function toggleAdminPromotionStatus(id: string | number): Promise<{
   }
 }
 
+/**
+ * PATCH /admin/promotions/{promotion_id}/participants/{user_id} — approve a participant in a promotion
+ */
+export async function enrollAdminPromotionParticipant(
+  promotionId: string | number,
+  userId: number
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const response = await apiClient.patch<{ success: boolean; message: string }>(
+      `/admin/promotions/${promotionId}/participants/${userId}`,
+      { status: "accepted" }
+    )
+    return {
+      success: response.data?.success ?? true,
+      message: response.data?.message,
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: getApiErrorMessage(error, "Failed to approve participant."),
+    }
+  }
+}
+

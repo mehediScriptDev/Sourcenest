@@ -25,6 +25,7 @@ import {
   Clock,
   Loader2,
 } from "lucide-react"
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
 
 const statusColors: Record<string, string> = {
   created: "bg-blue-100 text-blue-700",
@@ -110,10 +111,34 @@ export default function AdminOrdersPage() {
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard icon={Layers} label="Total" value={String(stats.total)} hint="All orders" />
-          <StatCard icon={Clock} label="Active" value={String(stats.active)} hint="In progress" />
-          <StatCard icon={CheckCircle2} label="Completed" value={String(stats.completed)} hint="Closed out" />
-          <StatCard icon={DollarSign} label="Total Value" value={formatCurrency(stats.totalValue, "USD")} hint="Across all records" />
+          <AdminStatCard 
+            icon={Layers} 
+            title="Total Orders" 
+            value={stats.total} 
+            layout="vertical"
+            contentClassName="pt-6 pb-6 px-6"
+          />
+          <AdminStatCard 
+            icon={Clock} 
+            title="Active Orders" 
+            value={stats.active} 
+            layout="vertical"
+            contentClassName="pt-6 pb-6 px-6"
+          />
+          <AdminStatCard 
+            icon={CheckCircle2} 
+            title="Completed Orders" 
+            value={stats.completed} 
+            layout="vertical"
+            contentClassName="pt-6 pb-6 px-6"
+          />
+          <AdminStatCard 
+            icon={DollarSign} 
+            title="Total Value" 
+            value={formatCurrency(stats.totalValue, "USD")} 
+            layout="vertical"
+            contentClassName="pt-6 pb-6 px-6"
+          />
         </div>
       )}
 
@@ -243,25 +268,3 @@ export default function AdminOrdersPage() {
   )
 }
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: React.ElementType
-  label: string
-  value: string
-  hint: string
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Icon className="h-4 w-4" />
-        <span className="text-sm">{label}</span>
-      </div>
-      <p className="mt-2 text-2xl font-semibold text-foreground">{value}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
-    </div>
-  )
-}

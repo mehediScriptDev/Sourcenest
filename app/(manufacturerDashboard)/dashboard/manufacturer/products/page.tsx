@@ -5,6 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import ManufacturerStatCard from "@/components/manufacturer/manufacturer-stat-card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -368,30 +369,22 @@ export default function ManufacturerProductsPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-4">
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-2xl font-bold text-foreground">
-            {loading && !stats ? "—" : stats?.total ?? total}
-          </div>
-          <p className="text-sm text-muted-foreground">Total Products</p>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-2xl font-bold text-emerald-600">
-            {loading && !stats ? "—" : stats?.active ?? "—"}
-          </div>
-          <p className="text-sm text-muted-foreground">Active</p>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-2xl font-bold text-foreground">
-            {loading && !stats ? "—" : stats?.totalViews?.toLocaleString() ?? "—"}
-          </div>
-          <p className="text-sm text-muted-foreground">Total Views</p>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-2xl font-bold text-foreground">
-            {loading && !stats ? "—" : stats?.totalInquiries ?? "—"}
-          </div>
-          <p className="text-sm text-muted-foreground">Total Inquiries</p>
-        </div>
+        <ManufacturerStatCard
+          title="Total Products"
+          value={loading && !stats ? "—" : stats?.total ?? total}
+        />
+        <ManufacturerStatCard
+          title="Active"
+          value={<span className={loading && !stats ? "text-foreground" : "text-emerald-600"}>{loading && !stats ? "—" : stats?.active ?? "—"}</span>}
+        />
+        <ManufacturerStatCard
+          title="Total Views"
+          value={loading && !stats ? "—" : stats?.totalViews?.toLocaleString() ?? "—"}
+        />
+        <ManufacturerStatCard
+          title="Total Inquiries"
+          value={loading && !stats ? "—" : stats?.totalInquiries ?? "—"}
+        />
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row">

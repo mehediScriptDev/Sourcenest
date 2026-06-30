@@ -493,21 +493,37 @@ export default function AdminContactsPage() {
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Close</Button>
-              <Button 
-                variant="outline"
-                className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                onClick={(e) => selectedContact && handleDeleteContact(e, selectedContact)}
-              >
-                Delete
-              </Button>
-              <Button className="gap-2" onClick={() => {
-                if (selectedContact) {
-                  window.location.href = `mailto:${selectedContact.email}?subject=Re: ${selectedContact.inquiry_type} Inquiry`;
-                }
-              }}>
-                <Mail className="h-4 w-4" />
-                Reply via Email
-              </Button>
+              {selectedContact && (
+                <>
+                  <Button variant="outline" asChild>
+                    <a 
+                      href={`https://mail.google.com/mail/?view=cm&fs=1&to=${selectedContact.email}&su=Re: ${encodeURIComponent(selectedContact.inquiry_type || '')} Inquiry`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="gap-2"
+                    >
+                      <Mail className="h-4 w-4" />
+                      Reply via Gmail
+                    </a>
+                  </Button>
+                  <Button 
+                    className="gap-2" 
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedContact.email);
+                      Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: 'Email copied to clipboard!',
+                        showConfirmButton: false,
+                        timer: 2000
+                      });
+                    }}
+                  >
+                    Copy Email
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </DialogContent>

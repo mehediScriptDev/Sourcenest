@@ -1,10 +1,11 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { getFeaturedSuppliers } from "@/lib/data/suppliers"
 import { useAuth } from "@/lib/auth-context"
+import { getBuyerDashboard, BuyerDashboardData } from "@/lib/api/buyer-dashboard"
 import { 
   MessageSquare, 
   FileText, 
@@ -15,21 +16,45 @@ import {
   TrendingUp,
   Clock,
   CheckCircle,
-  Star
+  Star,
+  Loader2
 } from "lucide-react"
-
-const recommendedSuppliers = getFeaturedSuppliers().slice(3, 6)
 
 export default function BuyerDashboardPage() {
   const { user } = useAuth()
-  const rfqs = [
-    { id: "RFQ-001", product: "TWS Wireless Earbuds", supplier: "TechVision Electronics", status: "Quoted", date: "Mar 12, 2026" },
-    { id: "RFQ-002", product: "Organic Cotton Fabric", supplier: "EcoThread Textiles", status: "Pending", date: "Mar 10, 2026" },
-    { id: "RFQ-003", product: "CNC Machining Center", supplier: "GlobalFab Machinery", status: "In Review", date: "Mar 8, 2026" },
-  ]
+  const [data, setData] = useState<BuyerDashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      setLoading(true)
+      const res = await getBuyerDashboard()
+      if (res.success && res.data) {
+        setData(res.data)
+      }
+      setLoading(false)
+    }
+    fetchDashboard()
+  }, [])
   
-  const userDisplayName = user?.firstName || user?.name || "Buyer"
+  const userDisplayName = data?.welcome?.first_name || data?.welcome?.name || user?.firstName || user?.name || "Buyer"
   
+  if (loading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="flex h-[400px] flex-col items-center justify-center">
+        <p className="text-muted-foreground">Failed to load dashboard data.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
@@ -49,10 +74,12 @@ export default function BuyerDashboardPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <MessageSquare className="h-5 w-5 text-secondary" />
             </div>
-            <Badge variant="secondary" className="text-xs">+3 new</Badge>
+            {data.stats.active_conversations.badge && (
+              <Badge variant="secondary" className="text-xs">{data.stats.active_conversations.badge}</Badge>
+            )}
           </div>
           <div className="mt-4">
-            <div className="text-2xl font-bold text-foreground">12</div>
+            <div className="text-2xl font-bold text-foreground">{data.stats.active_conversations.value}</div>
             <p className="text-sm text-muted-foreground">Active Conversations</p>
           </div>
         </div>
@@ -62,10 +89,12 @@ export default function BuyerDashboardPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <FileText className="h-5 w-5 text-secondary" />
             </div>
-            <Badge variant="secondary" className="text-xs">2 pending</Badge>
+            {data.stats.rfqs_submitted.badge && (
+              <Badge variant="secondary" className="text-xs">{data.stats.rfqs_submitted.badge}</Badge>
+            )}
           </div>
           <div className="mt-4">
-            <div className="text-2xl font-bold text-foreground">8</div>
+            <div className="text-2xl font-bold text-foreground">{data.stats.rfqs_submitted.value}</div>
             <p className="text-sm text-muted-foreground">RFQs Submitted</p>
           </div>
         </div>
@@ -75,9 +104,12 @@ export default function BuyerDashboardPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <Heart className="h-5 w-5 text-secondary" />
             </div>
+            {data.stats.saved_suppliers.badge && (
+              <Badge variant="secondary" className="text-xs">{data.stats.saved_suppliers.badge}</Badge>
+            )}
           </div>
           <div className="mt-4">
-            <div className="text-2xl font-bold text-foreground">24</div>
+            <div className="text-2xl font-bold text-foreground">{data.stats.saved_suppliers.value}</div>
             <p className="text-sm text-muted-foreground">Saved Suppliers</p>
           </div>
         </div>
@@ -87,9 +119,12 @@ export default function BuyerDashboardPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <TrendingUp className="h-5 w-5 text-secondary" />
             </div>
+            {data.stats.products_viewed.badge && (
+              <Badge variant="secondary" className="text-xs">{data.stats.products_viewed.badge}</Badge>
+            )}
           </div>
           <div className="mt-4">
-            <div className="text-2xl font-bold text-foreground">156</div>
+            <div className="text-2xl font-bold text-foreground">{data.stats.products_viewed.value}</div>
             <p className="text-sm text-muted-foreground">Products Viewed</p>
           </div>
         </div>
@@ -109,33 +144,35 @@ export default function BuyerDashboardPage() {
             </Button>
           </div>
           <div className="divide-y divide-border">
-            {[
-              { name: "TechVision Electronics", message: "Thank you for your inquiry. We can offer...", time: "2 hours ago", unread: true },
-              { name: "EcoThread Textiles", message: "The samples have been shipped. Tracking...", time: "5 hours ago", unread: true },
-              { name: "GlobalFab Machinery", message: "Please find the attached quotation for...", time: "1 day ago", unread: false },
-            ].map((msg, i) => (
-              <Link 
-                key={i} 
-                href="/dashboard/buyer/messages"
-                className="flex items-start gap-3 p-3 sm:p-4 hover:bg-muted/50 transition-colors min-w-0"
-              >
-                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-muted">
-                  <Factory className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className={`font-medium truncate ${msg.unread ? 'text-foreground' : 'text-muted-foreground'}`}>
-                      {msg.name}
-                    </p>
-                    <span className="text-xs text-muted-foreground">{msg.time}</span>
+            {data.recent_messages.length > 0 ? (
+              data.recent_messages.map((msg, i) => (
+                <Link 
+                  key={i} 
+                  href="/dashboard/buyer/messages"
+                  className="flex items-start gap-3 p-3 sm:p-4 hover:bg-muted/50 transition-colors min-w-0"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                    <Factory className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground truncate">{msg.message}</p>
-                </div>
-                {msg.unread && (
-                  <div className="h-2 w-2 rounded-full bg-secondary flex-shrink-0 mt-2" />
-                )}
-              </Link>
-            ))}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className={`font-medium truncate ${msg.unread ? 'text-foreground' : 'text-muted-foreground'}`}>
+                        {msg.name}
+                      </p>
+                      <span className="text-xs text-muted-foreground">{msg.time}</span>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground truncate">{msg.message}</p>
+                  </div>
+                  {msg.unread && (
+                    <div className="h-2 w-2 rounded-full bg-secondary shrink-0 mt-2" />
+                  )}
+                </Link>
+              ))
+            ) : (
+              <div className="p-8 text-center text-muted-foreground">
+                <p>No recent messages.</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -188,48 +225,62 @@ export default function BuyerDashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rfqs.map((rfq) => (
-                <tr key={rfq.id} className="hover:bg-muted/50 transition-colors">
-                  <td className="px-5 py-4 text-sm font-medium text-foreground">{rfq.id}</td>
-                  <td className="px-5 py-4 text-sm text-muted-foreground">{rfq.product}</td>
-                  <td className="px-5 py-4 text-sm text-muted-foreground">{rfq.supplier}</td>
-                  <td className="px-5 py-4">
-                    <Badge 
-                      variant={rfq.status === "Quoted" ? "default" : rfq.status === "Pending" ? "secondary" : "outline"}
-                      className="text-xs"
-                    >
-                      {rfq.status === "Quoted" && <CheckCircle className="mr-1 h-3 w-3" />}
-                      {rfq.status === "Pending" && <Clock className="mr-1 h-3 w-3" />}
-                      {rfq.status}
-                    </Badge>
+              {data.recent_rfqs.length > 0 ? (
+                data.recent_rfqs.map((rfq) => (
+                  <tr key={rfq.id} className="hover:bg-muted/50 transition-colors">
+                    <td className="px-5 py-4 text-sm font-medium text-foreground">{rfq.id}</td>
+                    <td className="px-5 py-4 text-sm text-muted-foreground">{rfq.product}</td>
+                    <td className="px-5 py-4 text-sm text-muted-foreground">{rfq.supplier}</td>
+                    <td className="px-5 py-4">
+                      <Badge 
+                        variant={rfq.status_value === "quoted" ? "default" : rfq.status_value === "in_review" ? "secondary" : "outline"}
+                        className="text-xs"
+                      >
+                        {rfq.status_value === "quoted" && <CheckCircle className="mr-1 h-3 w-3" />}
+                        {rfq.status_value === "in_review" && <Clock className="mr-1 h-3 w-3" />}
+                        {rfq.status}
+                      </Badge>
+                    </td>
+                    <td className="px-5 py-4 text-sm text-muted-foreground">{rfq.date}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                    No recent RFQs.
                   </td>
-                  <td className="px-5 py-4 text-sm text-muted-foreground">{rfq.date}</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Mobile RFQ cards */}
         <div className="md:hidden p-4 space-y-3">
-          {rfqs.map((rfq) => (
-            <div key={rfq.id} className="rounded-lg border border-border p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-medium truncate">{rfq.id} • {rfq.product}</p>
-                  <p className="text-sm text-muted-foreground truncate">{rfq.supplier}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <Badge variant={rfq.status === "Quoted" ? "default" : rfq.status === "Pending" ? "secondary" : "outline"} className="text-xs">
-                    {rfq.status === "Quoted" && <CheckCircle className="mr-1 h-3 w-3" />}
-                    {rfq.status === "Pending" && <Clock className="mr-1 h-3 w-3" />}
-                    {rfq.status}
-                  </Badge>
-                  <p className="text-xs text-muted-foreground">{rfq.date}</p>
+          {data.recent_rfqs.length > 0 ? (
+            data.recent_rfqs.map((rfq) => (
+              <div key={rfq.id} className="rounded-lg border border-border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{rfq.id} • {rfq.product}</p>
+                    <p className="text-sm text-muted-foreground truncate">{rfq.supplier}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge variant={rfq.status_value === "quoted" ? "default" : rfq.status_value === "in_review" ? "secondary" : "outline"} className="text-xs">
+                      {rfq.status_value === "quoted" && <CheckCircle className="mr-1 h-3 w-3" />}
+                      {rfq.status_value === "in_review" && <Clock className="mr-1 h-3 w-3" />}
+                      {rfq.status}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground">{rfq.date}</p>
+                  </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="text-center text-sm text-muted-foreground p-4">
+              No recent RFQs.
             </div>
-          ))}
+          )}
         </div>
       </div>
 
@@ -245,28 +296,34 @@ export default function BuyerDashboardPage() {
           </Button>
         </div>
         <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
-          {recommendedSuppliers.map((supplier) => (
-            <Link 
-              key={supplier.id}
-              href={`/suppliers/${supplier.slug}`}
-              className="rounded-lg border border-border bg-card p-4 hover:border-secondary transition-colors"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
-                  <Factory className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-foreground">{supplier.name}</h3>
-                  <p className="text-sm text-muted-foreground">{supplier.location.city}, {supplier.location.country}</p>
-                  <div className="mt-2 flex items-center gap-2 text-sm">
-                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                    <span className="font-medium">{supplier.rating}</span>
-                    <span className="text-muted-foreground">• {supplier.productCount.toLocaleString()} products</span>
+          {data.recommended_suppliers.length > 0 ? (
+            data.recommended_suppliers.map((supplier) => (
+              <Link 
+                key={supplier.id}
+                href={`/suppliers/${supplier.slug}`}
+                className="rounded-lg border border-border bg-card p-4 hover:border-secondary transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted">
+                    <Factory className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-foreground">{supplier.name}</h3>
+                    <p className="text-sm text-muted-foreground">{supplier.location.city}, {supplier.location.country}</p>
+                    <div className="mt-2 flex items-center gap-2 text-sm">
+                      <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                      <span className="font-medium">{supplier.rating}</span>
+                      <span className="text-muted-foreground">• {supplier.product_count.toLocaleString()} products</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            ))
+          ) : (
+            <div className="col-span-full p-8 text-center text-muted-foreground">
+              No recommended suppliers right now.
+            </div>
+          )}
         </div>
       </div>
     </div>

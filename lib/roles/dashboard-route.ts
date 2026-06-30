@@ -12,11 +12,14 @@ export function normalizeUserRole(role: string): UserRole {
   }
 }
 
-export function getDashboardPathByRole(role: string): string {
+export function getDashboardPathByRole(role: string, status?: string | null): string {
   switch (normalizeUserRole(role)) {
     case "admin":
       return "/admin";
     case "manufacturer":
+      if (status === "pending_approval" || status === "needs_more_info") {
+        return "/review";
+      }
       return "/dashboard/manufacturer";
     case "buyer":
     default:

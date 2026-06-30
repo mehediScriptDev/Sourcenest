@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import Swal from "sweetalert2"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import ManufacturerStatCard from "@/components/manufacturer/manufacturer-stat-card"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
@@ -313,45 +314,28 @@ export default function ManufacturerCatalogsPage() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
-                <FileBox className="h-5 w-5 text-secondary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats?.total_catalogs ?? 0}</p>
-                <p className="text-sm text-muted-foreground">Total Catalogs</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100">
-                <FileBox className="h-5 w-5 text-emerald-700" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats?.active_catalogs ?? 0}</p>
-                <p className="text-sm text-muted-foreground">Active Catalogs</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
-                <FileBox className="h-5 w-5 text-slate-700" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats?.inactive_catalogs ?? 0}</p>
-                <p className="text-sm text-muted-foreground">Inactive Catalogs</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <ManufacturerStatCard
+          title="Total Catalogs"
+          value={stats?.total_catalogs ?? 0}
+          icon={FileBox}
+          layout="horizontal"
+        />
+        <ManufacturerStatCard
+          title="Active Catalogs"
+          value={stats?.active_catalogs ?? 0}
+          icon={FileBox}
+          iconClassName="text-emerald-700"
+          iconWrapperClassName="bg-emerald-100"
+          layout="horizontal"
+        />
+        <ManufacturerStatCard
+          title="Inactive Catalogs"
+          value={stats?.inactive_catalogs ?? 0}
+          icon={FileBox}
+          iconClassName="text-slate-700"
+          iconWrapperClassName="bg-slate-100"
+          layout="horizontal"
+        />
       </div>
 
       {/* Filters */}
@@ -427,7 +411,7 @@ export default function ManufacturerCatalogsPage() {
 
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-start gap-4 min-w-0">
-                        <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-muted">
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-muted">
                           <File className="h-7 w-7 text-muted-foreground" />
                         </div>
                         <div className="min-w-0">
@@ -451,7 +435,7 @@ export default function ManufacturerCatalogsPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex flex-col sm:flex-row items-center gap-2 flex-shrink-0 mt-2 sm:mt-0 w-full sm:w-auto">
+                      <div className="flex flex-col sm:flex-row items-center gap-2 shrink-0 mt-2 sm:mt-0 w-full sm:w-auto">
                         <Button 
                           variant="outline" 
                           size="sm" 
@@ -569,7 +553,7 @@ export default function ManufacturerCatalogsPage() {
               )}
 
               <div className="flex items-start gap-4 border-t pt-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted flex-shrink-0">
+                <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted shrink-0">
                   <File className="h-8 w-8 text-muted-foreground" />
                 </div>
                 <div className="flex-1">
@@ -583,7 +567,7 @@ export default function ManufacturerCatalogsPage() {
               <div className="space-y-3 border-t pt-4">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">File Path</p>
-                  <p className="mt-1 break-all text-sm text-foreground font-mono text-xs bg-muted p-2 rounded">
+                  <p className="mt-1 break-all text-foreground font-mono text-xs bg-muted p-2 rounded">
                     {selectedCatalog.file_path}
                   </p>
                 </div>

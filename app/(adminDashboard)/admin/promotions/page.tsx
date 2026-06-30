@@ -24,6 +24,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Sparkles,
   Users,
   Calendar,
@@ -40,12 +47,21 @@ import {
   X,
   Loader2,
 } from "lucide-react"
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Separator } from "@/components/ui/separator"
-import { fetchAdminPromotions, resetAdminPromotions, updateAdminPromotion, toggleAdminPromotionStatus, type Promotion } from "@/lib/api/admin-promotions"
+import {
+  fetchAdminPromotions,
+  resetAdminPromotions,
+  updateAdminPromotion,
+  toggleAdminPromotionStatus,
+  type Promotion
+} from "@/lib/api/admin-promotions"
+import { fetchPlans, type PricingPlan } from "@/lib/api/admin-pricing"
 import { useToast } from "@/hooks/use-toast"
 
 export default function PromotionsPage() {
   const [promotions, setPromotions] = useState<Promotion[]>([])
+  const [plans, setPlans] = useState<PricingPlan[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
@@ -53,6 +69,22 @@ export default function PromotionsPage() {
 
   const [showResetDialog, setShowResetDialog] = useState(false)
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null)
+
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [editPromoData, setEditPromoData] = useState<{
+    id: number | string
+    plan_id: number
+    slots: number
+    duration_months: number
+    promotion_title: string
+    short_description: string
+    button_text: string
+    cta_button_text: string
+    highlight_text: string
+    expires_at: string | null
+    status: boolean
+  } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const loadPromotions = async (cancelled = false) => {
     setLoading(true)
@@ -67,9 +99,19 @@ export default function PromotionsPage() {
     setLoading(false)
   }
 
+  const loadPlans = async () => {
+    try {
+      const data = await fetchPlans()
+      setPlans(data)
+    } catch (err) {
+      console.error("Failed to load plans", err)
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
     void loadPromotions(cancelled)
+    void loadPlans()
     return () => { cancelled = true }
   }, [])
 
@@ -121,6 +163,59 @@ export default function PromotionsPage() {
     }
   }
 
+  const handleOpenEditDialog = (promo: Promotion) => {
+    setEditPromoData({
+      id: promo.id,
+      plan_id: promo.plan.id,
+      slots: promo.slots,
+      duration_months: promo.duration_months,
+      promotion_title: promo.promotion_title,
+      short_description: promo.short_description,
+      button_text: promo.button_text,
+      cta_button_text: promo.cta_button_text,
+      highlight_text: promo.highlight_text,
+      expires_at: promo.expires_at ? promo.expires_at.split("T")[0] : null,
+      status: promo.status,
+    })
+    setShowEditDialog(true)
+  }
+
+  const handleUpdatePromotion = async () => {
+    if (!editPromoData) return
+    
+    setSubmitting(true)
+    const payload = {
+      plan_id: editPromoData.plan_id,
+      slots: editPromoData.slots,
+      duration_months: editPromoData.duration_months,
+      promotion_title: editPromoData.promotion_title,
+      short_description: editPromoData.short_description,
+      button_text: editPromoData.button_text,
+      cta_button_text: editPromoData.cta_button_text,
+      highlight_text: editPromoData.highlight_text,
+      expires_at: editPromoData.expires_at,
+      status: editPromoData.status,
+    }
+
+    const res = await updateAdminPromotion(editPromoData.id, payload)
+    setSubmitting(false)
+
+    if (res.success) {
+      toast({
+        title: "Success",
+        description: res.message || "Promotion updated successfully.",
+      })
+      setShowEditDialog(false)
+      void loadPromotions()
+    } else {
+      toast({
+        title: "Error",
+        description: res.message || "Failed to update promotion.",
+        variant: "destructive",
+      })
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -162,61 +257,41 @@ export default function PromotionsPage() {
 
       {/* Stats Overview */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Spots</p>
-                <p className="text-2xl font-bold text-foreground">{totalSpots}</p>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Approved</p>
-                <p className="text-2xl font-bold text-foreground">{totalApproved}</p>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
-                <CheckCircle className="h-5 w-5 text-secondary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Spots Remaining</p>
-                <p className="text-2xl font-bold text-foreground">{totalRemaining}</p>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
-                <TrendingUp className="h-5 w-5 text-amber-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Pending Review</p>
-                <p className="text-2xl font-bold text-foreground">{totalPending}</p>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-                <Clock className="h-5 w-5 text-blue-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <AdminStatCard
+          title="Total Spots"
+          value={totalSpots}
+          icon={Users}
+          iconClassName="text-primary"
+          iconWrapperClassName="bg-primary/10"
+          layout="spaceBetween"
+        />
+        <AdminStatCard
+          title="Approved"
+          value={totalApproved}
+          icon={CheckCircle}
+          iconClassName="text-secondary"
+          iconWrapperClassName="bg-secondary/10"
+          layout="spaceBetween"
+        />
+        <AdminStatCard
+          title="Spots Remaining"
+          value={totalRemaining}
+          icon={TrendingUp}
+          iconClassName="text-amber-500"
+          iconWrapperClassName="bg-amber-500/10"
+          layout="spaceBetween"
+        />
+        <AdminStatCard
+          title="Pending Review"
+          value={totalPending}
+          icon={Clock}
+          iconClassName="text-blue-500"
+          iconWrapperClassName="bg-blue-500/10"
+          layout="spaceBetween"
+        />
       </div>
 
-      {/* Promotion Cards — one per promotion from backend */}
+      {/* Promotion Cards */}
       {promotions.map((promo) => {
         const percentUsed = promo.stats.fill_percentage
         const spotsRemaining = promo.stats.spots_remaining
@@ -253,6 +328,10 @@ export default function PromotionsPage() {
                   <Button variant="default" size="sm" onClick={() => router.push(`/admin/promotions/${promo.id}`)}>
                     <Users className="mr-2 h-4 w-4" />
                     Participants
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleOpenEditDialog(promo)}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit Details
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => {
                     setSelectedPromotion(promo)
@@ -409,6 +488,152 @@ export default function PromotionsPage() {
             <Button onClick={handleResetCounter}>
               <RotateCcw className="mr-2 h-4 w-4" />
               Reset to 0
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Promotion Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Promotion Settings</DialogTitle>
+            <DialogDescription>
+              Modify the configuration for the special promotional offer.
+            </DialogDescription>
+          </DialogHeader>
+          {editPromoData && (
+            <div className="space-y-4 py-2">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-title">Promotion Title</Label>
+                <Input
+                  id="edit-title"
+                  value={editPromoData.promotion_title}
+                  onChange={(e) => setEditPromoData({ ...editPromoData, promotion_title: e.target.value })}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit-desc">Short Description</Label>
+                <Textarea
+                  id="edit-desc"
+                  value={editPromoData.short_description}
+                  onChange={(e) => setEditPromoData({ ...editPromoData, short_description: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-plan">Linked Plan</Label>
+                  <Select
+                    value={String(editPromoData.plan_id)}
+                    onValueChange={(val) => setEditPromoData({ ...editPromoData, plan_id: Number(val) })}
+                  >
+                    <SelectTrigger id="edit-plan">
+                      <SelectValue placeholder="Select Plan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {plans.map((plan) => (
+                        <SelectItem key={plan.id} value={String(plan.id)}>
+                          {plan.name} (${parseFloat(plan.monthly_price?.amount || "0").toFixed(0)}/mo)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-slots">Max Spots / Slots</Label>
+                  <Input
+                    id="edit-slots"
+                    type="number"
+                    value={editPromoData.slots}
+                    onChange={(e) => setEditPromoData({ ...editPromoData, slots: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-duration">Duration (Months Free)</Label>
+                  <Input
+                    id="edit-duration"
+                    type="number"
+                    value={editPromoData.duration_months}
+                    onChange={(e) => setEditPromoData({ ...editPromoData, duration_months: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-expiry">Expires At</Label>
+                  <Input
+                    id="edit-expiry"
+                    type="date"
+                    value={editPromoData.expires_at || ""}
+                    onChange={(e) => setEditPromoData({ ...editPromoData, expires_at: e.target.value || null })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-btn-text">Button Text (Pricing Card)</Label>
+                  <Input
+                    id="edit-btn-text"
+                    value={editPromoData.button_text}
+                    onChange={(e) => setEditPromoData({ ...editPromoData, button_text: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-cta-text">CTA Button Text (Sign Up)</Label>
+                  <Input
+                    id="edit-cta-text"
+                    value={editPromoData.cta_button_text}
+                    onChange={(e) => setEditPromoData({ ...editPromoData, cta_button_text: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit-highlight">Highlight Text</Label>
+                <Textarea
+                  id="edit-highlight"
+                  value={editPromoData.highlight_text}
+                  onChange={(e) => setEditPromoData({ ...editPromoData, highlight_text: e.target.value })}
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                <div className="space-y-0.5">
+                  <Label>Promotion Status</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Whether this promotional offer is visible and active on the platform.
+                  </p>
+                </div>
+                <Switch
+                  checked={editPromoData.status}
+                  onCheckedChange={(checked) => setEditPromoData({ ...editPromoData, status: checked })}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setShowEditDialog(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdatePromotion} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Changes
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

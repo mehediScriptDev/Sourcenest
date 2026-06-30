@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -23,7 +23,7 @@ import {
   Upload,
   Plus,
   X,
-  Globe,
+  // Globe,
   Award,
   MapPin,
   CheckCircle,
@@ -33,53 +33,253 @@ import {
   Building2,
   Languages,
   CreditCard,
-  Camera
+  Camera,
+  Loader2
 } from "lucide-react"
+import { useRef } from "react"
+import Swal from "sweetalert2"
+import { getCountryByName, getCountryByCode } from "@/lib/data/countries"
+import { getManufacturerProfile, updateManufacturerProfile } from "@/lib/api/manufacturer-profile"
+import { useToast } from "@/components/ui/use-toast"
+import { getApiErrorMessage } from "@/lib/api/errors"
 
 export default function ManufacturerProfilePage() {
-  const [certifications, setCertifications] = useState([
-    "ISO 9001:2015", "ISO 14001", "CE Certified", "RoHS Compliant"
-  ])
-  const [exportMarkets, setExportMarkets] = useState([
-    "North America", "Western Europe", "Australia", "Southeast Asia"
-  ])
-  const [languages, setLanguages] = useState([
-    "English", "Mandarin", "Cantonese"
-  ])
-  const [paymentTerms, setPaymentTerms] = useState([
-    "T/T", "L/C", "PayPal", "Western Union"
-  ])
+  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [profileId, setProfileId] = useState<number | null>(null)
+  const [stats, setStats] = useState({
+    reviewValidUntil: "Dec 2026",
+    profileViews: "2,450",
+    inquiries: "28",
+    responseRate: "98%",
+    avgResponseTime: "2 hours",
+    overallProgress: 85
+  })
+  
+  const [certifications, setCertifications] = useState<string[]>([])
+  // const [exportMarkets, setExportMarkets] = useState<string[]>([])
+  const [languages, setLanguages] = useState<string[]>([])
+  const [paymentTerms, setPaymentTerms] = useState<string[]>([])
   const [businessTypes, setBusinessTypes] = useState({
-    manufacturer: true,
+    manufacturer: false,
     tradingCompany: false,
-    oem: true,
-    odm: true
+    oem: false,
+    odm: false
   })
   const [newCert, setNewCert] = useState("")
-  const [newMarket, setNewMarket] = useState("")
+  // const [newMarket, setNewMarket] = useState("")
   const [newLanguage, setNewLanguage] = useState("")
   const [newPaymentTerm, setNewPaymentTerm] = useState("")
-  const [oem, setOem] = useState(true)
-  const [odm, setOdm] = useState(true)
-  const [privateLabelEnabled, setPrivateLabelEnabled] = useState(true)
-  const [customization, setCustomization] = useState(true)
+  const [oem, setOem] = useState(false)
+  const [odm, setOdm] = useState(false)
+  const [privateLabelEnabled, setPrivateLabelEnabled] = useState(false)
+  const [customization, setCustomization] = useState(false)
+
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [factoryImages, setFactoryImages] = useState<File[]>([])
+  const [factoryImagePreviews, setFactoryImagePreviews] = useState<string[]>([])
+  const [existingFactoryImages, setExistingFactoryImages] = useState<string[]>([])
+  const [removeImages, setRemoveImages] = useState<string[]>([])
+
+  const logoInputRef = useRef<HTMLInputElement>(null)
+  const factoryImagesInputRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
-    companyName: "TechVision Electronics Co., Ltd.",
-    shortDescription: "Leading manufacturer of consumer electronics and audio products",
-    fullDescription: "TechVision Electronics Co., Ltd. is a leading manufacturer of consumer electronics, specializing in audio products, wearables, and smart devices. With over 15 years of industry experience, we combine cutting-edge technology with rigorous quality control to deliver products that exceed expectations. Our state-of-the-art facility spans 50,000 square meters and employs over 500 skilled professionals.",
-    yearEstablished: "2008",
+    companyName: "",
+    shortDescription: "",
+    fullDescription: "",
+    yearEstablished: "",
     employeeCount: "500",
     country: "CN",
-    city: "Shenzhen",
-    address: "Building A, Tech Industrial Park, Nanshan District",
-    industry: "electronics-electrical",
-    mainProducts: "TWS Earbuds, Bluetooth Speakers, Smart Watches, Fitness Trackers, Wireless Chargers, USB Accessories",
-    minimumOrder: "5000",
-    factorySize: "50000",
-    productionLines: "12",
-    annualOutput: "5000000",
+    city: "",
+    address: "",
+    industry: "",
+    mainProducts: "",
+    minimumOrder: "",
+    factorySize: "",
+    productionLines: "",
+    annualOutput: "",
+    companyType: "",
   })
+
+  const loadProfile = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const res = await getManufacturerProfile()
+      if (res.success && res.data) {
+        const p = res.data
+        const c = p.company
+        setProfileId(p.id)
+        
+        if (c) {
+          setLogoPreview(c.company_logo_url || null)
+          if (p.factory_images && Array.isArray(p.factory_images)) {
+            // Store URLs for existing previews
+            setExistingFactoryImages(p.factory_images.map((img: any) => img.url || img))
+          }
+          setFormData(prev => ({
+            ...prev,
+            companyName: c.company_name || "",
+            shortDescription: c.short_description || "",
+            fullDescription: c.long_description || "",
+            yearEstablished: c.company_established || "",
+            employeeCount: c.company_size || "500",
+            country: getCountryByName(c.country || "")?.code || c.country || "CN",
+            city: c.city || "",
+            address: c.street_address || "",
+            industry: c.industries?.[0]?.slug || "",
+            minimumOrder: c.minimum_order_value?.toString() || "",
+            companyType: c.company_type || "",
+          }))
+          
+          try { if (c.certifications) setCertifications(JSON.parse(c.certifications)) } catch(e){}
+          // try { if (c.export_markets) setExportMarkets(JSON.parse(c.export_markets)) } catch(e){}
+          try { if (c.language_spoken) setLanguages(JSON.parse(c.language_spoken)) } catch(e){}
+          try { if (c.payments_term) setPaymentTerms(JSON.parse(c.payments_term)) } catch(e){}
+          
+          try {
+            if (c.capabilities) {
+              const caps = JSON.parse(c.capabilities) as string[]
+              setOem(caps.includes("OEM"))
+              setOdm(caps.includes("ODM"))
+              setCustomization(caps.includes("Customization") || caps.includes("Custom packaging"))
+              setPrivateLabelEnabled(caps.includes("Private Label") || caps.includes("Product design"))
+            }
+          } catch(e){}
+          
+          setBusinessTypes({
+            manufacturer: c.company_type === 'manufacturer' || c.company_type === 'both',
+            tradingCompany: c.company_type === 'trading' || c.company_type === 'both',
+            oem: false,
+            odm: false
+          })
+        }
+      }
+    } catch (err: any) {
+      toast({ title: "Failed to load profile", description: getApiErrorMessage(err) || String(err), variant: "destructive" })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [toast])
+
+  useEffect(() => {
+    loadProfile()
+  }, [loadProfile])
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true)
+      
+      const formDataToSend = new FormData()
+      
+      // Text fields — exact keys from Postman screenshot
+      formDataToSend.append("company_name", formData.companyName)
+      formDataToSend.append("short_description", formData.shortDescription)
+      formDataToSend.append("long_description", formData.fullDescription)
+      formDataToSend.append("company_established", formData.yearEstablished)
+      formDataToSend.append("company_size", formData.employeeCount)
+      formDataToSend.append("country", getCountryByCode(formData.country)?.name || formData.country)
+      formDataToSend.append("city", formData.city)
+      formDataToSend.append("street_address", formData.address)
+      formDataToSend.append("minimum_order_value", formData.minimumOrder)
+      
+      const compType = formData.companyType || "Private Limited"
+      formDataToSend.append("company_type", compType)
+      formDataToSend.append("revenue", formData.annualOutput || "1000-2000")
+      
+      // Capabilities — only append if non-empty
+      const caps: string[] = []
+      if (oem) caps.push("OEM")
+      if (odm) caps.push("ODM")
+      if (customization) caps.push("Customization")
+      if (privateLabelEnabled) caps.push("Private Label")
+      
+      // Arrays — must use key[] bracket notation for Laravel
+      const appendAsArray = (key: string, arr: string[]) => {
+        if (arr.length === 0) {
+          formDataToSend.append(`${key}[]`, "")
+        } else {
+          arr.forEach(item => {
+            formDataToSend.append(`${key}[]`, item)
+          })
+        }
+      }
+
+      appendAsArray("capabilities", caps)
+      appendAsArray("certifications", certifications)
+      // appendAsArray("export_markets", exportMarkets)
+      appendAsArray("language_spoken", languages)
+      appendAsArray("payments_term", paymentTerms)
+      
+      // Factory fields
+      formDataToSend.append("factory_production", "1")
+      formDataToSend.append("mulitple_factories", "0")
+
+      // Industries — send as comma-separated IDs
+      const selectedIndustry = industries.find(i => i.slug === formData.industry)
+      if (selectedIndustry) {
+        formDataToSend.append("industries_id", selectedIndustry.id.toString())
+      }
+      
+      formDataToSend.append("factory_size", formData.factorySize || "5000")
+      formDataToSend.append("production_lines", formData.productionLines || "3")
+
+      // File uploads — company_logo
+      if (logoFile) {
+        formDataToSend.append("company_logo", logoFile)
+      }
+      
+      // Factory images — 1-based indexing as in Postman: factory_images[1], factory_images[2]
+      if (factoryImages.length > 0) {
+        factoryImages.forEach((file, index) => {
+          formDataToSend.append(`factory_images[${index + 1}]`, file)
+        })
+      }
+
+      // Images to remove
+      if (removeImages.length > 0) {
+        removeImages.forEach((img, index) => {
+          formDataToSend.append(`remove_images[${index}]`, img)
+        })
+      }
+
+      const res = await updateManufacturerProfile(formDataToSend)
+      
+      if (res && res.success === false) {
+        throw new Error(res.message || "Failed to update profile: validation error")
+      }
+      
+      // Clear local file states
+      setLogoFile(null)
+      setFactoryImages([])
+      setFactoryImagePreviews([])
+      setRemoveImages([])
+
+      // Reload profile to fetch fresh data from backend
+      await loadProfile()
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: res?.message || 'Profile updated successfully',
+        confirmButtonColor: '#0f172a',
+      })
+    } catch (err: any) {
+      toast({ title: "Update failed", description: getApiErrorMessage(err) || String(err), variant: "destructive" })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -91,9 +291,8 @@ export default function ManufacturerProfilePage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline">Preview Profile</Button>
-          <Button className="gap-2">
-            <Save className="h-4 w-4" />
+          <Button className="gap-2" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save Changes
           </Button>
         </div>
@@ -366,19 +565,6 @@ export default function ManufacturerProfilePage() {
                   />
                 </div>
               </div>
-              <div>
-                <Label>Factory Photos</Label>
-                <div className="mt-2 grid grid-cols-3 gap-4">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="aspect-video rounded-lg border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-secondary transition-colors">
-                      <div className="text-center">
-                        <Upload className="mx-auto h-6 w-6 text-muted-foreground" />
-                        <p className="mt-1 text-xs text-muted-foreground">Upload</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </CardContent>
           </Card>
 
@@ -429,7 +615,7 @@ export default function ManufacturerProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Export Markets */}
+          {/* Export Markets — disabled until export_markets_section plan feature is enabled
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -472,6 +658,7 @@ export default function ManufacturerProfilePage() {
               </div>
             </CardContent>
           </Card>
+          */}
 
           {/* Languages */}
           <Card>
@@ -579,15 +766,70 @@ export default function ManufacturerProfilePage() {
               <p className="text-sm text-muted-foreground mb-4">
                 Upload photos of your factory, production lines, and facilities to build trust with buyers
               </p>
+              <input 
+                type="file" 
+                ref={factoryImagesInputRef} 
+                className="hidden" 
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    const newFiles = Array.from(e.target.files)
+                    setFactoryImages([...factoryImages, ...newFiles])
+                    const newPreviews = newFiles.map(file => URL.createObjectURL(file))
+                    setFactoryImagePreviews([...factoryImagePreviews, ...newPreviews])
+                  }
+                }}
+              />
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="aspect-video rounded-lg border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-secondary transition-colors">
+                {existingFactoryImages.map((preview, i) => (
+                  <div key={`existing-${i}`} className="aspect-video rounded-lg border-2 border-border overflow-hidden relative group">
+                    <img src={preview} alt={`Factory ${i}`} className="w-full h-full object-cover" />
+                    <button 
+                      className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => {
+                         setRemoveImages([...removeImages, preview]);
+                         const newExisting = [...existingFactoryImages];
+                         newExisting.splice(i, 1);
+                         setExistingFactoryImages(newExisting);
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                
+                {factoryImagePreviews.map((preview, i) => (
+                  <div key={`new-${i}`} className="aspect-video rounded-lg border-2 border-border overflow-hidden relative group">
+                    <img src={preview} alt={`Factory ${i}`} className="w-full h-full object-cover" />
+                    <button 
+                      className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => {
+                         const newImages = [...factoryImages]; 
+                         newImages.splice(i, 1); 
+                         setFactoryImages(newImages);
+                         
+                         const newPreviews = [...factoryImagePreviews]; 
+                         newPreviews.splice(i, 1); 
+                         setFactoryImagePreviews(newPreviews);
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+
+                {(existingFactoryImages.length + factoryImagePreviews.length) < 6 && (
+                  <div 
+                    className="aspect-video rounded-lg border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer hover:border-secondary transition-colors"
+                    onClick={() => factoryImagesInputRef.current?.click()}
+                  >
                     <div className="text-center">
                       <Upload className="mx-auto h-6 w-6 text-muted-foreground" />
                       <p className="mt-1 text-xs text-muted-foreground">Upload</p>
                     </div>
                   </div>
-                ))}
+                )}
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
                 Recommended: High-quality photos showing production areas, equipment, and quality control processes
@@ -605,10 +847,32 @@ export default function ManufacturerProfilePage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-col items-center">
-                <div className="flex h-32 w-32 items-center justify-center rounded-2xl bg-muted">
-                  <Factory className="h-16 w-16 text-muted-foreground" />
+                <input 
+                  type="file" 
+                  ref={logoInputRef} 
+                  className="hidden" 
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setLogoFile(e.target.files[0])
+                      setLogoPreview(URL.createObjectURL(e.target.files[0]))
+                    }
+                  }}
+                />
+                <div 
+                  className="flex h-32 w-32 items-center justify-center rounded-2xl bg-muted cursor-pointer overflow-hidden relative group"
+                  onClick={() => logoInputRef.current?.click()}
+                >
+                  {logoPreview ? (
+                    <img src={logoPreview} alt="Company Logo" className="h-full w-full object-cover" />
+                  ) : (
+                    <Factory className="h-16 w-16 text-muted-foreground" />
+                  )}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                     <Camera className="h-8 w-8 text-white" />
+                  </div>
                 </div>
-                <Button variant="outline" className="mt-4 gap-2">
+                <Button variant="outline" className="mt-4 gap-2" onClick={() => logoInputRef.current?.click()}>
                   <Upload className="h-4 w-4" />
                   Upload Logo
                 </Button>
@@ -619,26 +883,6 @@ export default function ManufacturerProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Review Status */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Review Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3 rounded-lg bg-secondary/10 p-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary">
-                  <CheckCircle className="h-5 w-5 text-secondary-foreground" />
-                </div>
-                <div>
-                  <p className="font-medium text-foreground">Premium Reviewed</p>
-                  <p className="text-sm text-muted-foreground">Valid until Dec 2026</p>
-                </div>
-              </div>
-              <Button variant="link" className="mt-3 h-auto p-0 text-secondary">
-                Learn about review levels
-              </Button>
-            </CardContent>
-          </Card>
 
           {/* Approval Status */}
           <Card>

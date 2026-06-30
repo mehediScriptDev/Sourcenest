@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
+
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -20,62 +22,68 @@ import {
   Users,
   Factory,
   MoreVertical,
-  Eye
+  Eye,
+  Loader2,
+  CheckCircle,
+  AlertTriangle
 } from "lucide-react"
+import { 
+  getAdminSubscriptions, 
+  getAdminSubscriptionStats,
+  AdminSubscription,
+  AdminSubscriptionStats
+} from "@/lib/api/admin-subscriptions"
+import { format } from "date-fns"
+import { SubscriptionDetailModal } from "@/components/admin/subscription-detail-modal"
 
-interface Subscription {
-  id: string
-  company: string
-  plan: "starter" | "professional" | "enterprise"
-  status: "active" | "cancelled" | "expired" | "pending"
-  amount: number
-  billingCycle: "monthly" | "yearly"
-  nextBilling: string
-  startDate: string
-}
-
-const subscriptions: Subscription[] = [
-  { id: "1", company: "TechVision Electronics", plan: "enterprise", status: "active", amount: 499, billingCycle: "monthly", nextBilling: "Apr 15, 2026", startDate: "Jan 15, 2025" },
-  { id: "2", company: "EcoThread Textiles", plan: "professional", status: "active", amount: 199, billingCycle: "monthly", nextBilling: "Apr 10, 2026", startDate: "Feb 10, 2025" },
-  { id: "3", company: "GlobalFab Machinery", plan: "enterprise", status: "active", amount: 4990, billingCycle: "yearly", nextBilling: "Dec 1, 2026", startDate: "Dec 1, 2025" },
-  { id: "4", company: "India Exports Ltd", plan: "starter", status: "active", amount: 79, billingCycle: "monthly", nextBilling: "Apr 20, 2026", startDate: "Feb 20, 2026" },
-  { id: "5", company: "NewTech Industries", plan: "professional", status: "pending", amount: 199, billingCycle: "monthly", nextBilling: "-", startDate: "Mar 13, 2026" },
-  { id: "6", company: "QuickPack Solutions", plan: "starter", status: "cancelled", amount: 79, billingCycle: "monthly", nextBilling: "-", startDate: "Jan 1, 2026" },
-  { id: "7", company: "Suspended Corp", plan: "professional", status: "expired", amount: 199, billingCycle: "monthly", nextBilling: "-", startDate: "Aug 15, 2025" },
-]
-
-const planConfig: Record<string, { label: string; color: string }> = {
-  starter: { label: "Starter", color: "bg-slate-100 text-slate-700" },
-  professional: { label: "Professional", color: "bg-blue-100 text-blue-700" },
-  enterprise: { label: "Enterprise", color: "bg-amber-100 text-amber-700" },
-}
-
-const statusConfig: Record<string, { label: string; color: string }> = {
-  active: { label: "Active", color: "bg-emerald-100 text-emerald-700" },
-  pending: { label: "Pending", color: "bg-amber-100 text-amber-700" },
-  cancelled: { label: "Cancelled", color: "bg-slate-100 text-slate-700" },
-  expired: { label: "Expired", color: "bg-red-100 text-red-700" },
+const statusConfig: Record<string, { color: string }> = {
+  active: { color: "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" },
+  trialing: { color: "bg-blue-100 text-blue-700 hover:bg-blue-200" },
+  pending: { color: "bg-amber-100 text-amber-700 hover:bg-amber-200" },
+  canceled: { color: "bg-slate-100 text-slate-700 hover:bg-slate-200" },
+  expired: { color: "bg-red-100 text-red-700 hover:bg-red-200" },
 }
 
 export default function AdminSubscriptionsPage() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [planFilter, setPlanFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  
+  const [loading, setLoading] = useState(true)
+  const [subscriptions, setSubscriptions] = useState<AdminSubscription[]>([])
+  const [stats, setStats] = useState<AdminSubscriptionStats | null>(null)
+  
+  const [selectedSubId, setSelectedSubId] = useState<number | string | null>(null)
 
-  const filteredSubs = subscriptions.filter(sub => {
-    if (searchQuery && !sub.company.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      
+      const [subsRes, statsRes] = await Promise.all([
+        getAdminSubscriptions({
+          page: 1, // You could add pagination state here if needed
+          search: searchQuery || undefined,
+          status: statusFilter !== "all" ? statusFilter : undefined
+        }),
+        getAdminSubscriptionStats() // Fetches stats for current month by default
+      ])
+
+      if (subsRes.success) {
+        setSubscriptions(subsRes.data)
+      }
+      if (statsRes.success) {
+        setStats(statsRes.data)
+      }
+
+      setLoading(false)
     }
-    if (planFilter !== "all" && sub.plan !== planFilter) return false
-    if (statusFilter !== "all" && sub.status !== statusFilter) return false
-    return true
-  })
 
-  const activeSubs = subscriptions.filter(s => s.status === "active").length
-  const monthlyRevenue = subscriptions
-    .filter(s => s.status === "active")
-    .reduce((sum, s) => sum + (s.billingCycle === "monthly" ? s.amount : s.amount / 12), 0)
-  const annualRevenue = monthlyRevenue * 12
+    // Debounce search slightly
+    const timeoutId = setTimeout(() => {
+      fetchData()
+    }, 300)
+
+    return () => clearTimeout(timeoutId)
+  }, [searchQuery, statusFilter])
 
   return (
     <div className="space-y-6">
@@ -88,58 +96,34 @@ export default function AdminSubscriptionsPage() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
-                <Users className="h-5 w-5 text-secondary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{activeSubs}</p>
-                <p className="text-sm text-muted-foreground">Active Subscriptions</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100">
-                <DollarSign className="h-5 w-5 text-emerald-700" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">${monthlyRevenue.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground">Monthly Revenue</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-                <TrendingUp className="h-5 w-5 text-blue-700" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">${annualRevenue.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground">Annual Revenue (Est.)</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100">
-                <CreditCard className="h-5 w-5 text-amber-700" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{subscriptions.filter(s => s.plan === "enterprise").length}</p>
-                <p className="text-sm text-muted-foreground">Enterprise Plans</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <AdminStatCard
+          title="Active Subscriptions"
+          value={stats ? stats.overview.total_active_subscriptions : "-"}
+          icon={Users}
+          iconClassName="text-secondary"
+          iconWrapperClassName="bg-secondary/10"
+        />
+        <AdminStatCard
+          title="Monthly Revenue"
+          value={stats ? `$${stats.this_month.revenue.toLocaleString()}` : "-"}
+          icon={DollarSign}
+          iconClassName="text-emerald-700"
+          iconWrapperClassName="bg-emerald-100"
+        />
+        <AdminStatCard
+          title="All-Time Revenue"
+          value={stats ? `$${stats.overview.total_revenue_all_time.toLocaleString()}` : "-"}
+          icon={TrendingUp}
+          iconClassName="text-blue-700"
+          iconWrapperClassName="bg-blue-100"
+        />
+        <AdminStatCard
+          title="New This Month"
+          value={stats ? stats.this_month.new_subscriptions : "-"}
+          icon={CreditCard}
+          iconClassName="text-amber-700"
+          iconWrapperClassName="bg-amber-100"
+        />
       </div>
 
       {/* Filters */}
@@ -154,17 +138,6 @@ export default function AdminSubscriptionsPage() {
           />
         </div>
         <div className="flex gap-3">
-          <Select value={planFilter} onValueChange={setPlanFilter}>
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder="Plan" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Plans</SelectItem>
-              <SelectItem value="starter">Starter</SelectItem>
-              <SelectItem value="professional">Professional</SelectItem>
-              <SelectItem value="enterprise">Enterprise</SelectItem>
-            </SelectContent>
-          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-36">
               <SelectValue placeholder="Status" />
@@ -172,8 +145,9 @@ export default function AdminSubscriptionsPage() {
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="trialing">Trialing</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="canceled">Canceled</SelectItem>
               <SelectItem value="expired">Expired</SelectItem>
             </SelectContent>
           </Select>
@@ -195,59 +169,87 @@ export default function AdminSubscriptionsPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredSubs.map((sub) => (
-              <tr key={sub.id} className="border-t border-border hover:bg-muted/50">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                      <Factory className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">{sub.company}</p>
-                      <p className="text-xs text-muted-foreground">Since {sub.startDate}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <Badge className={planConfig[sub.plan].color}>
-                    {planConfig[sub.plan].label}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 hidden md:table-cell">
-                  <span className="font-medium text-foreground">${sub.amount}</span>
-                  <span className="text-xs text-muted-foreground">/{sub.billingCycle === "monthly" ? "mo" : "yr"}</span>
-                </td>
-                <td className="px-4 py-3 text-sm text-muted-foreground hidden lg:table-cell capitalize">
-                  {sub.billingCycle}
-                </td>
-                <td className="px-4 py-3 text-sm text-muted-foreground hidden lg:table-cell">
-                  {sub.nextBilling}
-                </td>
-                <td className="px-4 py-3">
-                  <Badge className={statusConfig[sub.status].color}>
-                    {statusConfig[sub.status].label}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <Button variant="ghost" size="icon">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-12 text-center">
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+                  <p className="mt-2 text-sm text-muted-foreground">Loading subscriptions...</p>
                 </td>
               </tr>
-            ))}
+            ) : subscriptions.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-12 text-center">
+                  <CreditCard className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                  <p className="mt-4 text-muted-foreground">No subscriptions found</p>
+                </td>
+              </tr>
+            ) : (
+              subscriptions.map((sub) => (
+                <tr key={sub.id} className="border-t border-border hover:bg-muted/50">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                        <Factory className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{sub.manufacturer?.name || "Unknown"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Since {sub.starts_at ? format(new Date(sub.starts_at), "MMM dd, yyyy") : "N/A"}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant="outline" className="font-normal">
+                      {sub.plan?.name || "Unknown"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    <span className="font-medium text-foreground">
+                      ${sub.billing_interval === "year" 
+                        ? sub.plan?.yearly_price?.amount 
+                        : sub.plan?.monthly_price?.amount}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      /{sub.billing_interval === "year" ? "yr" : "mo"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground hidden lg:table-cell capitalize">
+                    {sub.billing_interval}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground hidden lg:table-cell">
+                    {sub.ends_at ? format(new Date(sub.ends_at), "MMM dd, yyyy") : "-"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge 
+                      variant="secondary"
+                      className={statusConfig[sub.status]?.color || "bg-secondary text-secondary-foreground"}
+                    >
+                      {sub.status_label || sub.status}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => setSelectedSubId(sub.id)}
+                      title="View Details"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
-
-        {filteredSubs.length === 0 && (
-          <div className="text-center py-12">
-            <CreditCard className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <p className="mt-4 text-muted-foreground">No subscriptions found</p>
-          </div>
-        )}
       </div>
+
+      <SubscriptionDetailModal
+        subscriptionId={selectedSubId}
+        isOpen={selectedSubId !== null}
+        onClose={() => setSelectedSubId(null)}
+      />
     </div>
   )
 }

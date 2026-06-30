@@ -69,7 +69,7 @@ const sidebarItems: SidebarItem[] = [
     title: "Orders",
     href: "/dashboard/buyer/orders",
     icon: ShoppingBag,
-    exact: true
+    exact: false
   },
   {
     title: "Messages",
@@ -136,7 +136,7 @@ export default function BuyerDashboardLayout({
     if (exact) {
       return pathname === href
     }
-    return pathname.startsWith(href)
+    return pathname === href || pathname.startsWith(`${href}/`)
   }
 
   const handleLogout = () => {

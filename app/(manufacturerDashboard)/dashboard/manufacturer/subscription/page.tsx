@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,24 +9,14 @@ import { useSubscription, PlanId } from "@/lib/subscription-context"
 import { toast } from "sonner"
 import { 
   Check, 
-  CreditCard, 
-  Download, 
-  Calendar,
-  AlertCircle,
-  Zap,
-  Package,
-  Eye,
-  MessageSquare,
-  Crown,
-  Loader2
+  AlertCircle, 
+  Zap, 
+  Package, 
+  Eye, 
+  MessageSquare, 
+  Crown, 
+  Loader2 
 } from "lucide-react"
-
-const invoices = [
-  { id: "INV-001", date: "Mar 1, 2026", amount: 299, status: "Paid" },
-  { id: "INV-002", date: "Feb 1, 2026", amount: 299, status: "Paid" },
-  { id: "INV-003", date: "Jan 1, 2026", amount: 299, status: "Paid" },
-  { id: "INV-004", date: "Dec 1, 2025", amount: 299, status: "Paid" },
-]
 
 export default function SubscriptionPage() {
   const { 
@@ -39,14 +29,129 @@ export default function SubscriptionPage() {
     getLimitPercentage,
     upgradePlan,
     downgradePlan,
-    cancelSubscription
+    cancelSubscription,
+    subscribeToPlan
   } = useSubscription()
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "N/A"
+    try {
+      return new Date(dateString).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    } catch {
+      return dateString
+    }
+  }
+
+
 
   const [upgrading, setUpgrading] = useState<PlanId | null>(null)
   const [canceling, setCanceling] = useState(false)
+  const [confirmingPayment, setConfirmingPayment] = useState(false)
 
   const allPlans = getAllPlans().filter(p => p.id !== "free") // Exclude free plan for manufacturers
   const currentPlanId = getCurrentPlanId()
+
+  // Use refs for stable references in useEffect to avoid dependency array size issues
+  const subscribeToPlanRef = useRef(subscribeToPlan)
+  subscribeToPlanRef.current = subscribeToPlan
+  const upgradePlanRef = useRef(upgradePlan)
+  upgradePlanRef.current = upgradePlan
+  const allPlansRef = useRef(allPlans)
+  allPlansRef.current = allPlans
+  const currentPlanIdRef = useRef(currentPlanId)
+  currentPlanIdRef.current = currentPlanId
+
+  // Track whether we've already processed URL params to prevent double-processing
+  const processedRef = useRef(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isLoading) return
+    if (processedRef.current) return
+    
+    const searchParams = new URLSearchParams(window.location.search)
+    const transactionId = searchParams.get('transactionId')
+    const planIdParam = searchParams.get('planId')
+    const cycleParam = searchParams.get('cycle')
+    const priceParam = searchParams.get('price')
+    const planParam = searchParams.get('plan') as PlanId
+    const promoParam = searchParams.get('promo')
+
+    if (transactionId && planIdParam) {
+      processedRef.current = true
+      setConfirmingPayment(true)
+
+      const confirmSubscription = async () => {
+        // Clear URL params immediately so they don't re-trigger
+        window.history.replaceState({}, '', '/dashboard/manufacturer/subscription')
+
+        try {
+          const dbPlanId = parseInt(planIdParam, 10);
+          const paidAmount = priceParam ? parseFloat(priceParam) : 0;
+          const billingInterval = cycleParam === "yearly" ? "year" : "month";
+
+          const payload = {
+            plan_id: dbPlanId,
+            payment_method: "paypal",
+            billing_interval: billingInterval,
+            payment_id: transactionId,
+            auto_renew: true,
+            paid_amount: paidAmount
+          };
+
+          console.log("[Subscription] Confirming payment with payload:", payload);
+
+          const result = await subscribeToPlanRef.current(payload);
+
+          console.log("[Subscription] Subscribe API result:", result);
+
+          if (result.success) {
+            toast.success("Payment confirmed! Your subscription is now active.");
+          } else {
+            toast.error(result.message || "Failed to verify payment with the backend.");
+          }
+        } catch (e) {
+          console.error("[Subscription] Error confirming subscription:", e);
+          toast.error("An unexpected error occurred while confirming subscription.");
+        } finally {
+          setConfirmingPayment(false)
+        }
+      };
+
+      confirmSubscription();
+      return;
+    }
+    
+    if (planParam && planParam !== currentPlanIdRef.current) {
+      processedRef.current = true
+      // Clear params first to prevent infinite loop
+      window.history.replaceState({}, '', '/dashboard/manufacturer/subscription')
+      
+      const applyPromo = async () => {
+        setUpgrading(planParam)
+        try {
+          const targetPlan = allPlansRef.current.find(p => p.id === planParam)
+          if (!targetPlan) return
+          
+          await upgradePlanRef.current(planParam)
+          if (promoParam) {
+            toast.success(`Founding Manufacturer Promo Applied! You have been upgraded to the ${targetPlan.name} plan.`)
+          } else {
+            toast.success(`Successfully subscribed to ${targetPlan.name} plan.`)
+          }
+        } catch {
+          toast.error("Failed to apply promotion.")
+        } finally {
+          setUpgrading(null)
+        }
+      }
+      
+      applyPromo()
+    }
+  }, [isLoading])
 
   const handlePlanChange = async (planId: PlanId) => {
     setUpgrading(planId)
@@ -84,10 +189,13 @@ export default function SubscriptionPage() {
     }
   }
 
-  if (isLoading) {
+  if (isLoading || confirmingPayment) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex flex-col items-center justify-center py-12 gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        {confirmingPayment && (
+          <p className="text-sm text-muted-foreground">Activating your subscription...</p>
+        )}
       </div>
     )
   }
@@ -114,10 +222,14 @@ export default function SubscriptionPage() {
                 Current Plan: {plan?.name || "No Plan"}
               </CardTitle>
               <CardDescription>
-                {subscription?.cancelAtPeriodEnd 
-                  ? "Your subscription will end on " + subscription.currentPeriodEnd
-                  : "Your subscription renews on " + (subscription?.currentPeriodEnd || "N/A")
-                }
+                {subscription ? (
+                  subscription.cancelAtPeriodEnd 
+                    ? `Your subscription will end on ${formatDate(subscription.currentPeriodEnd)}`
+                    : `Your subscription renews on ${formatDate(subscription.currentPeriodEnd)}`
+                ) : (
+                  "No active subscription plan"
+                )}
+                {subscription?.daysRemaining !== undefined && ` (${subscription.daysRemaining} days remaining)`}
               </CardDescription>
             </div>
             <Badge className={
@@ -217,49 +329,79 @@ export default function SubscriptionPage() {
                   <ul className="space-y-3">
                     <li className="flex items-start gap-2 text-sm">
                       <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
-                      {planOption.limits.products === -1 ? "Unlimited" : `Up to ${planOption.limits.products}`} products
+                      {(() => {
+                        const productLimitFeature = planOption.rawFeatures?.find(f => f.features?.key === "product_limit");
+                        return productLimitFeature?.label || `${planOption.limits.products === -1 ? "Unlimited" : `Up to ${planOption.limits.products}`} products`;
+                      })()}
                     </li>
                     <li className="flex items-start gap-2 text-sm">
                       <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
-                      {planOption.limits.inquiriesPerMonth === -1 ? "Unlimited" : `${planOption.limits.inquiriesPerMonth}`} inquiries/month
+                      {(() => {
+                        const inquiriesLimitFeature = planOption.rawFeatures?.find(f => f.features?.key === "inquiries_limit" || f.features?.key === "inquiry_limit");
+                        return inquiriesLimitFeature?.label || `${planOption.limits.inquiriesPerMonth === -1 ? "Unlimited" : `${planOption.limits.inquiriesPerMonth}`} inquiries/month`;
+                      })()}
                     </li>
                     <li className="flex items-start gap-2 text-sm">
                       <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
-                      {planOption.limits.messagesPerMonth === -1 ? "Unlimited" : `${planOption.limits.messagesPerMonth}`} messages/month
+                      {(() => {
+                        const messagesLimitFeature = planOption.rawFeatures?.find(f => f.features?.key === "messages_limit" || f.features?.key === "message_limit");
+                        return messagesLimitFeature?.label || `${planOption.limits.messagesPerMonth === -1 ? "Unlimited" : `${planOption.limits.messagesPerMonth}`} messages/month`;
+                      })()}
                     </li>
                     <li className="flex items-start gap-2 text-sm">
                       <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
-                      {planOption.limits.teamMembers === -1 ? "Unlimited" : planOption.limits.teamMembers} team member{planOption.limits.teamMembers !== 1 ? "s" : ""}
+                      {(() => {
+                        const teamLimitFeature = planOption.rawFeatures?.find(f => f.features?.key === "team_users_limit");
+                        return teamLimitFeature?.label || `${planOption.limits.teamMembers === -1 ? "Unlimited" : planOption.limits.teamMembers} team member${planOption.limits.teamMembers !== 1 ? "s" : ""}`;
+                      })()}
                     </li>
-                    {planOption.features.advancedAnalytics && (
-                      <li className="flex items-start gap-2 text-sm">
-                        <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
-                        Advanced analytics
-                      </li>
-                    )}
-                    {planOption.features.prioritySearchVisibility && (
-                      <li className="flex items-start gap-2 text-sm">
-                        <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
-                        Priority search visibility
-                      </li>
-                    )}
-                    {planOption.features.featuredSupplierBadge && (
-                      <li className="flex items-start gap-2 text-sm">
-                        <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
-                        Featured supplier badge
-                      </li>
-                    )}
-                    {planOption.features.dedicatedAccountManager && (
-                      <li className="flex items-start gap-2 text-sm">
-                        <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
-                        Dedicated account manager
-                      </li>
-                    )}
-                    {planOption.features.apiAccess && (
-                      <li className="flex items-start gap-2 text-sm">
-                        <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
-                        API access
-                      </li>
+                    {planOption.rawFeatures ? (
+                      planOption.rawFeatures
+                        .filter((f) => {
+                          const key = f.features?.key;
+                          return key !== "product_limit" && key !== "team_users_limit" && key !== "inquiry_limit" && key !== "inquiries_limit" && key !== "message_limit" && key !== "messages_limit";
+                        })
+                        .map((feature) => (
+                          <li key={feature.id} className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
+                            <span className="text-foreground">
+                              {feature.label || feature.features?.name}
+                            </span>
+                          </li>
+                        ))
+                    ) : (
+                      <>
+                        {planOption.features.advancedAnalytics && (
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
+                            Advanced analytics
+                          </li>
+                        )}
+                        {planOption.features.prioritySearchVisibility && (
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
+                            Priority visibility
+                          </li>
+                        )}
+                        {planOption.features.featuredSupplierBadge && (
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
+                            Featured supplier badge
+                          </li>
+                        )}
+                        {planOption.features.dedicatedAccountManager && (
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
+                            Dedicated account manager
+                          </li>
+                        )}
+                        {planOption.features.apiAccess && (
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-secondary mt-0.5 shrink-0" />
+                            API access
+                          </li>
+                        )}
+                      </>
                     )}
                   </ul>
                 </CardContent>
@@ -305,62 +447,7 @@ export default function SubscriptionPage() {
         </div>
       </div>
 
-      {/* Payment Method */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Payment Method
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-16 items-center justify-center rounded-lg border bg-muted">
-                <span className="text-xs font-semibold">VISA</span>
-              </div>
-              <div>
-                <p className="font-medium">Visa ending in 4242</p>
-                <p className="text-sm text-muted-foreground">Expires 12/2027</p>
-              </div>
-            </div>
-            <Button variant="outline">Update</Button>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Billing History */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Billing History
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {invoices.map((invoice) => (
-              <div key={invoice.id} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <p className="font-medium">{invoice.id}</p>
-                    <p className="text-sm text-muted-foreground">{invoice.date}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="font-medium">${invoice.amount}</span>
-                  <Badge variant="outline" className="text-green-600 border-green-600">
-                    {invoice.status}
-                  </Badge>
-                  <Button variant="ghost" size="sm">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Danger Zone */}
       {subscription && !subscription.cancelAtPeriodEnd && (

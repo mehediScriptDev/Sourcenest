@@ -1,4 +1,4 @@
-import { apiClient } from "./client"
+import { apiClient, publicApiClient } from "./client"
 import { getApiErrorMessage } from "./errors"
 
 export interface ActivePromotionPlan {
@@ -70,7 +70,7 @@ export async function fetchActivePromotion(): Promise<{
   data: ActivePromotion | null
 }> {
   try {
-    const response = await apiClient.get<ActivePromotionResponse>("/admin/promotions/active")
+    const response = await publicApiClient.get<ActivePromotionResponse>("/promotions/active")
     const payload = response.data
     return {
       success: payload?.success ?? true,
@@ -85,3 +85,26 @@ export async function fetchActivePromotion(): Promise<{
     }
   }
 }
+
+/**
+ * POST /manufacturer/promotions/apply?promotion_id={id} — enroll a manufacturer user in a promotion
+ */
+export async function enrollInPromotion(
+  promotionId: number | string
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const response = await apiClient.post<{ success: boolean; message: string }>(
+      `/manufacturer/promotions/apply?promotion_id=${promotionId}`
+    )
+    return {
+      success: response.data?.success ?? true,
+      message: response.data?.message,
+    }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      message: getApiErrorMessage(error, "Failed to apply promotion."),
+    }
+  }
+}
+

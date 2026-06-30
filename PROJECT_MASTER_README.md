@@ -236,7 +236,7 @@ readywithfixes/
 | Reports | `/admin/reports` | ⚠️ Partial | Planned | Admin reports |
 | Certificate Types | `/admin/certificatetype` | ❌ Not Integrated | Not Started | Certificate management - API needed |
 | Contact Requests | `/admin/contact` | ⚠️ Partial | Planned | Contact form submissions |
-| Promotions | `/admin/promotions` | ⚠️ Partial | Planned | Promotion management |
+| Promotions | `/admin/promotions` | ✅ Integrated | Complete | Promotion management |
 
 ---
 
@@ -271,6 +271,7 @@ import { apiClient } from "@/lib/api/client"
 | Admin Manufacturer Registrations | `admin-manufacturer-registrations.ts` | approve, reject, review | ✅ Complete |
 | Admin FAQ | `admin-faqs.ts` | create, edit, delete | ✅ Complete |
 | Admin Quick Filters | `admin-quick-filters.ts` | manage filters | ✅ Complete |
+| Admin Product Reviews | `admin-product-reviews.ts` | reviews stats | ✅ Complete |
 | Manufacturer Catalogs | `manufacturer-catalogs.ts` | create, update, manage | ✅ Complete |
 | Manufacturer Products | `manufacturer-products.ts` | list, manage | ✅ Complete |
 | Categories | `categorizh.ts` | list, get, filter | ✅ Complete |
@@ -354,11 +355,11 @@ import { apiClient } from "@/lib/api/client"
   - Assigned To: -
   - Due: -
 
-- [ ] **Promotions Manager** - `/admin/promotions`
-  - Status: ❌ Not Started
-  - Needed: Promotion CRUD API
-  - Assigned To: -
-  - Due: -
+- [x] **Promotions Manager** - `/admin/promotions`
+  - Status: ✅ Complete
+  - Needed: Promotion CRUD API (List, Toggle status, edit details via PUT, reset counter)
+  - Assigned To: Antigravity
+  - Due: June 22, 2026
 
 - [ ] **Certificate Types Management** - `/admin/certificatetype`
   - Status: ❌ Not Started

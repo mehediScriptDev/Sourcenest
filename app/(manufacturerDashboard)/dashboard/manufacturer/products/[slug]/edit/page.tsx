@@ -54,6 +54,7 @@ import type {
 const units = [
   { value: "pieces", label: "Pieces" },
   { value: "sets", label: "Sets" },
+  { value: "units", label: "Units" },
   { value: "kg", label: "Kilograms" },
   { value: "tons", label: "Metric Tons" },
   { value: "meters", label: "Meters" },
@@ -62,6 +63,8 @@ const units = [
   { value: "boxes", label: "Boxes" },
   { value: "cartons", label: "Cartons" },
   { value: "pallets", label: "Pallets" },
+  { value: "20ft container", label: "20ft Container" },
+  { value: "40ft container", label: "40ft Container" },
 ]
 
 const FALLBACK_CURRENCIES: ManufacturerCurrencyOption[] = [

@@ -1,6 +1,8 @@
 "use client"
 
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Badge } from "@/components/ui/badge"
 import { 
   TrendingUp,
@@ -12,7 +14,8 @@ import {
   MessageSquare,
   DollarSign,
   Globe,
-  BarChart3
+  BarChart3,
+  Loader2
 } from "lucide-react"
 import {
   BarChart,
@@ -29,42 +32,16 @@ import {
   ChartLegendContent,
   type ChartConfig
 } from "@/components/ui/chart"
+import { getAdminAnalyticsMetrics, getAdminAnalyticsGrowth, getAdminAnalyticsCountries, getAdminAnalyticsIndustries, AdminAnalyticsMetricItem, GrowthItem, CountryDistributionItem, IndustryItem } from "@/lib/api/admin-analytics"
 
-const metrics = [
-  { label: "Total Revenue", value: "$1.2M", change: "+18.5%", trend: "up", icon: DollarSign },
-  { label: "Active Users", value: "12,847", change: "+12.5%", trend: "up", icon: Users },
-  { label: "Active Suppliers", value: "1,234", change: "+8.3%", trend: "up", icon: Factory },
-  { label: "Products Listed", value: "45,678", change: "+15.2%", trend: "up", icon: Package },
-  { label: "RFQs This Month", value: "3,456", change: "-2.1%", trend: "down", icon: FileText },
-  { label: "Messages Sent", value: "28,943", change: "+22.4%", trend: "up", icon: MessageSquare },
-]
-
-const topCountries = [
-  { country: "United States", users: "4,234", percentage: 33 },
-  { country: "Germany", users: "1,892", percentage: 15 },
-  { country: "United Kingdom", users: "1,543", percentage: 12 },
-  { country: "Australia", users: "1,234", percentage: 10 },
-  { country: "Canada", users: "987", percentage: 8 },
-  { country: "Other", users: "2,957", percentage: 22 },
-]
-
-const topIndustries = [
-  { industry: "Consumer Electronics", suppliers: 234, products: 12456 },
-  { industry: "Textiles & Apparel", suppliers: 189, products: 8934 },
-  { industry: "Machinery & Equipment", suppliers: 156, products: 5678 },
-  { industry: "Home & Garden", suppliers: 134, products: 7823 },
-  { industry: "Food & Agriculture", suppliers: 98, products: 3456 },
-]
-
-const chartData = [
-  { name: "Jan", users: 4000, suppliers: 2400, rfqs: 2400 },
-  { name: "Feb", users: 5000, suppliers: 2500, rfqs: 2800 },
-  { name: "Mar", users: 5500, suppliers: 2600, rfqs: 3200 },
-  { name: "Apr", users: 7000, suppliers: 3100, rfqs: 3800 },
-  { name: "May", users: 9500, suppliers: 4200, rfqs: 4500 },
-  { name: "Jun", users: 11200, suppliers: 5100, rfqs: 5200 },
-  { name: "Jul", users: 12847, suppliers: 6200, rfqs: 6800 },
-]
+const metricIcons: Record<string, React.ComponentType<any>> = {
+  total_revenue: DollarSign,
+  active_users: Users,
+  active_suppliers: Factory,
+  products_listed: Package,
+  rfqs_this_month: FileText,
+  messages_sent: MessageSquare,
+}
 
 const chartConfig = {
   users: {
@@ -82,6 +59,75 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export default function AdminAnalyticsPage() {
+  const [metrics, setMetrics] = useState<AdminAnalyticsMetricItem[]>([])
+  const [growthData, setGrowthData] = useState<GrowthItem[]>([])
+  const [countries, setCountries] = useState<CountryDistributionItem[]>([])
+  const [industries, setIndustries] = useState<IndustryItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isChartLoading, setIsChartLoading] = useState(true)
+  const [isCountriesLoading, setIsCountriesLoading] = useState(true)
+  const [isIndustriesLoading, setIsIndustriesLoading] = useState(true)
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setIsChartLoading(true)
+    setIsCountriesLoading(true)
+    setIsIndustriesLoading(true)
+
+    // Fetch metrics
+    try {
+      const res = await getAdminAnalyticsMetrics()
+      if (res.success && res.data?.metrics) {
+        setMetrics(res.data.metrics)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsLoading(false)
+    }
+
+    // Fetch growth
+    try {
+      const res = await getAdminAnalyticsGrowth()
+      if (res.success && res.data) {
+        // Reverse array to render chronologically (oldest to newest)
+        setGrowthData([...res.data].reverse())
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsChartLoading(false)
+    }
+
+    // Fetch countries
+    try {
+      const res = await getAdminAnalyticsCountries()
+      if (res.success && res.data) {
+        setCountries(res.data)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsCountriesLoading(false)
+    }
+
+    // Fetch industries
+    try {
+      const res = await getAdminAnalyticsIndustries()
+      if (res.success && res.data) {
+        setIndustries(res.data)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsIndustriesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
   return (
     <div className="space-y-6">
       <div>
@@ -93,32 +139,38 @@ export default function AdminAnalyticsPage() {
 
       {/* Key Metrics */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {metrics.map((metric) => (
-          <Card key={metric.label}>
-            <CardContent className="p-6">
+        {isLoading ? (
+          Array.from({ length: 6 }).map((_, idx) => (
+            <Card key={idx} className="animate-pulse px-6 py-4 flex flex-col justify-between h-[120px]">
               <div className="flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <metric.icon className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <Badge 
-                  variant={metric.trend === "up" ? "secondary" : "outline"}
-                  className="gap-1"
-                >
-                  {metric.trend === "up" ? (
-                    <TrendingUp className="h-3 w-3" />
-                  ) : (
-                    <TrendingDown className="h-3 w-3" />
-                  )}
-                  {metric.change}
-                </Badge>
+                <div className="h-4 w-28 rounded bg-muted" />
+                <div className="h-8 w-8 rounded bg-muted" />
               </div>
-              <div className="mt-4">
-                <p className="text-2xl font-bold text-foreground">{metric.value}</p>
-                <p className="text-sm text-muted-foreground">{metric.label}</p>
+              <div className="flex items-end justify-between mt-2">
+                <div className="h-8 w-20 rounded bg-muted" />
+                <div className="h-5 w-12 rounded bg-muted" />
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            </Card>
+          ))
+        ) : (
+          metrics.map((metric) => {
+            const Icon = metricIcons[metric.key] || DollarSign
+            return (
+              <AdminStatCard
+                key={metric.key}
+                title={metric.label}
+                value={metric.value}
+                icon={Icon}
+                layout="vertical"
+                trend={{
+                  value: metric.change,
+                  direction: (metric.trend === "up" || metric.trend === "down") ? metric.trend : "up"
+                }}
+                contentClassName="px-6 py-4"
+              />
+            )
+          })
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -131,27 +183,34 @@ export default function AdminAnalyticsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-80 w-full">
-              <ChartContainer config={chartConfig} className="h-full w-full">
-                <BarChart
-                  data={chartData}
-                  margin={{
-                    top: 20,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent />} wrapperStyle={{ paddingTop: "20px" }} />
-                  <Bar dataKey="users" fill="var(--color-users)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="suppliers" fill="var(--color-suppliers)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="rfqs" fill="var(--color-rfqs)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ChartContainer>
+            <div className="h-80 w-full flex items-center justify-center">
+              {isChartLoading ? (
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Loading growth data...</p>
+                </div>
+              ) : (
+                <ChartContainer config={chartConfig} className="h-full w-full">
+                  <BarChart
+                    data={growthData}
+                    margin={{
+                      top: 20,
+                      right: 30,
+                      left: 20,
+                      bottom: 5,
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} wrapperStyle={{ paddingTop: "20px" }} />
+                    <Bar dataKey="users" fill="var(--color-users)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="suppliers" fill="var(--color-suppliers)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="rfqs" fill="var(--color-rfqs)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ChartContainer>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -165,22 +224,28 @@ export default function AdminAnalyticsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {topCountries.map((item) => (
-                <div key={item.country} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-foreground">{item.country}</span>
-                    <span className="text-sm text-muted-foreground">{item.users} users ({item.percentage}%)</span>
+            {isCountriesLoading ? (
+              <div className="flex h-48 items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {countries.map((item) => (
+                  <div key={item.country} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">{item.country}</span>
+                      <span className="text-sm text-muted-foreground">{item.users} users ({item.percentage}%)</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted">
+                      <div 
+                        className="h-full rounded-full bg-secondary"
+                        style={{ width: `${item.percentage}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 rounded-full bg-muted">
-                    <div 
-                      className="h-full rounded-full bg-secondary"
-                      style={{ width: `${item.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -193,21 +258,27 @@ export default function AdminAnalyticsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {topIndustries.map((item, index) => (
-                <div key={item.industry} className="flex items-center gap-4">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                    {index + 1}
-                  </span>
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{item.industry}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {item.suppliers} suppliers • {item.products.toLocaleString()} products
-                    </p>
+            {isIndustriesLoading ? (
+              <div className="flex h-48 items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {industries.map((item, index) => (
+                  <div key={item.slug} className="flex items-center gap-4">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground">{item.industry}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {item.suppliers} suppliers • {item.products.toLocaleString()} products
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

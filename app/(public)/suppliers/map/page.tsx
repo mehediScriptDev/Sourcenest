@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useTranslation } from "@/lib/i18n"
 import { Header } from "@/components/layout/header"
@@ -21,7 +21,15 @@ import {
   Star,
   ChevronRight
 } from "lucide-react"
-import { countries, getCountriesByRegion } from "@/lib/data/countries"
+import { 
+  getSuppliersMap, 
+  getSuppliersMapGroups, 
+  getSuppliersMapTopCountries,
+  ApiSupplierMapCountry, 
+  ApiSupplierMapResponse,
+  ApiSupplierMapGroup,
+  ApiSupplierMapTopCountry
+} from "@/lib/api/public-suppliers"
 
 const regions = [
   { 
@@ -82,12 +90,57 @@ export default function GlobalSupplierMapPage() {
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAllCountries, setShowAllCountries] = useState(false)
+  const [mapData, setMapData] = useState<ApiSupplierMapResponse['data'] | null>(null)
+  const [groupsData, setGroupsData] = useState<ApiSupplierMapGroup[]>([])
+  const [topCountriesData, setTopCountriesData] = useState<ApiSupplierMapTopCountry[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadData() {
+      setIsLoading(true)
+      const [mapRes, groupsRes, topCountriesRes] = await Promise.all([
+        getSuppliersMap(),
+        getSuppliersMapGroups(),
+        getSuppliersMapTopCountries()
+      ])
+      
+      if (mapRes && mapRes.success) setMapData(mapRes.data)
+      if (groupsRes && groupsRes.success) setGroupsData(groupsRes.data.groups)
+      if (topCountriesRes && topCountriesRes.success) setTopCountriesData(topCountriesRes.data.countries)
+      
+      setIsLoading(false)
+    }
+    loadData()
+  }, [])
+
+  // Calculate dynamic regions based on API groups data
+  const dynamicRegions = regions.map(region => {
+    const apiGroup = groupsData.find(g => g.group === region.name);
+    return { ...region, supplierCount: apiGroup ? apiGroup.suppliers_count : 0 };
+  });
+
+  const apiCountries = mapData?.countries || [];
 
   const filteredCountries = searchQuery 
-    ? countries.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? apiCountries.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : selectedRegion 
-      ? getCountriesByRegion(selectedRegion)
+      ? apiCountries.filter(c => c.group === selectedRegion)
       : []
+
+  // Dynamic featured countries (from API)
+  const dynamicFeatured = topCountriesData;
+
+  // Fallback to static featured if API has none
+  const displayFeatured = dynamicFeatured.length > 0 
+    ? dynamicFeatured.map(c => ({
+        code: c.country_code,
+        name: c.country,
+        suppliers: c.manufacturers_count,
+        flag: c.flag,
+        growth: "", 
+        topIndustry: "" 
+      }))
+    : featuredCountries;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -127,11 +180,15 @@ export default function GlobalSupplierMapPage() {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 md:grid-cols-4">
               <div className="text-center">
-                <p className="text-3xl font-bold text-foreground">21,170+</p>
+                <p className="text-3xl font-bold text-foreground">
+                  {mapData ? mapData.total_suppliers.toLocaleString() : "..."}
+                </p>
                 <p className="text-sm text-muted-foreground">{t?.landing?.suppliersMap?.reviewedSuppliersLabel || "Reviewed Suppliers"}</p>
               </div>
               <div className="text-center">
-                <p className="text-3xl font-bold text-foreground">195</p>
+                <p className="text-3xl font-bold text-foreground">
+                  {mapData ? mapData.total_countries : "..."}
+                </p>
                 <p className="text-sm text-muted-foreground">{t?.landing?.suppliersMap?.countriesLabel || "Countries"}</p>
               </div>
               <div className="text-center">
@@ -159,7 +216,7 @@ export default function GlobalSupplierMapPage() {
             </div>
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {regions.map((region) => (
+              {dynamicRegions.map((region) => (
                 <Card 
                   key={region.name}
                   className={`h-full cursor-pointer transition-all hover:shadow-lg ${
@@ -212,19 +269,21 @@ export default function GlobalSupplierMapPage() {
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                       {filteredCountries.slice(0, showAllCountries ? undefined : 20).map((country) => (
                         <Link
-                          key={country.code}
-                          href={`/suppliers?country=${country.code}`}
+                          key={country.country_code}
+                          href={`/suppliers?country=${country.country_code}`}
                           className="w-full flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted"
                         >
                           <img 
-                            src={`https://flagcdn.com/w40/${country.code.toLowerCase()}.png`}
+                            src={country.flag_icon || `https://flagcdn.com/w40/${country.country_code.toLowerCase()}.png`}
                             width="20"
                             alt={country.name}
                             className="h-5 w-7 rounded-sm object-cover shadow-sm" 
                           />
                           <div className="flex-1">
                             <p className="font-medium text-sm">{country.name}</p>
-                            <p className="text-xs text-muted-foreground">{country.subregion || country.region}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {country.suppliers_count} suppliers
+                            </p>
                           </div>
                           <ChevronRight className="h-4 w-4 text-muted-foreground" />
                         </Link>
@@ -265,7 +324,7 @@ export default function GlobalSupplierMapPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {featuredCountries.map((country) => (
+              {displayFeatured.map((country) => (
                 <Link 
                   key={country.code}
                   href={`/suppliers?country=${country.code}`}
@@ -287,12 +346,14 @@ export default function GlobalSupplierMapPage() {
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-1 text-green-600">
-                          <span>{country.growth}</span>
-                          <span className="text-muted-foreground">{t?.landing?.suppliersMap?.growth || "growth"}</span>
+                          {country.growth && <span>{country.growth}</span>}
+                          {country.growth && <span className="text-muted-foreground">{t?.landing?.suppliersMap?.growth || "growth"}</span>}
                         </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {country.topIndustry}
-                        </Badge>
+                        {country.topIndustry && (
+                          <Badge variant="secondary" className="text-xs">
+                            {country.topIndustry}
+                          </Badge>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

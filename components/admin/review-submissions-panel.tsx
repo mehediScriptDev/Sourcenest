@@ -122,7 +122,7 @@ function CaptureLightbox({
             {current.has_review_code && (
               <Badge className="mt-1.5 bg-secondary text-secondary-foreground text-xs font-medium">
                 <Shield className="mr-1 h-3 w-3" />
-                Code Verified
+                Code Reviewed
               </Badge>
             )}
           </div>

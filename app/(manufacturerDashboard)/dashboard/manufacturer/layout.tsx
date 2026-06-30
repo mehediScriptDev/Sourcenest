@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
+import { useSubscription } from "@/lib/subscription-context"
 import { NotificationsDropdown } from "@/components/notifications-dropdown"
 import { 
   LayoutDashboard, 
@@ -23,7 +24,7 @@ import {
   Factory,
   Star,
   Award,
-  Globe,
+  // Globe,
   CreditCard,
   FileBox,
   Clock,
@@ -43,7 +44,7 @@ const navigation = [
   { name: "Products", href: "/dashboard/manufacturer/products", icon: Package },
   { name: "Catalogs", href: "/dashboard/manufacturer/catalogs", icon: FileBox },
   { name: "Certifications", href: "/dashboard/manufacturer/certifications", icon: Award },
-  { name: "Export Markets", href: "/dashboard/manufacturer/markets", icon: Globe },
+  // { name: "Export Markets", href: "/dashboard/manufacturer/markets", icon: Globe },
   { name: "Analytics", href: "/dashboard/manufacturer/analytics", icon: BarChart3 },
   { name: "Company Profile", href: "/dashboard/manufacturer/profile", icon: Factory },
   { name: "Subscription", href: "/dashboard/manufacturer/subscription", icon: CreditCard },
@@ -58,6 +59,7 @@ export default function ManufacturerDashboardLayout({
   const pathname = usePathname()
   const router = useRouter()
   const { user, isLoading, logout } = useAuth()
+  const { plan } = useSubscription()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
@@ -151,7 +153,7 @@ export default function ManufacturerDashboardLayout({
             <div className="flex items-center justify-between">
               <span className="text-xs text-sidebar-foreground/60">Current Plan</span>
               <Badge className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
-                Premium
+                {plan?.name || "Free"}
               </Badge>
             </div>
           </div>
@@ -188,21 +190,9 @@ export default function ManufacturerDashboardLayout({
           </nav>
 
           <div className="shrink-0 border-t border-sidebar-border p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-accent">
-                <Factory className="h-5 w-5 text-sidebar-accent-foreground" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-sidebar-foreground">{user.company}</p>
-                <div className="flex items-center gap-1 text-xs text-sidebar-foreground/60">
-                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                  4.9 Rating
-                </div>
-              </div>
-            </div>
             <Button 
               variant="ghost" 
-              className="mt-3 w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+              className="w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
               onClick={() => {
                 logout()
                 router.push("/")

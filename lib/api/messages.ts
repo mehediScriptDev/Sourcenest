@@ -1,5 +1,6 @@
 import { apiClient } from "./client"
 import { formatDistanceToNow } from "date-fns"
+import Swal from "sweetalert2"
 
 // Types based on the ChatView component
 export interface ChatParticipant {
@@ -53,6 +54,7 @@ interface ApiMessage {
   is_read?: boolean | number
   created_at?: string
   updated_at?: string
+  attachments?: any[]
 }
 
 interface ApiConversation {
@@ -95,12 +97,22 @@ function normalizeMessage(msg: ApiMessage): ChatMessage {
   const senderId = msg.sender_id || msg.user_id || "";
   const text = msg.body || msg.content || msg.message || "";
 
+  let msgAttachments: string[] = []
+  if (msg.attachments && Array.isArray(msg.attachments)) {
+    msgAttachments = msg.attachments.map((att: any) => {
+      // Depending on backend, it might be an object or a direct string URL
+      if (typeof att === 'string') return att;
+      return att.url || att.file_url || att.path || "";
+    }).filter(Boolean)
+  }
+
   return {
     id: msg.id ? msg.id.toString() : `msg-${Date.now()}`,
     senderId: senderId.toString(),
     text: text,
     timestamp: formattedTime,
-    isRead: !!msg.is_read
+    isRead: !!msg.is_read,
+    attachments: msgAttachments.length > 0 ? msgAttachments : undefined
   }
 }
 
@@ -200,13 +212,19 @@ export async function sendMessage(conversationId: string, text: string, files?: 
   try {
     let response;
     
-    if (files && files.length) {
+    if (files && files.length > 0) {
       const formData = new FormData()
-      formData.append("body", text)
-      files.forEach((f, idx) => {
-        formData.append(`attachments[${idx}]`, f)
+      formData.append("body", text || " ") // ensure body is sent if required, or empty string
+      
+      files.forEach((file, index) => {
+        formData.append(`attachments[${index}]`, file)
       })
-      response = await apiClient.post(`/conversations/${conversationId}/messages`, formData)
+      
+      response = await apiClient.post(`/conversations/${conversationId}/messages`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
     } else {
       response = await apiClient.post(`/conversations/${conversationId}/messages`, { body: text })
     }
@@ -218,8 +236,28 @@ export async function sendMessage(conversationId: string, text: string, files?: 
     }
     
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to send message:", error)
+    
+    // Extract validation message
+    let errorMessage = "Failed to send message. Please try again."
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message
+    } else if (error.response?.data?.errors) {
+      const firstErrorKey = Object.keys(error.response.data.errors)[0]
+      if (firstErrorKey) {
+        errorMessage = error.response.data.errors[firstErrorKey][0]
+      }
+    }
+    
+    Swal.fire({
+      title: "Upload Failed",
+      text: errorMessage,
+      icon: "error",
+      confirmButtonText: "OK",
+      confirmButtonColor: "#ef4444"
+    })
+    
     return null;
   }
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -70,9 +70,11 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
   const [note, setNote] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   
-  // Lightweight attachment simulation since we can't upload actual files easily without a file input component
-  const [photoNames, setPhotoNames] = useState<string[]>([])
-  const [fileNames, setFileNames] = useState<string[]>([])
+  // Real file attachment state
+  const [photos, setPhotos] = useState<File[]>([])
+  const [attachments, setAttachments] = useState<File[]>([])
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function fetchOrder() {
@@ -127,13 +129,12 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
     setIsSubmitting(true)
     const trimmedNote = note.trim()
     
-    // In a real implementation with file inputs, we would pass actual File objects here.
-    // For this prototype, we're passing empty arrays.
+    // Passing the real selected files
     const res = await updateManufacturerOrderStatus(order.id, {
       status: newStatus,
       notes: trimmedNote || undefined,
-      photos: [],
-      attachments: [],
+      photos,
+      attachments,
     })
     
     if (res.success && res.data) {
@@ -144,8 +145,8 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
         postOrderUpdate(res.data as any, {
           status: newStatus as any,
           note: trimmedNote,
-          photos: photoNames,
-          files: fileNames,
+          photos: photos.map((f) => f.name),
+          files: attachments.map((f) => f.name),
           createdAt: new Date().toISOString(),
         })
       } catch (e) {
@@ -153,8 +154,8 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
       }
       
       setNote("")
-      setPhotoNames([])
-      setFileNames([])
+      setPhotos([])
+      setAttachments([])
       setShowForm(false)
     } else {
       alert(res.message || "Failed to post update")
@@ -164,7 +165,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <Button asChild variant="ghost" size="sm" className="mb-4 gap-1.5 text-muted-foreground">
         <Link href={config.basePath}>
           <ArrowLeft className="h-4 w-4" />
@@ -274,14 +275,39 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
                     rows={3}
                   />
                 </div>
-                {/* Lightweight attachment simulation */}
+                {/* Real file attachments */}
                 <div className="flex flex-wrap gap-2">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    ref={photoInputRef}
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        setPhotos((prev) => [...prev, ...Array.from(e.target.files as FileList)])
+                      }
+                      e.target.value = ""
+                    }}
+                  />
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    ref={fileInputRef}
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        setAttachments((prev) => [...prev, ...Array.from(e.target.files as FileList)])
+                      }
+                      e.target.value = ""
+                    }}
+                  />
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     className="gap-1.5"
-                    onClick={() => setPhotoNames((p) => [...p, `photo-${p.length + 1}.jpg`])}
+                    onClick={() => photoInputRef.current?.click()}
                   >
                     <ImageIcon className="h-4 w-4" />
                     Add photo
@@ -291,24 +317,30 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
                     size="sm"
                     variant="outline"
                     className="gap-1.5"
-                    onClick={() => setFileNames((f) => [...f, `document-${f.length + 1}.pdf`])}
+                    onClick={() => fileInputRef.current?.click()}
                   >
                     <FileText className="h-4 w-4" />
                     Attach file
                   </Button>
                 </div>
-                {(photoNames.length > 0 || fileNames.length > 0) && (
+                {(photos.length > 0 || attachments.length > 0) && (
                   <div className="flex flex-wrap gap-1.5">
-                    {photoNames.map((p, i) => (
+                    {photos.map((p, i) => (
                       <Badge key={`p-${i}`} variant="secondary" className="gap-1 text-xs">
                         <ImageIcon className="h-3 w-3" />
-                        {p}
+                        {p.name}
+                        <button type="button" onClick={() => setPhotos(prev => prev.filter((_, idx) => idx !== i))} className="ml-1">
+                          <XCircle className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                        </button>
                       </Badge>
                     ))}
-                    {fileNames.map((f, i) => (
+                    {attachments.map((f, i) => (
                       <Badge key={`f-${i}`} variant="secondary" className="gap-1 text-xs">
                         <FileText className="h-3 w-3" />
-                        {f}
+                        {f.name}
+                        <button type="button" onClick={() => setAttachments(prev => prev.filter((_, idx) => idx !== i))} className="ml-1">
+                          <XCircle className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                        </button>
                       </Badge>
                     ))}
                   </div>

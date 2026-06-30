@@ -369,7 +369,7 @@ export function Header() {
                       {savedProductDetails.map((product) => (
                         <div key={product.id} className="group relative">
                           <DropdownMenuItem asChild className="cursor-pointer p-0 rounded-none">
-                            <Link href={`/products/${product.slug}`} className="flex items-start gap-3 p-3">
+                            <Link href={`/products/${product.id}`} className="flex items-start gap-3 p-3">
                               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary/10">
                                 <Package className="h-5 w-5 text-secondary" />
                               </div>

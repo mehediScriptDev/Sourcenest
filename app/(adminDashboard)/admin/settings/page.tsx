@@ -98,65 +98,6 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Notification Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
-              {t.settings.adminNotifications}
-            </CardTitle>
-            <CardDescription>
-              {t.settings.adminNotificationsDesc}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-foreground">{t.settings.newSupplierRegistrations}</p>
-                <p className="text-sm text-muted-foreground">{t.settings.newSupplierRegistrationsDesc}</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-foreground">{t.settings.reportedContent}</p>
-                <p className="text-sm text-muted-foreground">{t.settings.reportedContentDesc}</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-foreground">{t.settings.dailySummary}</p>
-                <p className="text-sm text-muted-foreground">{t.settings.dailySummaryDesc}</p>
-              </div>
-              <Switch />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Email Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              {t.settings.emailSettings}
-            </CardTitle>
-            <CardDescription>
-              {t.settings.emailSettingsDesc}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-foreground">{t.settings.fromName}</label>
-              <Input defaultValue="SourceNest Team" className="mt-2" />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground">{t.settings.fromEmail}</label>
-              <Input defaultValue="noreply@sourcenest.com" className="mt-2" type="email" />
-            </div>
-            <Button variant="outline">{t.settings.testEmailDelivery}</Button>
-          </CardContent>
-        </Card>
 
         {/* Localization */}
         <Card>
@@ -202,7 +143,6 @@ export default function AdminSettingsPage() {
               <p className="font-medium text-foreground">March 15, 2026 at 3:00 AM UTC</p>
             </div>
             <div className="flex gap-3">
-              <Button variant="outline">{t.settings.createBackup}</Button>
               <Button variant="outline">{t.settings.exportData}</Button>
             </div>
           </CardContent>

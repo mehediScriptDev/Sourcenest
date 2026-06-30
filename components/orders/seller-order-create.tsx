@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMessages } from "@/lib/messages-context"
@@ -60,8 +60,9 @@ export function SellerOrderCreate({ config }: { config: CreateConfig }) {
     notes: "",
   })
   
-  // Lightweight file attachment simulation since we can't upload actual files from browser easily without a file input
-  const [docs, setDocs] = useState<string[]>([])
+  // Actual file attachment state
+  const [docs, setDocs] = useState<File[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [showError, setShowError] = useState(false)
 
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }))
@@ -107,9 +108,8 @@ export function SellerOrderCreate({ config }: { config: CreateConfig }) {
     setIsSubmitting(true)
     const amount = Number.parseFloat(form.totalAmount) || 0
     
-    // Create an empty File array since we're using a dummy string list for docs in UI
-    // If real file uploads are needed, a file input should be added to the UI
-    const attachments: File[] = []
+    // Pass the actual files to the API
+    const attachments: File[] = docs
     
     const res = await createManufacturerOrder({
       buyer_id: parseInt(selectedBuyerId, 10),
@@ -211,19 +211,36 @@ export function SellerOrderCreate({ config }: { config: CreateConfig }) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={isService ? "Scope / deliverables" : "Quantity"} required>
-              <Input
-                placeholder={isService ? "e.g., Logo, 3 packaging SKUs, brand guide" : "e.g., 5000"}
-                type={isService ? "text" : "number"}
-                value={form.quantity}
-                onChange={(e) => set("quantity", e.target.value)}
-              />
-            </Field>
-            <Field label="Unit">
-              <Input
-                placeholder="e.g., units, pieces, kg"
-                value={form.quantityUnit}
-                onChange={(e) => set("quantityUnit", e.target.value)}
-              />
+              <div className="flex gap-2">
+                <Input
+                  placeholder={isService ? "e.g., Logo, 3 packaging SKUs, brand guide" : "e.g., 5000"}
+                  type={isService ? "text" : "number"}
+                  value={form.quantity}
+                  onChange={(e) => set("quantity", e.target.value)}
+                  className="flex-1"
+                />
+                {!isService && (
+                  <Select 
+                    value={form.quantityUnit} 
+                    onValueChange={(value) => set("quantityUnit", value)}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pieces">Pieces</SelectItem>
+                      <SelectItem value="sets">Sets</SelectItem>
+                      <SelectItem value="units">Units</SelectItem>
+                      <SelectItem value="kg">KG</SelectItem>
+                      <SelectItem value="meters">Meters</SelectItem>
+                      <SelectItem value="cartons">Cartons</SelectItem>
+                      <SelectItem value="pallets">Pallets</SelectItem>
+                      <SelectItem value="20ft container">20ft Container</SelectItem>
+                      <SelectItem value="40ft container">40ft Container</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </Field>
           </div>
         </Section>
@@ -278,18 +295,30 @@ export function SellerOrderCreate({ config }: { config: CreateConfig }) {
         </Section>
 
         <Section title="Documents & notes">
-          <Field label="Attach documents (Simulated UI)">
+          <Field label="Attach documents">
             <div className="flex flex-wrap items-center gap-2">
               {docs.map((d, i) => (
                 <span key={i} className="flex items-center gap-1.5 rounded-full border border-border bg-muted/30 px-3 py-1 text-xs text-foreground">
                   <FileText className="h-3 w-3" />
-                  {d}
+                  {d.name}
                   <button type="button" onClick={() => setDocs((p) => p.filter((_, idx) => idx !== i))}>
                     <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
                   </button>
                 </span>
               ))}
-              <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => setDocs((p) => [...p, `document-${p.length + 1}.pdf`])}>
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                ref={fileInputRef}
+                onChange={(e) => {
+                  if (e.target.files) {
+                    setDocs((prev) => [...prev, ...Array.from(e.target.files as FileList)])
+                  }
+                  e.target.value = ""
+                }}
+              />
+              <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => fileInputRef.current?.click()}>
                 <Plus className="h-3.5 w-3.5" />
                 Add document
               </Button>

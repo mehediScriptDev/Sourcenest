@@ -83,6 +83,9 @@ export default function SignInPage() {
         const params = new URLSearchParams(window.location.search)
         const callbackUrl = params.get("callbackUrl")
         router.push(callbackUrl || result.redirectTo)
+      } else if (result.message?.toLowerCase().includes("pending review")) {
+        // Intercept the backend's "pending review" error block and push them to the review page
+        router.push("/review")
       } else if (result.requiresTwoFactor) {
         const params = new URLSearchParams({
           token: result.twoFactorToken,

@@ -99,9 +99,14 @@ export function PayPalButton({
             });
           },
           onApprove: async (data: any, actions: any) => {
-            const details = await actions.order.capture(data.orderID);
-            if (details.status === 'COMPLETED') onSuccess?.(details.id);
-            else onError?.(`Payment status: ${details.status}`);
+            const details = await actions.order.capture();
+            if (details.status === 'COMPLETED') {
+              // Get the actual transaction (capture) ID from the payments object
+              const transactionId = details.purchase_units?.[0]?.payments?.captures?.[0]?.id || details.id;
+              onSuccess?.(transactionId);
+            } else {
+              onError?.(`Payment status: ${details.status}`);
+            }
           },
           onError: (err: any) => {
             onError?.(err?.message || 'Payment failed');

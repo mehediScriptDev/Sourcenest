@@ -17,6 +17,10 @@ import {
   normalizeUserRole,
   type UserRole,
 } from "@/lib/roles/dashboard-route"
+import {
+  clearAdditionalInfoStorage,
+  syncAdditionalInfoFromUser,
+} from "@/lib/additional-information-storage"
 
 export type { UserRole }
 
@@ -117,6 +121,9 @@ interface SignupData {
   additionalNotes?: string
   deviceName?: string
   agreeTerms?: boolean
+  transactionId?: string
+  planId?: string
+  promoId?: string
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -136,6 +143,7 @@ function toAuthUser(user: User | ApiUser): User {
       name: `${firstName} ${lastName}`.trim(),
       company: normalizedRole === "admin" ? "SourceNest" : "",
       createdAt: user.created_at,
+      manufacturerStatus: (user as ApiUser).manufacture_status as ManufacturerStatus | undefined,
     }
   }
 
@@ -177,12 +185,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!nextUser) {
       setUserState(null)
       localStorage.removeItem("sourcenest_user")
+      clearAdditionalInfoStorage()
       return
     }
 
     const normalizedUser = toAuthUser(nextUser)
     setUserState(normalizedUser)
     localStorage.setItem("sourcenest_user", JSON.stringify(normalizedUser))
+
+    if ("additional_information_requests" in nextUser) {
+      syncAdditionalInfoFromUser(nextUser)
+    }
   }
 
   useEffect(() => {
@@ -238,7 +251,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return {
           success: true,
-          redirectTo: getDashboardPathByRole(response.data.user.role),
+          redirectTo: getDashboardPathByRole(
+            response.data.user.role, 
+            response.data.user.manufacture_status
+          ),
           message: response.message || undefined,
         }
       }
@@ -311,6 +327,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.deviceName) form.append("device_name", data.deviceName)
+      if (data.transactionId) form.append("transaction_id", data.transactionId)
+      if (data.planId) form.append("plan_id", data.planId)
+      if (data.promoId) form.append("promo_id", data.promoId)
 
       const response = await registerRequest(form)
 
@@ -325,7 +344,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return {
           success: true,
           pendingReview: false,
-          redirectTo: getDashboardPathByRole(session.user.role),
+          redirectTo: getDashboardPathByRole(
+            session.user.role, 
+            session.user.manufacture_status
+          ),
           message: response.message || undefined,
         }
       }
@@ -368,7 +390,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(response.data.user)
         return {
           success: true,
-          redirectTo: getDashboardPathByRole(response.data.user.role),
+          redirectTo: getDashboardPathByRole(
+            response.data.user.role,
+            response.data.user.manufacture_status
+          ),
         }
       }
 
@@ -431,7 +456,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(response.data.user)
         return {
           success: true,
-          redirectTo: getDashboardPathByRole(response.data.user.role),
+          redirectTo: getDashboardPathByRole(
+            response.data.user.role,
+            response.data.user.manufacture_status
+          ),
         }
       }
 
@@ -461,13 +489,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null)
     setToken(null)
+    clearAdditionalInfoStorage()
   }
 
   const getDashboardPath = () => {
     if (!user) {
       return "/auth/signin"
     }
-    return getDashboardPathByRole(user.role)
+    return getDashboardPathByRole(user.role, user.manufacturerStatus)
   }
 
   return (

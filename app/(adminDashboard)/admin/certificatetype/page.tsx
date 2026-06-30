@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Card, CardContent } from "@/components/ui/card"
+
 import {
   Dialog,
   DialogContent,
@@ -626,45 +628,33 @@ export default function AdminCertificateTypePage() {
           ) : (
             <>
               <div className="grid gap-4 sm:grid-cols-3">
-                <Card>
-                  <CardContent className="p-4 sm:p-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100">
-                        <CheckCircle className="h-5 w-5 text-emerald-700" />
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold text-foreground">{validCount}</p>
-                        <p className="text-sm text-muted-foreground">Valid</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 sm:p-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100">
-                        <AlertTriangle className="h-5 w-5 text-amber-700" />
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold text-foreground">{expiringCount}</p>
-                        <p className="text-sm text-muted-foreground">Expiring Soon</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 sm:p-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100">
-                        <AlertTriangle className="h-5 w-5 text-red-700" />
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold text-foreground">{expiredCount}</p>
-                        <p className="text-sm text-muted-foreground">Expired</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <AdminStatCard
+                  title="Valid"
+                  value={validCount}
+                  icon={CheckCircle}
+                  iconClassName="text-emerald-700"
+                  iconWrapperClassName="bg-emerald-100"
+                  layout="horizontal"
+                  contentClassName="p-4 sm:p-5"
+                />
+                <AdminStatCard
+                  title="Expiring Soon"
+                  value={expiringCount}
+                  icon={AlertTriangle}
+                  iconClassName="text-amber-700"
+                  iconWrapperClassName="bg-amber-100"
+                  layout="horizontal"
+                  contentClassName="p-4 sm:p-5"
+                />
+                <AdminStatCard
+                  title="Expired"
+                  value={expiredCount}
+                  icon={AlertTriangle}
+                  iconClassName="text-red-700"
+                  iconWrapperClassName="bg-red-100"
+                  layout="horizontal"
+                  contentClassName="p-4 sm:p-5"
+                />
               </div>
 
               <div className="space-y-4">

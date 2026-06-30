@@ -57,7 +57,6 @@ function calculateCertStatus(expiryDate: string): "valid" | "expiring" | "expire
     return "expired"
   }
   
-  // 90 days from now
   const ninetyDaysFromNow = new Date()
   ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90)
   
@@ -105,8 +104,7 @@ export default function ManufacturerCertificationsPage() {
     void loadCertifications(1)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleCertificateAdded = (newCert: Certificate) => {
-    // Reload page 1 to reflect the new cert in server order
+  const handleCertificateAdded = () => {
     void loadCertifications(1)
   }
 
@@ -118,7 +116,6 @@ export default function ManufacturerCertificationsPage() {
     try {
       await deleteCertificate(id)
       toast({ title: "Deleted", description: "Certification deleted successfully" })
-      // Stay on current page; if it becomes empty go back one page
       const targetPage = certs.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage
       void loadCertifications(targetPage)
     } catch (error) {
@@ -141,6 +138,7 @@ export default function ManufacturerCertificationsPage() {
   const expiredCount = certs.filter(
     (c) => calculateCertStatus(c.expiry_date) === "expired"
   ).length
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -165,7 +163,6 @@ export default function ManufacturerCertificationsPage() {
         </Card>
       ) : (
         <>
-          {/* Stats */}
           <div className="grid gap-4 sm:grid-cols-3">
             <Card>
               <CardContent className="p-4 sm:p-5">
@@ -208,7 +205,6 @@ export default function ManufacturerCertificationsPage() {
             </Card>
           </div>
 
-          {/* Certifications List */}
           <div className="grid gap-4">
             {certs.map((cert) => {
               const status = calculateCertStatus(cert.expiry_date)
@@ -302,7 +298,6 @@ export default function ManufacturerCertificationsPage() {
             )}
           </div>
 
-          {/* Pagination */}
           {lastPage > 1 && (
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
@@ -336,14 +331,12 @@ export default function ManufacturerCertificationsPage() {
         </>
       )}
 
-      {/* Add Certification Modal */}
       <AddCertificationModal
         open={showAddModal}
         onOpenChange={setShowAddModal}
         onSuccess={handleCertificateAdded}
       />
 
-      {/* Edit Certification Modal */}
       <EditCertificationModal
         open={editingCert !== null}
         onOpenChange={(open) => !open && setEditingCert(null)}
@@ -351,7 +344,6 @@ export default function ManufacturerCertificationsPage() {
         onSuccess={handleCertificateUpdated}
       />
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog
         open={deletingCertId !== null}
         onOpenChange={(open) => !open && setDeletingCertId(null)}
@@ -366,9 +358,7 @@ export default function ManufacturerCertificationsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() =>
-                deletingCertId && handleDeleteCert(deletingCertId)
-              }
+              onClick={() => deletingCertId && handleDeleteCert(deletingCertId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
@@ -379,4 +369,3 @@ export default function ManufacturerCertificationsPage() {
     </div>
   )
 }
-

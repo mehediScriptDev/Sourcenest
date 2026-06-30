@@ -5,6 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { ChatView, ChatConversation, ChatMessage, ChatParticipant } from "@/components/chat/chat-view"
 import { useAuth } from "@/lib/auth-context"
 import { getConversations, getMessages, sendMessage, markAsRead, createConversation } from "@/lib/api/messages"
+import { getProduct } from "@/lib/api/products"
+import { getProductBySlug } from "@/lib/data/products"
 import { getEcho } from "@/lib/echo"
 import { Loader2 } from "lucide-react"
 
@@ -19,6 +21,7 @@ export default function BuyerMessagesPage() {
   const [isMessagesLoading, setIsMessagesLoading] = useState(false)
   const [hasProcessedAutoMessage, setHasProcessedAutoMessage] = useState(false)
   const [prefillMessage, setPrefillMessage] = useState("")
+  const [initialProductRef, setInitialProductRef] = useState<any>(null)
 
   const buildIncomingMessage = (data: any): ChatMessage | null => {
     const msg = data?.message
@@ -75,12 +78,13 @@ export default function BuyerMessagesPage() {
       if (!isAuthenticated || hasProcessedAutoMessage || conversations.length === 0) return
       
       const autoMessage = searchParams.get('auto_message')
-      const prefill = searchParams.get('prefill')
       const supplierSlug = searchParams.get('supplier')
       const productSlug = searchParams.get('product')
-      const productName = searchParams.get('productName') || productSlug
+      const fallbackImg = searchParams.get('productImage')
+      const fallbackDesc = searchParams.get('productDesc')
+      let productName = searchParams.get('productName') || productSlug
       
-      if ((autoMessage === '1' || prefill === '1') && supplierSlug && productSlug) {
+      if (supplierSlug && productSlug) {
         setHasProcessedAutoMessage(true)
         
         const isAutoSend = autoMessage === '1'
@@ -90,6 +94,48 @@ export default function BuyerMessagesPage() {
         
         setIsMessagesLoading(true)
         try {
+          // Fetch product info to show in card
+          let loadedProductRef = null
+          try {
+            const prodRes = await getProduct(productSlug)
+            if (prodRes.success && prodRes.data) {
+              const prod = prodRes.data
+              productName = prod.name
+              loadedProductRef = {
+                name: prod.name,
+                images: prod.images?.length ? prod.images : (prod.image ? [prod.image] : undefined),
+                description: prod.description,
+                minOrder: prod.pricing_quantities?.minimum_order_quantity ? `${prod.pricing_quantities.minimum_order_quantity} ${prod.pricing_quantities.unit || 'pcs'}` : undefined,
+                price: prod.price_display || (prod.price?.amount ? `$${prod.price.amount}` : undefined),
+                url: `${window.location.origin}/products/${prod.id || prod.slug}`
+              }
+            } else {
+              // Fallback if product not found in API, check dummy data
+              const dummyProd = getProductBySlug(productSlug)
+              loadedProductRef = {
+                name: dummyProd?.name || productName,
+                images: dummyProd?.images || (fallbackImg ? [fallbackImg] : undefined),
+                description: dummyProd?.shortDescription || dummyProd?.description || fallbackDesc || "No description available",
+                minOrder: dummyProd?.moq ? `${dummyProd.moq} ${dummyProd.moqUnit || 'pcs'}` : undefined,
+                price: dummyProd?.price ? `$${dummyProd.price.min}` : undefined,
+                url: `${window.location.origin}/products/${productSlug}`
+              }
+            }
+            setInitialProductRef(loadedProductRef)
+          } catch (e) {
+            console.error("Failed to load product details for chat:", e)
+            const dummyProd = getProductBySlug(productSlug)
+            loadedProductRef = {
+              name: dummyProd?.name || productName,
+              images: dummyProd?.images || (fallbackImg ? [fallbackImg] : undefined),
+              description: dummyProd?.shortDescription || dummyProd?.description || fallbackDesc || "No description available",
+              minOrder: dummyProd?.moq ? `${dummyProd.moq} ${dummyProd.moqUnit || 'pcs'}` : undefined,
+              price: dummyProd?.price ? `$${dummyProd.price.min}` : undefined,
+              url: `${window.location.origin}/products/${productSlug}`
+            }
+            setInitialProductRef(loadedProductRef)
+          }
+
           // In a real app, we'd lookup the supplier ID. For dummy data, use a static ID or slug
           let conv = conversations.find(c => c.participants.some(p => 
             p.id === supplierSlug || 
@@ -110,11 +156,15 @@ export default function BuyerMessagesPage() {
           
           if (conv) {
             setSelectedConvId(conv.id)
-            const defaultText = `Hello,\n\nI am interested in your product "${productName}".\n\nProduct Link: ${window.location.origin}/products/${productSlug}\n\n\nCould you please provide more details regarding pricing, minimum order quantity, and available shipping options?\n\nI look forward to hearing from you soon.\n\nBest regards.`
+            const defaultText = `Hello,\n\nI am interested in your product "${productName}".\n\nCould you please provide more details regarding pricing, minimum order quantity, and available shipping options?\n\nI look forward to hearing from you soon.\n\nBest regards.`
             
             if (isAutoSend) {
               // Send the message
-              const sentMsg = await sendMessage(conv.id, defaultText)
+              let finalMessage = defaultText
+              if (loadedProductRef) {
+                finalMessage = `[Product Reference: ${loadedProductRef.name}]\nLink: ${loadedProductRef.url}\n\n${defaultText}`
+              }
+              const sentMsg = await sendMessage(conv.id, finalMessage)
               if (sentMsg) {
                 setMessages(prev => [...prev, sentMsg])
                 setConversations(prev => prev.map(c => 
@@ -214,10 +264,10 @@ export default function BuyerMessagesPage() {
     avatar: user?.avatar
   }
 
-  const handleSendMessage = async (text: string) => {
-    if (!selectedConvId) return
+  const handleSendMessage = async (text: string, files?: File[]) => {
+    if (!selectedConvId) return false
 
-    const sentMsg = await sendMessage(selectedConvId, text)
+    const sentMsg = await sendMessage(selectedConvId, text, files)
     if (sentMsg) {
       setMessages(prev => [...prev, sentMsg])
       setConversations(prev => prev.map(c => 
@@ -225,7 +275,9 @@ export default function BuyerMessagesPage() {
           ? { ...c, lastMessage: sentMsg, updatedAt: "Just now" } 
           : c
       ))
+      return true
     }
+    return false
   }
 
   const handleSelectConversation = async (conv: ChatConversation) => {
@@ -260,6 +312,7 @@ export default function BuyerMessagesPage() {
         selectedConversationId={selectedConvId}
         isLoading={isMessagesLoading}
         initialMessage={prefillMessage}
+        initialProductRef={initialProductRef}
       />
     </div>
   )

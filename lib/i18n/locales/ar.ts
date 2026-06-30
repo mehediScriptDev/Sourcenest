@@ -893,8 +893,10 @@ const ar = {
         price: "مخصص",
         cta: "اتصل بالمبيعات"
       },
-      billedAnnually: "يتم الفوترة سنويًا (${price}/شهر)",
-      pricePerCycle: "{cycle}"
+      billedAnnually: "تُدفع سنويًا (${price}/شهر)",
+      pricePerCycle: "{cycle}",
+      free: "مجاني",
+      noPlans: "لا توجد خطط تسعير متاحة في هذا الوقت."
     },
     approval: {
       title: "موافقة مطلوبة",
@@ -954,7 +956,8 @@ const ar = {
       success: "تمت عملية الدفع بنجاح!",
       transactionId: "رقم المعاملة:",
       redirecting: "جاري إعادة التوجيه إلى الاشتراك...",
-      failed: "فشل الدفع",
+      redirectingDashboard: "جاري إعادة التوجيه إلى لوحة التحكم الخاصة بك...",
+      failed: "فشلت عملية الدفع",
       tryAgain: "حاول مجددًا",
       priceInfo: "خطة {plan} ({cycle})",
       processingTime: "💡 هذا عادة ما يستغرق 2-5 أيام عمل."

@@ -427,21 +427,7 @@ export function NotificationsDropdown({ className }: NotificationsDropdownProps)
           </ScrollArea>
         )}
 
-        {/* Footer */}
-        <div className="border-t p-4 bg-muted/20">
-          <Link href={messageCenterHref} className="block w-full" onClick={() => setIsOpen(false)}>
-            <Button 
-              variant="outline" 
-              className="h-10 w-full justify-center text-xs font-bold bg-background hover:bg-primary hover:text-primary-foreground border-primary/10 shadow-xs transition-all duration-300 group/footer rounded-xl" 
-              asChild
-            >
-              <span>
-                View all activity
-                <ArrowRight className="ml-2 h-3.5 w-3.5 transition-transform group-hover/footer:translate-x-1" />
-              </span>
-            </Button>
-          </Link>
-        </div>
+
       </DropdownMenuContent>
     </DropdownMenu>
   )

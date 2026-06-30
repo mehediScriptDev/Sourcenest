@@ -36,9 +36,32 @@ export default function AdminMessagesPage() {
       setIsLoading(true)
       try {
         const data = await getConversations({ per_page: 50 })
-        setConversations(data)
-        if (data.length > 0 && !selectedConvId) {
-          setSelectedConvId(data[0].id)
+        
+        // Deduplicate conversations (keep the newest one per other participant name)
+        const uniqueConversations: ChatConversation[] = []
+        const seenOtherNames = new Set<string>()
+        const currentUserId = user?.id?.toString() || "admin-1"
+        
+        for (const conv of data) {
+          const other = conv.participants.find(p => p.id !== currentUserId) || conv.participants[0]
+          const otherName = other?.name || "unknown"
+          
+          if (!seenOtherNames.has(otherName)) {
+            seenOtherNames.add(otherName)
+            uniqueConversations.push(conv)
+          }
+        }
+        
+        setConversations(uniqueConversations)
+        
+        // Auto-select conversation from URL if provided
+        const params = new URLSearchParams(window.location.search)
+        const requestedConvId = params.get("conversation")
+        
+        if (requestedConvId) {
+          setSelectedConvId(requestedConvId)
+        } else if (uniqueConversations.length > 0 && !selectedConvId) {
+          setSelectedConvId(uniqueConversations[0].id)
         }
       } catch (error) {
         console.error("Failed to load admin conversations:", error)
@@ -169,10 +192,10 @@ export default function AdminMessagesPage() {
     }
   }
 
-  const handleSendMessage = async (text: string) => {
-    if (!selectedConvId) return
+  const handleSendMessage = async (text: string, files?: File[]) => {
+    if (!selectedConvId) return false
 
-    const sentMsg = await sendMessage(selectedConvId, text)
+    const sentMsg = await sendMessage(selectedConvId, text, files)
     if (sentMsg) {
       setMessages(prev => [...prev, sentMsg])
       
@@ -182,7 +205,9 @@ export default function AdminMessagesPage() {
           ? { ...c, lastMessage: sentMsg, updatedAt: "Just now" } 
           : c
       ))
+      return true
     }
+    return false
   }
 
   if (isLoading) {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Swal from "sweetalert2"
 import { Button } from "@/components/ui/button"
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -56,7 +57,8 @@ import {
   FolderOpen,
   Tag,
   ArrowLeft,
-  X
+  X,
+  Star
 } from "lucide-react"
 
 // Types
@@ -640,50 +642,34 @@ export default function AdminIndustriesPage() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
-              <Layers className="h-5 w-5 text-secondary" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{industries.length}</p>
-              <p className="text-sm text-muted-foreground">Main Categories</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-              <FolderOpen className="h-5 w-5 text-blue-700" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{totalCategories}</p>
-              <p className="text-sm text-muted-foreground">Category Records</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100">
-              <Tag className="h-5 w-5 text-emerald-700" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{totalSubcategories}</p>
-              <p className="text-sm text-muted-foreground">Subcategories</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100">
-              <Layers className="h-5 w-5 text-amber-700" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{featuredCount}</p>
-              <p className="text-sm text-muted-foreground">Featured category</p>
-            </div>
-          </div>
-        </div>
+        <AdminStatCard
+          title="Main Categories"
+          value={industries.length}
+          icon={Layers}
+          iconClassName="text-secondary"
+          iconWrapperClassName="bg-secondary/10"
+        />
+        <AdminStatCard
+          title="Category Records"
+          value={totalCategories}
+          icon={FolderOpen}
+          iconClassName="text-blue-700"
+          iconWrapperClassName="bg-blue-100"
+        />
+        <AdminStatCard
+          title="Subcategories"
+          value={totalSubcategories}
+          icon={Tag}
+          iconClassName="text-emerald-700"
+          iconWrapperClassName="bg-emerald-100"
+        />
+        <AdminStatCard
+          title="Featured category"
+          value={featuredCount}
+          icon={Layers}
+          iconClassName="text-amber-700"
+          iconWrapperClassName="bg-amber-100"
+        />
       </div>
 
       {/* Search */}

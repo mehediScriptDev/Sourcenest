@@ -209,7 +209,7 @@ export default function InquiryDetailPage() {
           title: 'Success! 🎉',
           text: `Your quote for Inquiry #${inquiry?.rfq_number} has been sent successfully.`,
           icon: 'success',
-          confirmButtonColor: 'hsl(var(--primary))',
+          confirmButtonColor: 'var(--primary)',
           confirmButtonText: 'Great!'
         }).then(() => {
           // Refresh the inquiry data
@@ -220,7 +220,7 @@ export default function InquiryDetailPage() {
           title: 'Error',
           text: response.message || "Failed to submit quote",
           icon: 'error',
-          confirmButtonColor: 'hsl(var(--destructive))',
+          confirmButtonColor: 'var(--destructive)',
         })
       }
     } catch (error) {
@@ -229,7 +229,7 @@ export default function InquiryDetailPage() {
         title: 'Error',
         text: "An unexpected error occurred.",
         icon: 'error',
-        confirmButtonColor: 'hsl(var(--destructive))',
+        confirmButtonColor: 'var(--destructive)',
       })
     } finally {
       setIsSubmitting(false)

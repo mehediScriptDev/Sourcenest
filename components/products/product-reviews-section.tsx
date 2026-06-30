@@ -76,14 +76,19 @@ export function ProductReviewsSection({
             distribution={ratingSummary.distribution}
           />
           
-          <Button 
-            onClick={() => setShowReviewForm(true)}
-            className="gap-2 self-start"
-            size="lg"
-          >
-            <PenLine className="h-4 w-4" />
-            Write a Review
-          </Button>
+          <div className="flex flex-col gap-2 shrink-0">
+            <Button 
+              onClick={() => setShowReviewForm(true)}
+              className="gap-2 self-start lg:self-end"
+              size="lg"
+            >
+              <PenLine className="h-4 w-4" />
+              Write a Review
+            </Button>
+            <p className="text-xs text-muted-foreground max-w-[250px] text-left lg:text-right">
+              Only buyers with an active or completed order can leave a review.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -139,13 +144,18 @@ export function ProductReviewsSection({
               }
             </p>
             {filterRating === "all" && (
-              <Button 
-                onClick={() => setShowReviewForm(true)}
-                className="mt-4 gap-2"
-              >
-                <PenLine className="h-4 w-4" />
-                Write the First Review
-              </Button>
+              <>
+                <Button 
+                  onClick={() => setShowReviewForm(true)}
+                  className="mt-4 gap-2"
+                >
+                  <PenLine className="h-4 w-4" />
+                  Write the First Review
+                </Button>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Only buyers with an active or completed order can leave a review.
+                </p>
+              </>
             )}
           </div>
         )}
