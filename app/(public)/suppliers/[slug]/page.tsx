@@ -621,7 +621,7 @@ export default async function SupplierPage({ params }: { params: Promise<{ slug:
                             href={catalog.file_path}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="group relative flex flex-col rounded-lg border border-border/60 bg-[#f4f3f0] hover:bg-[#efede9] hover:border-amber-700/30 transition-all overflow-hidden aspect-[3/4]"
+                            className="group relative flex flex-col rounded-lg border border-border/60 bg-[#f4f3f0] hover:bg-[#efede9] hover:border-amber-700/30 transition-all overflow-hidden aspect-3/4"
                           >
                             <div className="flex-1 flex items-center justify-center relative">
                               <Image className="h-10 w-10 text-muted-foreground/30 transition-all duration-300 group-hover:opacity-0 group-hover:scale-75 absolute" />
@@ -629,7 +629,7 @@ export default async function SupplierPage({ params }: { params: Promise<{ slug:
                             </div>
                             
                             {/* Gradient overlay at bottom for better text readability */}
-                            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#e8e6e1]/90 to-transparent pointer-events-none transition-opacity duration-300 group-hover:opacity-80" />
+                            <div className="absolute bottom-0 left-0 right-0 h-24 bg-linear-to-t from-[#e8e6e1]/90 to-transparent pointer-events-none transition-opacity duration-300 group-hover:opacity-80" />
                             
                             <div className="absolute bottom-0 left-0 right-0 p-4">
                               <span className="text-sm font-medium text-muted-foreground transition-colors duration-300 group-hover:text-[#8B5E3C] line-clamp-1">

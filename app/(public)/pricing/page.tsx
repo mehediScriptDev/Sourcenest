@@ -641,16 +641,16 @@ function PricingPageContent() {
                   a: t?.pricing?.faq?.a8 || "We accept major credit and debit cards, PayPal, and any additional payment methods displayed during checkout."
                 },
                 {
-                  q: "When do I choose my subscription plan?",
-                  a: "You'll choose your subscription plan only after your manufacturer profile has been reviewed and approved. At that stage, you'll see all available plans and can activate the one that best fits your business."
+                  q: t?.pricing?.faq?.q9 || "When do I choose my subscription plan?",
+                  a: t?.pricing?.faq?.a9 || "You'll choose your subscription plan only after your manufacturer profile has been reviewed and approved. At that stage, you'll see all available plans and can activate the one that best fits your business."
                 },
                 {
-                  q: "Can I choose the Free Plan after approval?",
-                  a: "Yes. If you're eligible, the Free Plan will appear together with the paid plans after your profile is approved. Simply choose the plan you want to activate."
+                  q: t?.pricing?.faq?.q10 || "Can I choose the Free Plan after approval?",
+                  a: t?.pricing?.faq?.a10 || "Yes. If you're eligible, the Free Plan will appear together with the paid plans after your profile is approved. Simply choose the plan you want to activate."
                 },
                 {
-                  q: "What happens if I don't choose a plan after approval?",
-                  a: "Your profile will remain approved, but it won't become visible to buyers until you activate a subscription plan."
+                  q: t?.pricing?.faq?.q11 || "What happens if I don't choose a plan after approval?",
+                  a: t?.pricing?.faq?.a11 || "Your profile will remain approved, but it won't become visible to buyers until you activate a subscription plan."
                 }
               ].map((faq, index) => (
                 <AccordionItem key={index} value={`item-${index}`}>
