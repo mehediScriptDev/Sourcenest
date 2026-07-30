@@ -183,7 +183,7 @@ export default function ManufacturerRegistrationsPage() {
     })
   }
 
-  const rows = data?.data || []
+  const rows = [...(data?.data || [])].reverse()
   const meta = data?.meta
 
   const openView = (row: ManufacturerApplication) => {
