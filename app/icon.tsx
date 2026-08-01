@@ -4,7 +4,7 @@ import { join } from 'path'
 export const runtime = 'nodejs'
 
 export default function Icon() {
-  const filePath = join(process.cwd(), 'public', 'images', 'logoFooter-original.png')
+  const filePath = join(process.cwd(), 'public', 'images', 'sourcenet.png')
   const imageBuffer = readFileSync(filePath)
 
   return new Response(imageBuffer, {
