@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, User } from "lucide-react"
@@ -77,24 +77,24 @@ export default function ArticlePage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden">
+      <SiteHeader />
       <main className="flex-1">
-        <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
           {loading ? (
-            <div className="text-center py-20">Loading article...</div>
+            <div className="py-12 text-center sm:py-16">Loading article...</div>
           ) : error ? (
-            <div className="text-center text-destructive py-20">{error}</div>
+            <div className="py-12 text-center text-destructive sm:py-16">{error}</div>
           ) : !article ? (
-            <div className="text-center py-20">Article not found.</div>
+            <div className="py-12 text-center sm:py-16">Article not found.</div>
           ) : (
             <article className="prose prose-lg mx-auto">
               <header className="mb-6">
                 {article.category && (
                   <Badge variant="secondary">{article.category.name}</Badge>
                 )}
-                <h1 className="mt-4 text-3xl font-serif font-medium">{article.title}</h1>
-                <div className="mt-3 flex items-center gap-4 text-sm text-muted-foreground">
+                <h1 className="mt-4 font-serif text-2xl font-medium min-[400px]:text-3xl sm:text-4xl">{article.title}</h1>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground sm:gap-4 sm:text-sm">
                   <span className="flex items-center gap-2"><User className="h-4 w-4" />{article.author}</span>
                   <span className="flex items-center gap-2"><Calendar className="h-4 w-4" />{formatDate(article.published_at)}</span>
                   <span>{article.views.toLocaleString()} views</span>

@@ -208,19 +208,69 @@ export async function rejectManufacturer(
   }
 }
 
+export async function createManufacturerSupportTicket(
+  manufacturerId: number | string,
+  payload: {
+    subject: string
+    message: string
+    department_type?: string
+    priority?: string
+    attachments?: File[]
+  }
+): Promise<{ success: boolean; message: string; data?: { id: number } }> {
+  try {
+    let response
+
+    if (payload.attachments && payload.attachments.length > 0) {
+      const formData = new FormData()
+      formData.append("subject", payload.subject)
+      formData.append("message", payload.message)
+      if (payload.department_type) formData.append("department_type", payload.department_type)
+      if (payload.priority) formData.append("priority", payload.priority)
+      payload.attachments.forEach((file, index) => {
+        formData.append(`attachments[${index}]`, file)
+      })
+
+      response = await apiClient.post(
+        `/admin/manufacturer/${manufacturerId}/support-tickets`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+    } else {
+      response = await apiClient.post(`/admin/manufacturer/${manufacturerId}/support-tickets`, {
+        subject: payload.subject,
+        message: payload.message,
+        department_type: payload.department_type,
+        priority: payload.priority,
+      })
+    }
+
+    return response.data
+  } catch (error) {
+    throw error
+  }
+}
+
 export async function fetchSuppliers(
   page: number = 1,
-  perPage: number = 10
+  perPage: number = 10,
+  filters?: { status?: string; search?: string }
 ): Promise<ManufacturerRegistrationResponse> {
   try {
+    const params: Record<string, string | number> = {
+      page,
+      per_page: perPage,
+    }
+    if (filters?.status) {
+      params.status = filters.status
+    }
+    if (filters?.search) {
+      params.search = filters.search
+    }
+
     const response = await apiClient.get<ManufacturerRegistrationResponse>(
       "/admin/manufacturer",
-      {
-        params: {
-          page,
-          per_page: perPage,
-        },
-      }
+      { params }
     )
     return response.data
   } catch (error) {

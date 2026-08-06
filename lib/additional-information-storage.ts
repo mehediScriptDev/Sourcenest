@@ -14,10 +14,14 @@ export function getPendingAdditionalInfoRequest(
     return null
   }
 
-  return (
-    user.additional_information_requests.find((request) => isAdditionalInfoPending(request.status)) ??
-    null
-  )
+  const pending = user.additional_information_requests
+    .filter((request) => isAdditionalInfoPending(request.status))
+    .sort(
+      (a, b) =>
+        new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    )
+
+  return pending[0] ?? null
 }
 
 export function syncAdditionalInfoFromUser(user?: UserWithAdditionalRequests | null): void {
@@ -112,7 +116,12 @@ export function isAdditionalInfoPending(status: string): boolean {
 export function getActionableAdditionalInfoRequests(
   apiRequests: AdditionalInformationRequest[]
 ): AdditionalInformationRequest[] {
-  const pendingFromApi = apiRequests.filter((request) => isAdditionalInfoPending(request.status))
+  const sorted = [...apiRequests].sort(
+    (a, b) =>
+      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+  )
+
+  const pendingFromApi = sorted.filter((request) => isAdditionalInfoPending(request.status))
   if (pendingFromApi.length > 0) {
     return pendingFromApi
   }

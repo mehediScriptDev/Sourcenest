@@ -80,6 +80,13 @@ export default function BuyerSettingsPage() {
           if (data.preferred_currency?.code) {
             setSelectedCurrency(data.preferred_currency.code)
           }
+          setNotifications({
+            newQuotes: data.quote_notification ?? true,
+            newMessages: data.message_notification ?? true,
+            supplierUpdates: data.supplier_update ?? true,
+            weeklyDigest: data.weekly_digest ?? false,
+            promotions: data.marketing_promotion ?? false,
+          })
         }
       } catch (err) {
         toast({ title: "Failed to load profile", description: getApiErrorMessage(err) || String(err), variant: "destructive" })
@@ -182,6 +189,31 @@ export default function BuyerSettingsPage() {
       setIsSaving(false)
     }
   }, [pwdForm, toast])
+
+  const saveNotificationPreferences = useCallback(async (next: typeof notifications) => {
+    try {
+      await apiClient.put("/buyer/profile/notification-preferences", {
+        quote_notification: next.newQuotes,
+        message_notification: next.newMessages,
+        supplier_update: next.supplierUpdates,
+        weekly_digest: next.weeklyDigest,
+        marketing_promotion: next.promotions,
+      })
+      toast({ title: "Notification preferences saved", variant: "default" })
+    } catch (err) {
+      toast({
+        title: "Failed to save notification preferences",
+        description: getApiErrorMessage(err) || String(err),
+        variant: "destructive",
+      })
+    }
+  }, [toast])
+
+  const handleNotificationChange = (key: keyof typeof notifications, checked: boolean) => {
+    const next = { ...notifications, [key]: checked }
+    setNotifications(next)
+    void saveNotificationPreferences(next)
+  }
 
   return (
     <div className="space-y-6">
@@ -323,6 +355,70 @@ export default function BuyerSettingsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5" />
+                {t.settings.notifications ?? "Notifications"}
+              </CardTitle>
+              <CardDescription>
+                Choose how you want to receive email and in-app alerts.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium text-foreground">New quotes</p>
+                  <p className="text-sm text-muted-foreground">When a manufacturer quotes your RFQ</p>
+                </div>
+                <Switch
+                  checked={notifications.newQuotes}
+                  onCheckedChange={(checked) => handleNotificationChange("newQuotes", checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium text-foreground">New messages</p>
+                  <p className="text-sm text-muted-foreground">When you receive a new message</p>
+                </div>
+                <Switch
+                  checked={notifications.newMessages}
+                  onCheckedChange={(checked) => handleNotificationChange("newMessages", checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium text-foreground">Supplier updates</p>
+                  <p className="text-sm text-muted-foreground">Updates from suppliers you follow</p>
+                </div>
+                <Switch
+                  checked={notifications.supplierUpdates}
+                  onCheckedChange={(checked) => handleNotificationChange("supplierUpdates", checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium text-foreground">Weekly digest</p>
+                  <p className="text-sm text-muted-foreground">Summary of your sourcing activity</p>
+                </div>
+                <Switch
+                  checked={notifications.weeklyDigest}
+                  onCheckedChange={(checked) => handleNotificationChange("weeklyDigest", checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium text-foreground">Promotions</p>
+                  <p className="text-sm text-muted-foreground">Product news and platform updates</p>
+                </div>
+                <Switch
+                  checked={notifications.promotions}
+                  onCheckedChange={(checked) => handleNotificationChange("promotions", checked)}
+                />
               </div>
             </CardContent>
           </Card>

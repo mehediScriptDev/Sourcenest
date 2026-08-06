@@ -73,7 +73,7 @@ interface ApiConversation {
 /**
  * Normalizes an API user to the frontend ChatParticipant type
  */
-function normalizeParticipant(user: ApiUser): ChatParticipant {
+export function normalizeParticipant(user: ApiUser): ChatParticipant {
   return {
     id: user.id.toString(),
     name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || 'Unknown User',
@@ -84,7 +84,7 @@ function normalizeParticipant(user: ApiUser): ChatParticipant {
   }
 }
 
-function normalizeMessage(msg: ApiMessage): ChatMessage {
+export function normalizeMessage(msg: ApiMessage): ChatMessage {
   let formattedTime = "Recently"
   try {
     if (msg.created_at) {
@@ -119,7 +119,7 @@ function normalizeMessage(msg: ApiMessage): ChatMessage {
 /**
  * Normalizes an API conversation to the frontend ChatConversation type
  */
-function normalizeConversation(conv: ApiConversation): ChatConversation {
+export function normalizeConversation(conv: ApiConversation): ChatConversation {
   const lastActivity = conv.last_message_sent_at || conv.updated_at || conv.created_at
   let formattedTime = "Recently"
   

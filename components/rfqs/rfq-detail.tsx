@@ -38,6 +38,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency } from "@/lib/orders-context"
+import { useTranslation } from "@/lib/i18n"
 
 const statusStyles: Record<RfqStatus, { color: string; icon: typeof Clock }> = {
   pending: { color: "bg-amber-100 text-amber-700", icon: Clock },
@@ -54,6 +55,14 @@ export interface RfqDetailConfig {
 }
 
 export function RfqDetail({ rfqId, config }: { rfqId: string; config: RfqDetailConfig }) {
+  const { t } = useTranslation()
+  const p = t.admin.pages.rfqs
+  const common = t.admin.common
+  const rfqStatus = t.admin.rfqStatus
+  const isAdmin = config.role === "admin"
+  const getStatusLabel = (status: RfqStatus) =>
+    isAdmin ? (rfqStatus[status as keyof typeof rfqStatus] || status) : RFQ_STATUS_LABELS[status]
+
   const { getRfqById, addMessage, submitQuote, updateStatus } = useRfqs()
   const router = useRouter()
   const rfq = getRfqById(rfqId)
@@ -77,9 +86,9 @@ export function RfqDetail({ rfqId, config }: { rfqId: string; config: RfqDetailC
   if (!rfq) {
     return (
       <div className="mx-auto max-w-3xl py-16 text-center">
-        <h1 className="font-serif text-xl font-medium text-foreground">RFQ not found</h1>
+        <h1 className="font-serif text-xl font-medium text-foreground">{isAdmin ? p.notFound : "RFQ not found"}</h1>
         <Button asChild variant="outline" className="mt-4">
-          <Link href={config.basePath}>Back to list</Link>
+          <Link href={config.basePath}>{isAdmin ? common.backToList : "Back to list"}</Link>
         </Button>
       </div>
     )
@@ -131,7 +140,7 @@ export function RfqDetail({ rfqId, config }: { rfqId: string; config: RfqDetailC
       <Button asChild variant="ghost" size="sm" className="mb-4 gap-1.5 text-muted-foreground">
         <Link href={config.basePath}>
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {isAdmin ? common.back : "Back"}
         </Link>
       </Button>
 
@@ -143,18 +152,18 @@ export function RfqDetail({ rfqId, config }: { rfqId: string; config: RfqDetailC
               <span className="text-sm font-medium text-muted-foreground">{rfq.id}</span>
               <Badge className={cn("gap-1 text-xs", statusStyles[rfq.status].color)}>
                 <StatusIcon className="h-3 w-3" />
-                {RFQ_STATUS_LABELS[rfq.status]}
+                {getStatusLabel(rfq.status)}
               </Badge>
             </div>
             <h1 className="mt-1.5 font-serif text-2xl font-medium text-foreground">{rfq.productName}</h1>
             <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
               <Building2 className="h-4 w-4" />
-              {config.role === "buyer" ? (rfq.supplierCompanyName || "Any Supplier") : rfq.buyerCompany}
+              {config.role === "buyer" ? (rfq.supplierCompanyName || (isAdmin ? common.anySupplier : "Any Supplier")) : rfq.buyerCompany}
             </p>
           </div>
           <div className="text-right">
             <p className="font-serif text-2xl font-medium text-foreground">
-              {formatCurrency(rfq.targetPrice, rfq.targetCurrencyCode)} target
+              {formatCurrency(rfq.targetPrice, rfq.targetCurrencyCode)} {isAdmin ? common.target_label : "target"}
             </p>
             <p className="text-xs text-muted-foreground">{rfq.quantity.toLocaleString()} {rfq.quantityUnit}</p>
           </div>
@@ -179,7 +188,7 @@ export function RfqDetail({ rfqId, config }: { rfqId: string; config: RfqDetailC
                       {reached ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                     </div>
                     <span className="mt-1.5 hidden text-center text-[10px] leading-tight text-muted-foreground sm:block">
-                      {RFQ_STATUS_LABELS[s]}
+                      {getStatusLabel(s)}
                     </span>
                   </div>
                   {i < flow.length - 1 && (
@@ -198,7 +207,7 @@ export function RfqDetail({ rfqId, config }: { rfqId: string; config: RfqDetailC
           {/* Action Area */}
           <div className="rounded-xl border border-border bg-card p-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <h2 className="font-medium text-foreground">Activity & Updates</h2>
+              <h2 className="font-medium text-foreground">{isAdmin ? p.activityUpdates : "Activity & Updates"}</h2>
               <div className="flex flex-wrap gap-2">
                 {config.role === "manufacturer" && (rfq.status === "pending" || rfq.status === "in_review") && (
                   <Button size="sm" className="gap-1.5" onClick={() => setShowQuoteForm(!showQuoteForm)}>
@@ -303,7 +312,7 @@ export function RfqDetail({ rfqId, config }: { rfqId: string; config: RfqDetailC
                     </div>
                     <div className="flex-1 pb-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium text-foreground">{RFQ_STATUS_LABELS[u.status]}</span>
+                        <span className="text-sm font-medium text-foreground">{getStatusLabel(u.status)}</span>
                         <span className="text-xs text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</span>
                         <Badge variant="outline" className="text-[10px] capitalize">{u.author}</Badge>
                       </div>
@@ -329,23 +338,23 @@ export function RfqDetail({ rfqId, config }: { rfqId: string; config: RfqDetailC
         {/* Sidebar */}
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-5">
-            <h2 className="font-medium text-foreground">Details</h2>
+            <h2 className="font-medium text-foreground">{isAdmin ? common.detailsTitle : "Details"}</h2>
             <dl className="mt-3 space-y-3 text-sm">
-              <Row label="Quantity" value={`${rfq.quantity.toLocaleString()} ${rfq.quantityUnit}`} />
-              <Row label="Target Price" value={formatCurrency(rfq.targetPrice, rfq.targetCurrencyCode)} />
-              <Row label="Est. delivery" value={new Date(rfq.requiredDeliveryDate).toLocaleDateString()} icon={Calendar} />
-              <Row label="Destination" value={`${rfq.destinationPortCity}, ${rfq.destinationCountry}`} />
-              <Row label="Shipping terms" value={rfq.shippingTerms} />
+              <Row label={isAdmin ? p.quantity : "Quantity"} value={`${rfq.quantity.toLocaleString()} ${rfq.quantityUnit}`} />
+              <Row label={isAdmin ? p.targetPrice : "Target Price"} value={formatCurrency(rfq.targetPrice, rfq.targetCurrencyCode)} />
+              <Row label={isAdmin ? p.estDelivery : "Est. delivery"} value={new Date(rfq.requiredDeliveryDate).toLocaleDateString()} icon={Calendar} />
+              <Row label={isAdmin ? p.destination : "Destination"} value={`${rfq.destinationPortCity}, ${rfq.destinationCountry}`} />
+              <Row label={isAdmin ? p.shippingTerms : "Shipping terms"} value={rfq.shippingTerms} />
             </dl>
             {rfq.additionalRequirements && (
               <p className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">
-                <span className="block font-medium text-foreground mb-1">Requirements</span>
+                <span className="block font-medium text-foreground mb-1">{isAdmin ? p.requirements : "Requirements"}</span>
                 {rfq.additionalRequirements}
               </p>
             )}
             {rfq.packagingDetails && (
               <p className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">
-                <span className="block font-medium text-foreground mb-1">Packaging</span>
+                <span className="block font-medium text-foreground mb-1">{isAdmin ? p.packaging : "Packaging"}</span>
                 {rfq.packagingDetails}
               </p>
             )}
@@ -353,12 +362,12 @@ export function RfqDetail({ rfqId, config }: { rfqId: string; config: RfqDetailC
 
           {rfq.quotedPrice && (
             <div className="rounded-xl border border-border bg-card p-5">
-              <h2 className="font-medium text-emerald-600">Quote Submitted</h2>
+              <h2 className="font-medium text-emerald-600">{isAdmin ? p.quoteSubmitted : "Quote Submitted"}</h2>
               <dl className="mt-3 space-y-3 text-sm">
-                <Row label="Quoted Price" value={formatCurrency(rfq.quotedPrice, rfq.quoteCurrencyCode || "USD")} />
-                <Row label="Min. Order" value={`${rfq.minimumOrderQuantity?.toLocaleString()}`} />
-                <Row label="Lead Time" value={`${rfq.leadTimeDays} days`} />
-                {rfq.quoteValidUntil && <Row label="Valid until" value={new Date(rfq.quoteValidUntil).toLocaleDateString()} icon={Calendar} />}
+                <Row label={isAdmin ? p.quotedPrice : "Quoted Price"} value={formatCurrency(rfq.quotedPrice, rfq.quoteCurrencyCode || "USD")} />
+                <Row label={isAdmin ? p.minOrder : "Min. Order"} value={`${rfq.minimumOrderQuantity?.toLocaleString()}`} />
+                <Row label={isAdmin ? p.leadTime : "Lead Time"} value={isAdmin ? common.daysCount.replace("{count}", String(rfq.leadTimeDays)) : `${rfq.leadTimeDays} days`} />
+                {rfq.quoteValidUntil && <Row label={isAdmin ? p.validUntil : "Valid until"} value={new Date(rfq.quoteValidUntil).toLocaleDateString()} icon={Calendar} />}
               </dl>
               {rfq.manufacturerReply && (
                 <p className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">{rfq.manufacturerReply}</p>

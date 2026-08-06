@@ -1,6 +1,6 @@
 import { Metadata } from "next"
 import Link from "next/link"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { getFaqCategories } from "@/lib/api/faqs"
@@ -91,15 +91,15 @@ export default async function FaqPage() {
       ]
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden">
+      <SiteHeader />
       <main className="flex-1">
         {/* Hero */}
-        <section className="bg-primary py-16 lg:py-24">
+        <section className="bg-primary py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
               <HelpCircle className="mx-auto h-12 w-12 text-primary-foreground" />
-              <h1 className="mt-6 font-serif text-4xl font-medium tracking-tight text-primary-foreground sm:text-5xl">
+              <h1 className="mt-4 font-serif text-3xl font-medium tracking-tight text-primary-foreground min-[400px]:text-4xl sm:mt-6 sm:text-5xl lg:text-6xl">
                 Frequently Asked Questions
               </h1>
               <p className="mt-4 text-lg text-primary-foreground/80">
@@ -110,10 +110,10 @@ export default async function FaqPage() {
         </section>
 
         {/* FAQ Sections */}
-        <section className="py-16 lg:py-24">
+        <section className="py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
             {categoriesToRender.map((category, categoryIndex) => (
-              <div key={category.id} className={categoryIndex > 0 ? "mt-16" : ""}>
+              <div key={category.id} className={categoryIndex > 0 ? "mt-8 sm:mt-12" : ""}>
                 <h2 className="font-serif text-2xl font-medium text-foreground">{category.title}</h2>
                 <Accordion type="single" collapsible className="mt-6">
                   {category.faqs.map((faq, index) => (
@@ -133,7 +133,7 @@ export default async function FaqPage() {
         </section>
 
         {/* CTA */}
-        <section className="bg-muted/50 py-16 lg:py-24">
+        <section className="bg-muted/50 py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-2xl text-center">
               <h2 className="font-serif text-2xl font-medium text-foreground">Still Have Questions?</h2>

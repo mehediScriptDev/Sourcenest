@@ -54,6 +54,27 @@ function toType(value: unknown): NotificationType {
   if (raw === "message" || raw === "inquiry" || raw === "quote" || raw === "supplier" || raw === "order") {
     return raw
   }
+  if (raw.startsWith("order.")) {
+    return "order"
+  }
+  if (raw.startsWith("support.ticket")) {
+    return "message"
+  }
+  if (raw.startsWith("rfq.")) {
+    return "quote"
+  }
+  if (raw.startsWith("conversation.")) {
+    return "message"
+  }
+  if (raw.startsWith("plan.subscription.")) {
+    return "system"
+  }
+  if (raw.startsWith("supplier.report.")) {
+    return "supplier"
+  }
+  if (raw.startsWith("manufacturer.")) {
+    return "supplier"
+  }
 
   return "system"
 }
@@ -107,7 +128,10 @@ function normalizeNotification(item: unknown, index: number): Notification {
     pickString(record, ["description", "body", "content", "message"]) || "You have a new update."
   const actionUrl = pickString(record, ["actionUrl", "action_url", "url", "link", "redirectTo", "redirect_to"])
   const avatar = pickString(record, ["avatar", "avatar_url", "image", "image_url"])
-  const read = Boolean(record.read ?? record.isRead ?? record.is_read ?? record.readAt ?? record.read_at)
+  const read =
+    Boolean(record.read ?? record.isRead ?? record.is_read) ||
+    record.readAt != null ||
+    record.read_at != null
 
   return {
     id,
@@ -143,8 +167,9 @@ function normalizeNotificationsResponse(payload: unknown): NotificationsResponse
 
   const notifications = rawNotifications.map((item, index) => normalizeNotification(item, index))
   const unreadFromPayload = data.unreadCount ?? data.unread_count
+  const rootUnread = root.unread_count ?? root.unreadCount
   const unreadCount = toNumber(
-    unreadFromPayload,
+    unreadFromPayload ?? rootUnread,
     notifications.filter((notification) => !notification.read).length
   )
   return {
@@ -159,12 +184,12 @@ function normalizeNotificationsResponse(payload: unknown): NotificationsResponse
 
 /**
  * Fetch all notifications for the current user
- * Note: Currently returns empty notifications - not connected to backend yet
  */
 export async function getNotifications(limit = 20, offset = 0): Promise<NotificationsResponse> {
   try {
+    const page = offset > 0 ? Math.floor(offset / limit) + 1 : 1
     const response = await apiClient.get("/me/notifications", {
-      params: { limit, offset },
+      params: { per_page: limit, page },
     })
     return normalizeNotificationsResponse(response.data)
   } catch (error: unknown) {
@@ -244,7 +269,7 @@ export async function deleteNotification(notificationId: string): Promise<MarkAs
 export async function getUnreadCount(): Promise<number> {
   try {
     const response = await apiClient.get("/me/notifications/unread-count")
-    return response.data?.data?.unreadCount || 0
+    return response.data?.data?.unread_count ?? response.data?.unread_count ?? 0
   } catch (error: any) {
     console.error("Failed to get unread count:", error)
     return 0

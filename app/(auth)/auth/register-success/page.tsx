@@ -79,7 +79,7 @@ export default function RegisterSuccessPage() {
       )}
       <div className="mx-auto mt-10 flex max-w-md flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
         <Button type="button" className="w-full sm:w-auto sm:min-w-[200px]" onClick={goToPricing}>
-          Continue to pricing
+          View available plan
         </Button>
         {payload.isLoggedIn && (
           <Button asChild variant="outline" className="w-full sm:w-auto">

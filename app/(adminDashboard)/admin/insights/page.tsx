@@ -2,8 +2,22 @@
 
 import React, { useState } from "react"
 import { useToast } from "@/hooks/use-toast"
-import { apiClient } from "@/lib/api/client"
 import { getApiErrorMessage } from "@/lib/api/errors"
+import {
+  createAdminArticle,
+  createArticleCategory,
+  deleteAdminArticle,
+  deleteArticleCategory,
+  fetchAdminArticle,
+  fetchAdminArticles,
+  fetchArticleCategories,
+  mapAdminArticleToInsight,
+  updateAdminArticle,
+  updateArticleCategory,
+  type ArticleStatus,
+} from "@/lib/api/admin-articles"
+import { useTranslation } from "@/lib/i18n"
+import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,9 +27,9 @@ import { Switch } from "@/components/ui/switch"
 import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
+import { AdminDialogContent } from "@/components/admin/admin-dialog-content"
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -61,7 +75,7 @@ interface InsightArticle {
   tags: string[]
   author: string
   publishedAt: string | null
-  status: "draft" | "published" | "archived"
+  status: ArticleStatus
   featured: boolean
   featuredImage?: string | null
   featuredImageName?: string | null
@@ -70,85 +84,15 @@ interface InsightArticle {
   updatedAt: string
 }
 
-const initialCategories = [
-  "Industry News",
-  "Sourcing Tips",
-  "Market Analysis",
-  "Success Stories",
-  "How-to Guides",
-  "Trade Shows",
-  "Supplier Spotlights",
-  "Compliance & Regulations"
-]
-
-const initialArticles: InsightArticle[] = [
-  {
-    id: "1",
-    title: "Top 10 Tips for Finding Reliable Manufacturers",
-    slug: "top-10-tips-finding-reliable-manufacturers",
-    excerpt: "Learn the essential strategies for identifying and vetting trustworthy manufacturing partners.",
-    content: "Finding reliable manufacturers is crucial for business success...",
-    category: "Sourcing Tips",
-    tags: ["sourcing", "manufacturers", "review"],
-    author: "Editorial Team",
-    publishedAt: "2024-01-15",
-    status: "published",
-    featured: true,
-    views: 2450,
-    createdAt: "2024-01-10",
-    updatedAt: "2024-01-15"
-  },
-  {
-    id: "2",
-    title: "Understanding MOQ: A Buyer's Guide",
-    slug: "understanding-moq-buyers-guide",
-    excerpt: "Everything you need to know about Minimum Order Quantities and how to negotiate them.",
-    content: "Minimum Order Quantity (MOQ) is a critical factor...",
-    category: "How-to Guides",
-    tags: ["MOQ", "negotiation", "buying"],
-    author: "Editorial Team",
-    publishedAt: "2024-01-20",
-    status: "published",
-    featured: false,
-    views: 1820,
-    createdAt: "2024-01-18",
-    updatedAt: "2024-01-20"
-  },
-  {
-    id: "3",
-    title: "2024 Manufacturing Trends in Asia",
-    slug: "2024-manufacturing-trends-asia",
-    excerpt: "An in-depth analysis of the latest manufacturing trends across Asian markets.",
-    content: "The manufacturing landscape in Asia continues to evolve...",
-    category: "Market Analysis",
-    tags: ["trends", "asia", "market"],
-    author: "Research Team",
-    publishedAt: null,
-    status: "draft",
-    featured: false,
-    views: 0,
-    createdAt: "2024-02-01",
-    updatedAt: "2024-02-05"
-  },
-  {
-    id: "4",
-    title: "How TechMart Found Their Perfect Supplier",
-    slug: "techmart-success-story",
-    excerpt: "A case study of how TechMart used SourceNest to find their ideal manufacturing partner.",
-    content: "When TechMart first started looking for a supplier...",
-    category: "Success Stories",
-    tags: ["case study", "success", "electronics"],
-    author: "Marketing Team",
-    publishedAt: "2024-01-25",
-    status: "published",
-    featured: true,
-    views: 3200,
-    createdAt: "2024-01-22",
-    updatedAt: "2024-01-25"
-  }
-]
-
 export default function AdminInsightsPage() {
+  const { t } = useTranslation()
+  const p = t.admin.pages.insights
+  const c = t.admin.common
+  const statusLabels: Record<InsightArticle["status"], string> = {
+    draft: t.admin.supplierStatus.draft,
+    published: c.published,
+    archived: c.archived,
+  }
   const [articles, setArticles] = useState<InsightArticle[]>([]) // Start empty, fetch from server on mount
   const [articlesLoading, setArticlesLoading] = useState(false)
   const [articlesError, setArticlesError] = useState<string | null>(null)
@@ -159,7 +103,7 @@ export default function AdminInsightsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [showCategoriesDialog, setShowCategoriesDialog] = useState(false)
   const [categoryForm, setCategoryForm] = useState({ name: "", index: -1 })
-  const [rawCategories, setRawCategories] = useState<Array<Record<string, any>>>([])
+  const [rawCategories, setRawCategories] = useState<Array<{ id: number; name: string; slug?: string }>>([])
   const [categoriesLoading, setCategoriesLoading] = useState(false)
   const [categoriesError, setCategoriesError] = useState<string | null>(null)
   const [featuredImageError, setFeaturedImageError] = useState<string | null>(null)
@@ -178,11 +122,11 @@ export default function AdminInsightsPage() {
 
   function handleFeaturedFile(file: File) {
     if (!file.type.startsWith('image/')) {
-      setFeaturedImageError('Please upload a valid image file.')
+      setFeaturedImageError(c.invalidImageFile)
       return
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      setFeaturedImageError(`Image is too large. Max ${formatBytes(MAX_IMAGE_BYTES)}.`)
+      setFeaturedImageError(c.imageTooLarge.replace("{size}", formatBytes(MAX_IMAGE_BYTES)))
       return
     }
 
@@ -216,7 +160,7 @@ export default function AdminInsightsPage() {
     category: "",
     tags: "",
     author: "",
-    status: "draft" as "draft" | "published" | "archived",
+    status: "draft" as ArticleStatus,
     featured: false,
     featuredImage: null as string | null,
     featuredImageName: undefined as string | undefined
@@ -246,8 +190,8 @@ export default function AdminInsightsPage() {
       content: "",
       category: "",
       tags: "",
-      author: "Editorial Team",
-      status: "published",
+      author: c.editorialTeam,
+      status: "draft",
       featured: false,
       featuredImage: null,
       featuredImageName: undefined
@@ -278,144 +222,91 @@ export default function AdminInsightsPage() {
     setShowEditDialog(true)
   }
 
-  const saveArticle = () => {
-    const now = new Date().toISOString().split('T')[0]
-    
-    if (editingArticle) {
-      // Update existing (PUT to backend)
-      ;(async () => {
-        setIsSubmittingArticle(true)
-        const form = new FormData()
-        form.append('title', editForm.title)
-        form.append('slug', editForm.slug)
-        form.append('excerpt', editForm.excerpt)
-        form.append('content', editForm.content)
-        form.append('author', editForm.author)
-        form.append('is_featured', editForm.featured ? '1' : '0')
-        form.append('status', editForm.status)
+  const buildArticlePayload = () => {
+    const cat = rawCategories.find((item) => String(item.name) === String(editForm.category))
+    const tags = editForm.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
 
-        // find category id if available
-        const cat = rawCategories.find(c => String(c.name) === String(editForm.category))
-        if (cat && cat.id) {
-          form.append('article_category_id', String(cat.id))
-        }
-
-        if (featuredFile) {
-          form.append('article_image', featuredFile)
-        }
-
-        const tags = editForm.tags.split(',').map(t => t.trim()).filter(Boolean)
-        tags.forEach((t) => form.append('tags[]', t))
-
-        try {
-          const res = await apiClient.put(`/admin/articles/${editingArticle.id}`, form)
-          const updated = res.data?.data ?? null
-          toast({ title: 'Article updated', description: res.data?.message || 'Article saved successfully.' })
-
-          // Update in-memory list with returned data
-          setArticles(prev => prev.map(a => 
-            a.id === editingArticle.id 
-              ? {
-                  id: String(updated?.id ?? editingArticle.id),
-                  title: updated?.title ?? editForm.title,
-                  slug: updated?.slug ?? editForm.slug,
-                  excerpt: updated?.excerpt ?? editForm.excerpt,
-                  content: updated?.content ?? editForm.content,
-                  category: editForm.category,
-                  tags: tags,
-                  author: updated?.author ?? editForm.author,
-                  publishedAt: updated?.published_at ?? (editForm.status === 'published' ? now : null),
-                  status: editForm.status,
-                  featured: editForm.featured,
-                  featuredImage: updated?.image_url ?? editForm.featuredImage ?? null,
-                  featuredImageName: updated?.image_url ? updated.image_url.split('/').pop() : editForm.featuredImageName ?? null,
-                  views: updated?.views ?? a.views,
-                  createdAt: a.createdAt,
-                  updatedAt: updated?.updated_at ?? now,
-                }
-              : a
-          ))
-          setShowEditDialog(false)
-          setFeaturedFile(null)
-          setFeaturedImageError(null)
-        } catch (err: unknown) {
-          toast({ title: 'Failed to save', description: getApiErrorMessage(err, 'Failed to save article.') })
-        } finally {
-          setIsSubmittingArticle(false)
-        }
-      })()
-    } else {
-      // Create new (POST to backend)
-      ;(async () => {
-        setIsSubmittingArticle(true)
-        const form = new FormData()
-        form.append('title', editForm.title)
-        form.append('slug', editForm.slug)
-        form.append('excerpt', editForm.excerpt)
-        form.append('content', editForm.content)
-        form.append('author', editForm.author)
-        form.append('is_featured', editForm.featured ? '1' : '0')
-        form.append('status', editForm.status)
-
-        // find category id if available
-        const cat = rawCategories.find(c => String(c.name) === String(editForm.category))
-        if (cat && cat.id) {
-          form.append('article_category_id', String(cat.id))
-        }
-
-        if (featuredFile) {
-          form.append('article_image', featuredFile)
-        }
-
-        const tags = editForm.tags.split(',').map(t => t.trim()).filter(Boolean)
-        tags.forEach((t) => form.append('tags[]', t))
-
-        try {
-          const res = await apiClient.post('/admin/articles/create', form)
-          const created = res.data?.data ?? null
-          toast({ title: 'Article created', description: res.data?.message || 'Article created successfully.' })
-
-          // Add to in-memory list using returned data when available
-          const newArticle: InsightArticle = {
-            id: created?.id ? String(created.id) : `article-${Date.now()}`,
-            title: created?.title ?? editForm.title,
-            slug: created?.slug ?? editForm.slug,
-            excerpt: created?.excerpt ?? editForm.excerpt,
-            content: created?.content ?? editForm.content,
-            category: editForm.category,
-            tags: tags,
-            author: created?.author ?? editForm.author,
-            publishedAt: editForm.status === 'published' ? now : null,
-            status: editForm.status,
-            featured: editForm.featured,
-            featuredImage: created?.article_image ?? editForm.featuredImage ?? null,
-            featuredImageName: created?.article_image_name ?? editForm.featuredImageName ?? null,
-            views: 0,
-            createdAt: created?.created_at ?? now,
-            updatedAt: created?.updated_at ?? now,
-          }
-          setArticles(prev => [newArticle, ...prev])
-          setShowEditDialog(false)
-        } catch (err: unknown) {
-          toast({ title: 'Failed to create', description: getApiErrorMessage(err, 'Failed to create article.' ) })
-        } finally {
-          setIsSubmittingArticle(false)
-        }
-      })()
+    return {
+      title: editForm.title.trim(),
+      slug: editForm.slug.trim(),
+      excerpt: editForm.excerpt.trim(),
+      content: editForm.content.trim(),
+      author: editForm.author.trim(),
+      is_featured: editForm.featured,
+      status: editForm.status,
+      article_category_id: cat?.id,
+      article_image: featuredFile,
+      tags,
     }
+  }
+
+  const saveArticle = () => {
+    if (!editForm.title.trim() || !editForm.slug.trim() || !editForm.content.trim()) {
+      toast({
+        title: c.validationError,
+        description: c.fillRequiredFields,
+        variant: "destructive",
+      })
+      return
+    }
+
+    const cat = rawCategories.find((item) => String(item.name) === String(editForm.category))
+    if (!cat?.id) {
+      toast({
+        title: c.validationError,
+        description: p.selectCategory,
+        variant: "destructive",
+      })
+      return
+    }
+
+    const payload = buildArticlePayload()
+
+    ;(async () => {
+      setIsSubmittingArticle(true)
+      try {
+        if (editingArticle) {
+          const result = await updateAdminArticle(editingArticle.id, payload)
+          toast({
+            title: p.articleUpdated,
+            description: result.message || p.articleSaved,
+          })
+        } else {
+          const result = await createAdminArticle(payload)
+          toast({
+            title: p.articleCreated,
+            description: result.message || p.articleSaved,
+          })
+        }
+
+        setShowEditDialog(false)
+        setFeaturedFile(null)
+        setFeaturedImageError(null)
+        await fetchArticles()
+      } catch (err: unknown) {
+        toast({
+          title: editingArticle ? p.saveFailed : p.failedToCreate,
+          description: getApiErrorMessage(
+            err,
+            editingArticle ? p.saveFailed : p.articleCreateFailed
+          ),
+          variant: "destructive",
+        })
+      } finally {
+        setIsSubmittingArticle(false)
+      }
+    })()
   }
 
   async function fetchCategories() {
     setCategoriesLoading(true)
     setCategoriesError(null)
     try {
-      const res = await apiClient.get("/admin/article/categories")
-      const payload = res.data
-      const list = Array.isArray(payload?.data) ? payload.data : []
+      const list = await fetchArticleCategories()
       setRawCategories(list)
-      setCategories(list.map((c: any) => String(c.name)))
+      setCategories(list.map((category) => String(category.name)))
     } catch (err: unknown) {
-      setCategoriesError(getApiErrorMessage(err, "Failed to load categories."))
+      setCategoriesError(getApiErrorMessage(err, p.failedLoadCategories))
     } finally {
       setCategoriesLoading(false)
     }
@@ -425,32 +316,10 @@ export default function AdminInsightsPage() {
     setArticlesLoading(true)
     setArticlesError(null)
     try {
-      const res = await apiClient.get("/admin/articles")
-      const payload = res.data
-      const list = Array.isArray(payload?.data) ? payload.data : []
-      
-      const normalized = list.map((article: any) => ({
-        id: String(article.id),
-        title: String(article.title || ''),
-        slug: String(article.slug || ''),
-        excerpt: String(article.excerpt || ''),
-        content: String(article.content || ''),
-        category: article.category?.name ? String(article.category.name) : '',
-        tags: Array.isArray(article.tags) ? article.tags.map((t: any) => String(t)) : [],
-        author: String(article.author || ''),
-        publishedAt: article.published_at ? String(article.published_at) : null,
-        status: ['draft', 'published', 'archived'].includes(article.status) ? article.status : 'draft',
-        featured: Boolean(article.is_featured),
-        views: Number(article.views) || 0,
-        createdAt: String(article.created_at || ''),
-        updatedAt: String(article.updated_at || ''),
-        featuredImage: article.image_url ? String(article.image_url) : null,
-        featuredImageName: article.image_url ? article.image_url.split('/').pop() : null,
-      }))
-      
-      setArticles(normalized)
+      const list = await fetchAdminArticles()
+      setArticles(list.map(mapAdminArticleToInsight))
     } catch (err: unknown) {
-      setArticlesError(getApiErrorMessage(err, "Failed to load articles."))
+      setArticlesError(getApiErrorMessage(err, p.failedLoadArticles))
     } finally {
       setArticlesLoading(false)
     }
@@ -459,32 +328,15 @@ export default function AdminInsightsPage() {
   async function fetchAndPreviewArticle(articleId: string) {
     setPreviewLoading(true)
     try {
-      const res = await apiClient.get(`/admin/articles/${articleId}`)
-      const article = res.data?.data
-      
-      const normalized: InsightArticle = {
-        id: String(article.id),
-        title: String(article.title || ''),
-        slug: String(article.slug || ''),
-        excerpt: String(article.excerpt || ''),
-        content: String(article.content || ''),
-        category: article.category?.name ? String(article.category.name) : '',
-        tags: Array.isArray(article.tags) ? article.tags.map((t: any) => String(t)) : [],
-        author: String(article.author || ''),
-        publishedAt: article.published_at ? String(article.published_at) : null,
-        status: ['draft', 'published', 'archived'].includes(article.status) ? article.status : 'draft',
-        featured: Boolean(article.is_featured),
-        views: Number(article.views) || 0,
-        createdAt: String(article.created_at || ''),
-        updatedAt: String(article.updated_at || ''),
-        featuredImage: article.image_url ? String(article.image_url) : null,
-        featuredImageName: article.image_url ? article.image_url.split('/').pop() : null,
-      }
-      
-      setPreviewArticle(normalized)
+      const article = await fetchAdminArticle(articleId)
+      setPreviewArticle(mapAdminArticleToInsight(article))
       setShowPreviewDialog(true)
     } catch (err: unknown) {
-      toast({ variant: "destructive", title: "Error", description: getApiErrorMessage(err, "Failed to load article preview.") })
+      toast({
+        variant: "destructive",
+        title: c.error,
+        description: getApiErrorMessage(err, p.previewFailed),
+      })
     } finally {
       setPreviewLoading(false)
     }
@@ -494,11 +346,15 @@ export default function AdminInsightsPage() {
     const trimmed = name.trim()
     if (!trimmed) return
     try {
-      const slug = trimmed.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 100)
-      await apiClient.post("/admin/article/categories", { name: trimmed, slug })
+      const slug = trimmed
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "")
+        .slice(0, 100)
+      await createArticleCategory({ name: trimmed, slug })
       await fetchCategories()
     } catch (err: unknown) {
-      setCategoriesError(getApiErrorMessage(err, "Failed to add category."))
+      setCategoriesError(getApiErrorMessage(err, p.failedAddCategory))
     }
   }
 
@@ -506,30 +362,34 @@ export default function AdminInsightsPage() {
     const trimmed = name.trim()
     if (!trimmed) return
     const entry = rawCategories[index]
-    if (!entry || !entry.id) {
-      setCategoriesError("Category not found for update.")
+    if (!entry?.id) {
+      setCategoriesError(p.categoryNotFoundUpdate)
       return
     }
     try {
-      const slug = trimmed.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 100)
-      await apiClient.put(`/admin/article/categories/${entry.id}`, { name: trimmed, slug })
+      const slug = trimmed
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "")
+        .slice(0, 100)
+      await updateArticleCategory(entry.id, { name: trimmed, slug })
       await fetchCategories()
     } catch (err: unknown) {
-      setCategoriesError(getApiErrorMessage(err, "Failed to update category."))
+      setCategoriesError(getApiErrorMessage(err, p.failedUpdateCategory))
     }
   }
 
   async function removeCategory(index: number) {
     const entry = rawCategories[index]
-    if (!entry || !entry.id) {
-      setCategoriesError("Category not found for delete.")
+    if (!entry?.id) {
+      setCategoriesError(p.categoryNotFoundDelete)
       return
     }
     try {
-      await apiClient.delete(`/admin/article/categories/${entry.id}`)
+      await deleteArticleCategory(entry.id)
       await fetchCategories()
     } catch (err: unknown) {
-      setCategoriesError(getApiErrorMessage(err, "Failed to delete category."))
+      setCategoriesError(getApiErrorMessage(err, p.failedDeleteCategory))
     }
   }
 
@@ -588,11 +448,23 @@ export default function AdminInsightsPage() {
   }
 
   const deleteArticle = () => {
-    if (deletingId) {
-      setArticles(prev => prev.filter(a => a.id !== deletingId))
-      setShowDeleteConfirm(false)
-      setDeletingId(null)
-    }
+    if (!deletingId) return
+
+    ;(async () => {
+      try {
+        await deleteAdminArticle(deletingId)
+        toast({ title: c.deleted, description: (p as any).articleDeleted ?? c.deletedSuccessfully })
+        setShowDeleteConfirm(false)
+        setDeletingId(null)
+        await fetchArticles()
+      } catch (err: unknown) {
+        toast({
+          title: c.error,
+          description: getApiErrorMessage(err, c.actionFailed),
+          variant: "destructive",
+        })
+      }
+    })()
   }
 
   const publishArticle = (id: string) => {
@@ -613,32 +485,32 @@ export default function AdminInsightsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Insights Management</h1>
-          <p className="text-muted-foreground">Manage articles, guides, and resources</p>
+          <h1 className="text-2xl font-bold text-foreground">{p.title}</h1>
+          <p className="text-muted-foreground">{p.subtitle}</p>
         </div>
         <Button onClick={openNewArticle}>
           <Plus className="mr-2 h-4 w-4" />
-          New Article
+          {p.newArticle}
         </Button>
       </div>
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-4">
         <AdminStatCard
-          title="Total Articles"
+          title={p.totalArticles}
           value={articles.length}
           layout="vertical"
           contentClassName="pt-6 pb-6 px-6"
         />
         <AdminStatCard
-          title="Published"
+          title={p.published}
           value={articles.filter(a => a.status === "published").length}
           valueClassName="text-emerald-600"
           layout="vertical"
           contentClassName="pt-6 pb-6 px-6"
         />
         <AdminStatCard
-          title="Total Views"
+          title={p.totalViews}
           value={articles.reduce((acc, a) => acc + a.views, 0).toLocaleString()}
           layout="vertical"
           contentClassName="pt-6 pb-6 px-6"
@@ -652,7 +524,7 @@ export default function AdminInsightsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input 
-                placeholder="Search articles..."
+                placeholder={p.searchArticles}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -660,27 +532,28 @@ export default function AdminInsightsPage() {
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-37.5">
-                <SelectValue placeholder="Status" />
+                <SelectValue placeholder={c.status} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="published">Published</SelectItem>
-                <SelectItem value="archived">Archived</SelectItem>
+                <SelectItem value="all">{c.allStatus}</SelectItem>
+                <SelectItem value="draft">{t.admin.supplierStatus.draft}</SelectItem>
+                <SelectItem value="published">{c.published}</SelectItem>
+                <SelectItem value="archived">{c.archived}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-45">
-                <SelectValue placeholder="Category" />
+                <SelectValue placeholder={c.category} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="all">{p.allCategories}</SelectItem>
                 {categories.map(cat => (
                   <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Button variant="outline" size="sm" onClick={() => openCategoriesDialog()}>
-              Manage Categories
+              {c.manageCategories}
             </Button>
           </div>
         </CardContent>
@@ -689,12 +562,19 @@ export default function AdminInsightsPage() {
       {/* Articles List */}
       <Card>
         <CardHeader>
-          <CardTitle>Articles</CardTitle>
+          <CardTitle>{p.articles}</CardTitle>
           <CardDescription>
-            {filteredArticles.length} article{filteredArticles.length !== 1 ? "s" : ""} found
+            {p.articlesFound.replace("{count}", String(filteredArticles.length))}
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {articlesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : articlesError ? (
+            <div className="py-8 text-center text-sm text-destructive">{articlesError}</div>
+          ) : (
           <div className="space-y-4">
             {filteredArticles.map((article) => (
               <div 
@@ -707,33 +587,33 @@ export default function AdminInsightsPage() {
                       {article.title}
                     </h3>
                     <Badge className={statusColors[article.status]}>
-                      {article.status}
+                      {statusLabels[article.status]}
                     </Badge>
                     {article.featured && (
                       <Badge variant="outline" className="border-primary text-primary">
-                        Featured
+                        {c.featured}
                       </Badge>
                     )}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
                     {article.excerpt}
                   </p>
-                  <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Tag className="h-3 w-3" />
+                  <div className="mt-2 flex flex-wrap items-center gap-4 gap-y-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1 whitespace-nowrap">
+                      <Tag className="h-3 w-3 shrink-0" />
                       {article.category}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <User className="h-3 w-3" />
+                    <span className="flex items-center gap-1 whitespace-nowrap">
+                      <User className="h-3 w-3 shrink-0" />
                       {article.author}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {article.publishedAt || article.createdAt}
+                    <span className="flex items-center gap-1 whitespace-nowrap">
+                      <Calendar className="h-3 w-3 shrink-0" />
+                      {article.publishedAt || article.createdAt ? format(new Date(article.publishedAt || article.createdAt), "MMM dd, yyyy") : "-"}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Eye className="h-3 w-3" />
-                      {article.views.toLocaleString()} views
+                    <span className="flex items-center gap-1 whitespace-nowrap">
+                      <Eye className="h-3 w-3 shrink-0" />
+                      {p.viewsLabel.replace("{count}", article.views.toLocaleString())}
                     </span>
                   </div>
                 </div>
@@ -754,11 +634,11 @@ export default function AdminInsightsPage() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => openEditArticle(article)}>
                         <Edit className="mr-2 h-4 w-4" />
-                        Edit
+                        {c.edit}
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => fetchAndPreviewArticle(article.id)}>
                         <ExternalLink className="mr-2 h-4 w-4" />
-                        Preview
+                        {c.preview}
                       </DropdownMenuItem>
                       
                       <DropdownMenuItem 
@@ -769,7 +649,7 @@ export default function AdminInsightsPage() {
                         }}
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
+                        {c.delete}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -780,43 +660,44 @@ export default function AdminInsightsPage() {
             {filteredArticles.length === 0 && (
               <div className="py-12 text-center">
                 <FileText className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                <h3 className="mt-4 font-semibold text-foreground">No articles found</h3>
+                <h3 className="mt-4 font-semibold text-foreground">{p.noArticlesFound}</h3>
                 <p className="mt-2 text-muted-foreground">
                   {searchQuery || statusFilter !== "all" || categoryFilter !== "all"
-                    ? "Try adjusting your filters"
-                    : "Create your first article to get started"
+                    ? p.tryAdjustFilters
+                    : p.createFirstArticle
                   }
                 </p>
               </div>
             )}
           </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Edit/Create Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <AdminDialogContent mobile="fullscreen" size="xl">
           <DialogHeader>
             <DialogTitle>
-              {editingArticle ? "Edit Article" : "Create New Article"}
+              {editingArticle ? p.editArticle : p.createNewArticle}
             </DialogTitle>
             <DialogDescription>
-              {editingArticle ? "Update article content and settings" : "Create a new insight article"}
+              {editingArticle ? p.editArticleDesc : p.createArticleDesc}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <Label>Title</Label>
+                <Label>{c.title}</Label>
                 <Input 
                   value={editForm.title}
                   onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                   className="mt-2"
-                  placeholder="Article title"
+                  placeholder={p.articleTitle}
                 />
               </div>
               <div>
-                <Label>URL Slug</Label>
+                <Label>{p.urlSlug}</Label>
                 <Input 
                   value={editForm.slug}
                   onChange={(e) => {
@@ -824,17 +705,17 @@ export default function AdminInsightsPage() {
                     setEditForm({ ...editForm, slug: e.target.value })
                   }}
                   className="mt-2"
-                  placeholder="article-url-slug"
+                  placeholder={p.slugPlaceholder}
                 />
               </div>
               <div>
-                <Label>Category</Label>
+                <Label>{c.category}</Label>
                 <Select 
                   value={editForm.category}
                   onValueChange={(value) => setEditForm({ ...editForm, category: value })}
                 >
                   <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Select category" />
+                    <SelectValue placeholder={p.selectCategory} />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map(cat => (
@@ -846,7 +727,7 @@ export default function AdminInsightsPage() {
             </div>
 
             <div>
-              <Label>Excerpt</Label>
+              <Label>{c.description}</Label>
               <Textarea 
                 value={editForm.excerpt}
                   onChange={(e) => {
@@ -855,23 +736,23 @@ export default function AdminInsightsPage() {
                   }}
                 className="mt-2"
                 rows={2}
-                placeholder="Brief summary of the article"
+                placeholder={p.briefSummary}
               />
             </div>
 
             <div>
-              <Label>Content</Label>
+              <Label>{c.content}</Label>
               <Textarea 
                 value={editForm.content}
                 onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
                 className="mt-2"
                 rows={10}
-                placeholder="Full article content (supports Markdown)"
+                placeholder={p.fullContent}
               />
             </div>
 
             <div>
-              <Label>Featured Image</Label>
+              <Label>{p.featuredImage}</Label>
               <div className="mt-2">
                 <div
                   className="group relative flex items-center gap-4 rounded border border-dashed border-border p-3 hover:border-primary transition-colors"
@@ -899,15 +780,15 @@ export default function AdminInsightsPage() {
                   ) : (
                     <div className="flex items-center gap-3">
                       <Image className="h-8 w-8 text-muted-foreground" />
-                      <div className="text-sm text-muted-foreground">Drop an image here, or</div>
+                      <div className="text-sm text-muted-foreground">{c.dropImageHere}</div>
                     </div>
                   )}
 
                   <div className="ml-auto flex items-center gap-2">
-                    <Button size="sm" onClick={() => fileInputRef.current?.click()}>Choose file</Button>
+                    <Button size="sm" onClick={() => fileInputRef.current?.click()}>{c.chooseFile}</Button>
                     {editForm.featuredImage && (
                       <Button size="sm" variant="outline" onClick={() => removeFeaturedImage()}>
-                        Remove
+                        {c.remove}
                       </Button>
                     )}
                   </div>
@@ -916,38 +797,38 @@ export default function AdminInsightsPage() {
                   <div className="mt-2 text-sm text-destructive">{featuredImageError}</div>
                 )}
                 {editForm.featuredImage && (
-                  <div className="mt-2 text-xs text-muted-foreground">{editForm.featuredImageName ?? "Uploaded image"}</div>
+                  <div className="mt-2 text-xs text-muted-foreground">{editForm.featuredImageName ?? c.uploadedImage}</div>
                 )}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Tags (comma separated)</Label>
+                <Label>{p.tagsCommaSeparated}</Label>
                 <Input 
                   value={editForm.tags}
                   onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
                   className="mt-2"
-                  placeholder="tag1, tag2, tag3"
+                  placeholder={p.tagsPlaceholder}
                 />
               </div>
               <div>
-                <Label>Author</Label>
+                <Label>{c.author}</Label>
                 <Input 
                   value={editForm.author}
                   onChange={(e) => setEditForm({ ...editForm, author: e.target.value })}
                   className="mt-2"
-                  placeholder="Author name"
+                  placeholder={p.authorName}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Status</Label>
+                <Label>{c.status}</Label>
                 <Select 
                   value={editForm.status}
-                  onValueChange={(value: "draft" | "published" | "archived") => 
+                  onValueChange={(value: ArticleStatus) => 
                     setEditForm({ ...editForm, status: value })
                   }
                 >
@@ -955,8 +836,9 @@ export default function AdminInsightsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="published">Published</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
+                    <SelectItem value="draft">{t.admin.supplierStatus.draft}</SelectItem>
+                    <SelectItem value="published">{c.published}</SelectItem>
+                    <SelectItem value="archived">{c.archived}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -966,55 +848,55 @@ export default function AdminInsightsPage() {
                     checked={editForm.featured}
                     onCheckedChange={(checked) => setEditForm({ ...editForm, featured: checked })}
                   />
-                  <Label>Featured Article</Label>
+                  <Label>{c.featuredArticle}</Label>
                 </div>
               </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancel
+              {c.cancel}
             </Button>
             <Button onClick={saveArticle} disabled={isSubmittingArticle}>
               <Save className="mr-2 h-4 w-4" />
-              {isSubmittingArticle ? (editingArticle ? "Saving..." : "Creating...") : (editingArticle ? "Save Changes" : "Create Article")}
+              {isSubmittingArticle ? (editingArticle ? c.saving : c.creating) : (editingArticle ? c.saveChanges : c.createArticle)}
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
 
       {/* Delete Confirmation */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent>
+        <AdminDialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Delete Article?</DialogTitle>
+            <DialogTitle>{c.deleteArticle}</DialogTitle>
             <DialogDescription>
-              This action cannot be undone. This will permanently delete the article.
+              {p.deleteArticleDesc}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
-              Cancel
+              {c.cancel}
             </Button>
             <Button variant="destructive" onClick={deleteArticle}>
-              Delete
+              {c.delete}
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
 
       {/* Categories Management Dialog */}
       <Dialog open={showCategoriesDialog} onOpenChange={setShowCategoriesDialog}>
-        <DialogContent className="max-w-lg">
+        <AdminDialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Manage Article Categories</DialogTitle>
-            <DialogDescription>Add, edit, or remove categories used for insights.</DialogDescription>
+            <DialogTitle>{c.manageArticleCategories}</DialogTitle>
+            <DialogDescription>{p.manageCategoriesDesc}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="flex gap-2">
               <Input
-                placeholder="New category name"
+                placeholder={p.newCategory}
                 value={categoryForm.name}
                 onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
               />
@@ -1030,7 +912,7 @@ export default function AdminInsightsPage() {
                   setCategoryForm({ name: "", index: -1 })
                 }}
               >
-                {categoryForm.index >= 0 ? "Save" : "Add"}
+                {categoryForm.index >= 0 ? c.save : c.add}
               </Button>
             </div>
 
@@ -1038,12 +920,12 @@ export default function AdminInsightsPage() {
               {categoriesLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="h-8 w-8 rounded-full border-2 border-t-transparent border-gray-300 animate-spin" />
-                  <div className="ml-3 text-sm text-muted-foreground">Loading categories...</div>
+                  <div className="ml-3 text-sm text-muted-foreground">{c.loadingCategories}</div>
                 </div>
               ) : categoriesError ? (
                 <div className="py-6 text-sm text-destructive">{categoriesError}</div>
               ) : categories.length === 0 ? (
-                <div className="py-6 text-sm text-muted-foreground">No categories found.</div>
+                <div className="py-6 text-sm text-muted-foreground">{c.noCategoriesFound}</div>
               ) : (
                 categories.map((cat, i) => (
                   <div key={cat} className="flex items-center justify-between gap-2">
@@ -1057,14 +939,14 @@ export default function AdminInsightsPage() {
                         size="sm"
                         onClick={() => setCategoryForm({ name: cat, index: i })}
                       >
-                        Edit
+                        {c.edit}
                       </Button>
                       <Button
                         variant="destructive"
                         size="sm"
                         onClick={() => removeCategory(i)}
                       >
-                        Delete
+                        {c.delete}
                       </Button>
                     </div>
                   </div>
@@ -1074,22 +956,22 @@ export default function AdminInsightsPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCategoriesDialog(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setShowCategoriesDialog(false)}>{c.close}</Button>
           </DialogFooter>
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
 
       {/* Article Preview Dialog */}
       <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <AdminDialogContent mobile="fullscreen" size="lg">
           <DialogHeader>
-            <DialogTitle>Article Preview</DialogTitle>
+            <DialogTitle>{c.articlePreview}</DialogTitle>
           </DialogHeader>
           
           {previewLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="h-8 w-8 rounded-full border-2 border-t-transparent border-gray-300 animate-spin" />
-              <div className="ml-3 text-sm text-muted-foreground">Loading article...</div>
+              <div className="ml-3 text-sm text-muted-foreground">{c.loadingArticle}</div>
             </div>
           ) : previewArticle ? (
             <div className="space-y-6">
@@ -1113,34 +995,34 @@ export default function AdminInsightsPage() {
               {/* Meta Information */}
               <div className="grid grid-cols-2 gap-4 py-4 border-y">
                 <div>
-                  <p className="text-xs text-muted-foreground">Author</p>
+                  <p className="text-xs text-muted-foreground">{c.author}</p>
                   <p className="text-sm font-medium">{previewArticle.author}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Category</p>
+                  <p className="text-xs text-muted-foreground">{c.category}</p>
                   <p className="text-sm font-medium">{previewArticle.category}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Status</p>
-                  <Badge variant="outline" className="capitalize">{previewArticle.status}</Badge>
+                  <p className="text-xs text-muted-foreground">{c.status}</p>
+                  <Badge variant="outline" className="capitalize">{statusLabels[previewArticle.status]}</Badge>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Views</p>
+                  <p className="text-xs text-muted-foreground">{p.totalViews}</p>
                   <p className="text-sm font-medium">{previewArticle.views.toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Published</p>
-                  <p className="text-sm font-medium">{previewArticle.publishedAt || "Not published"}</p>
+                  <p className="text-xs text-muted-foreground">{c.published}</p>
+                  <p className="text-sm font-medium">{previewArticle.publishedAt || c.notPublished}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Tags</p>
+                  <p className="text-xs text-muted-foreground">{c.tags}</p>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {previewArticle.tags.length > 0 ? (
                       previewArticle.tags.map(tag => (
                         <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
                       ))
                     ) : (
-                      <span className="text-sm text-muted-foreground">No tags</span>
+                      <span className="text-sm text-muted-foreground">{c.noTags}</span>
                     )}
                   </div>
                 </div>
@@ -1148,7 +1030,7 @@ export default function AdminInsightsPage() {
 
               {/* Content */}
               <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Content</h3>
+                <h3 className="text-lg font-semibold">{c.content}</h3>
                 <div className="bg-muted p-4 rounded-lg text-sm leading-relaxed whitespace-pre-wrap">
                   {previewArticle.content}
                 </div>
@@ -1157,25 +1039,25 @@ export default function AdminInsightsPage() {
               {/* Featured Badge */}
               {previewArticle.featured && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-sm text-amber-800 font-medium">⭐ This is a featured article</p>
+                  <p className="text-sm text-amber-800 font-medium">{c.featuredArticleNote}</p>
                 </div>
               )}
             </div>
           ) : null}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>{c.close}</Button>
             {previewArticle && (
               <Button onClick={() => {
                 openEditArticle(previewArticle)
                 setShowPreviewDialog(false)
               }}>
                 <Edit className="mr-2 h-4 w-4" />
-                Edit
+                {c.edit}
               </Button>
             )}
           </DialogFooter>
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
     </div>
   )

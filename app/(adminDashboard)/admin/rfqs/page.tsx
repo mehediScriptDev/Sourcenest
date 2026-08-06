@@ -1,15 +1,19 @@
 "use client"
 
 import { RfqList, type RfqListConfig } from "@/components/rfqs/rfq-list"
-
-const config: RfqListConfig = {
-  role: "admin",
-  basePath: "/admin/rfqs",
-  listTitle: "Platform RFQs",
-  listSubtitle: "Monitor all buyer requests and manufacturer quotes",
-}
+import { useTranslation } from "@/lib/i18n"
 
 export default function AdminRfqsPage() {
+  const { t } = useTranslation()
+  const p = t.admin.pages.rfqs
+
+  const config: RfqListConfig = {
+    role: "admin",
+    basePath: "/admin/rfqs",
+    listTitle: p.title,
+    listSubtitle: p.subtitle,
+  }
+
   return (
     <div className="space-y-6">
       <RfqList config={config} />

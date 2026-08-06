@@ -12,7 +12,7 @@ export function CtaSection() {
     return null
   }
   return (
-    <section className="bg-primary py-8 sm:py-12 lg:py-28">
+    <section className="bg-primary py-8 sm:py-12 lg:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="font-serif text-3xl font-medium tracking-tight text-primary-foreground sm:text-4xl">
@@ -23,20 +23,21 @@ export function CtaSection() {
           </p>
         </div>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
-          {/* Buyer CTA */}
-          <div className="rounded-2xl bg-primary-foreground/10 p-8 backdrop-blur">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary-foreground/20">
-              <Users className="h-7 w-7 text-primary-foreground" />
+        <div className="mt-8 grid gap-3 sm:mt-12 sm:gap-5 md:grid-cols-2 lg:gap-6">
+          <div className="rounded-xl bg-primary-foreground/10 p-4 backdrop-blur sm:rounded-2xl sm:p-6 lg:p-8">
+            <div className="flex items-center gap-3 sm:block">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/20 sm:h-12 sm:w-12 sm:rounded-xl lg:h-14 lg:w-14">
+                <Users className="h-5 w-5 text-primary-foreground sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
+              </div>
+              <h3 className="text-base font-semibold text-primary-foreground sm:mt-5 sm:text-xl lg:mt-6">{t.landing.howItWorks.tabBuyers}</h3>
             </div>
-            <h3 className="mt-6 text-xl font-semibold text-primary-foreground">{t.landing.howItWorks.tabBuyers}</h3>
-            <p className="mt-2 text-primary-foreground/80">
+            <p className="mt-2 line-clamp-3 text-sm text-primary-foreground/80 sm:mt-2 sm:line-clamp-none sm:text-base">
               {t.landing.whatIs.forBuyersDesc}
             </p>
             <Button 
               variant="secondary" 
-              size="lg" 
-              className="mt-6 gap-2 bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+              size="lg"
+              className="mt-4 h-10 w-full gap-2 bg-primary-foreground text-primary hover:bg-primary-foreground/90 sm:mt-6 sm:h-11 sm:w-auto"
               asChild
             >
               <Link href="/auth/signup?role=buyer">
@@ -46,19 +47,20 @@ export function CtaSection() {
             </Button>
           </div>
 
-          {/* Manufacturer CTA */}
-          <div className="rounded-2xl bg-primary-foreground/10 p-8 backdrop-blur">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary-foreground/20">
-              <Factory className="h-7 w-7 text-primary-foreground" />
+          <div className="rounded-xl bg-primary-foreground/10 p-4 backdrop-blur sm:rounded-2xl sm:p-6 lg:p-8">
+            <div className="flex items-center gap-3 sm:block">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/20 sm:h-12 sm:w-12 sm:rounded-xl lg:h-14 lg:w-14">
+                <Factory className="h-5 w-5 text-primary-foreground sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
+              </div>
+              <h3 className="text-base font-semibold text-primary-foreground sm:mt-5 sm:text-xl lg:mt-6">{t.landing.howItWorks.tabMfg}</h3>
             </div>
-            <h3 className="mt-6 text-xl font-semibold text-primary-foreground">{t.landing.howItWorks.tabMfg}</h3>
-            <p className="mt-2 text-primary-foreground/80">
+            <p className="mt-2 line-clamp-3 text-sm text-primary-foreground/80 sm:mt-2 sm:line-clamp-none sm:text-base">
               {t.landing.cta.mfgDesc}
             </p>
             <Button 
               variant="secondary" 
-              size="lg" 
-              className="mt-6 gap-2 bg-secondary text-secondary-foreground hover:bg-secondary/90"
+              size="lg"
+              className="mt-4 h-10 w-full gap-2 bg-secondary text-secondary-foreground hover:bg-secondary/90 sm:mt-6 sm:h-11 sm:w-auto"
               asChild
             >
               <Link href="/pricing">

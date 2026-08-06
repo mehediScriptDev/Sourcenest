@@ -18,6 +18,8 @@ import {
   type CustomerTicketStatus,
 } from "@/lib/api/customer-support-tickets"
 import { ArrowLeft, Loader2, Paperclip, Send } from "lucide-react"
+import { SupportErrorDialog } from "@/components/support/support-error-dialog"
+import { SUPPORT_ATTACHMENT_ACCEPT } from "@/components/support/support-message-attachments"
 
 interface CustomerSupportTicketDetailPageProps {
   basePath: string
@@ -79,6 +81,14 @@ export function CustomerSupportTicketDetailPage({ basePath }: CustomerSupportTic
   const [replyMessage, setReplyMessage] = useState("")
   const [replyAttachments, setReplyAttachments] = useState<File[]>([])
   const [isReplying, setIsReplying] = useState(false)
+  const [errorDialog, setErrorDialog] = useState<{ title: string; message: string } | null>(null)
+
+  const showError = (title: string, message?: string) => {
+    setErrorDialog({
+      title,
+      message: message?.trim() || "Something went wrong. Please try again.",
+    })
+  }
 
   useEffect(() => {
     if (!ticketId) {
@@ -139,11 +149,7 @@ export function CustomerSupportTicketDetailPage({ basePath }: CustomerSupportTic
     setIsReplying(false)
 
     if (!response.success || !response.data) {
-      toast({
-        title: "Failed to send reply",
-        description: response.message || "Please try again.",
-        variant: "destructive",
-      })
+      showError("Failed to send reply", response.message)
       return
     }
 
@@ -273,6 +279,7 @@ export function CustomerSupportTicketDetailPage({ basePath }: CustomerSupportTic
               id="ticket-reply-attachments"
               type="file"
               multiple
+              accept={SUPPORT_ATTACHMENT_ACCEPT}
               onChange={(event) => setReplyAttachments(Array.from(event.target.files || []))}
             />
 
@@ -297,6 +304,13 @@ export function CustomerSupportTicketDetailPage({ basePath }: CustomerSupportTic
           </div>
         </div>
       </div>
+
+      <SupportErrorDialog
+        open={!!errorDialog}
+        title={errorDialog?.title ?? ""}
+        message={errorDialog?.message ?? ""}
+        onClose={() => setErrorDialog(null)}
+      />
     </div>
   )
 }

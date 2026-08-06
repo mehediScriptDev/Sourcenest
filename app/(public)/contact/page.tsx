@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -195,14 +195,14 @@ export default function ContactPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden">
+      <SiteHeader />
       <main className="flex-1">
         {/* Hero */}
-        <section className="bg-primary py-16 lg:py-24">
+        <section className="bg-primary py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
-              <h1 className="font-serif text-4xl font-medium tracking-tight text-primary-foreground sm:text-5xl">
+              <h1 className="font-serif text-3xl font-medium tracking-tight text-primary-foreground min-[400px]:text-4xl sm:text-5xl lg:text-6xl">
                 {pageSettings.heroTitle}
               </h1>
               <p className="mt-4 text-lg text-primary-foreground/80">
@@ -212,9 +212,9 @@ export default function ContactPage() {
           </div>
         </section>
 
-        <section className="py-16 lg:py-24">
+        <section className="py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid gap-12 lg:grid-cols-3 lg:gap-16">
+            <div className="grid gap-6 sm:gap-8 lg:grid-cols-3 lg:gap-12">
               {/* Contact Info */}
               <div className="lg:col-span-1">
                 <h2 className="font-serif text-2xl font-medium text-foreground">{pageSettings.sidebarTitle}</h2>

@@ -1,18 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Swal from "sweetalert2"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +15,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import * as Icons from "lucide-react"
 import { getAdminProducts, updateAdminProductApprovalStatus, deleteAdminProduct } from "@/lib/api/admin-products"
-import type { AdminProduct } from "@/lib/api/admin-products"
+import type { AdminProduct, AdminProductMeta } from "@/lib/api/admin-products"
+import { useTranslation } from "@/lib/i18n"
+import { AdminPagination } from "@/components/admin/admin-pagination"
+import { queryKeys } from "@/lib/query-keys"
 
 const iconMap: Record<string, React.ReactNode> = {
   Factory: <Icons.Factory className="h-7 w-7" />,
@@ -46,13 +43,13 @@ function getDynamicIcon(iconName: string) {
 }
 
 export default function AdminProductsPage() {
+  const { t } = useTranslation()
+  const p = t.admin.pages.products
+  const c = t.admin.common
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [products, setProducts] = useState<AdminProduct[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastPage, setLastPage] = useState(1)
+  const queryClient = useQueryClient()
   const [updatingIds, setUpdatingIds] = useState<Set<number>>(new Set())
 
   // Get query parameters
@@ -74,35 +71,32 @@ export default function AdminProductsPage() {
     router.push(`/admin/products?${newParams.toString()}`)
   }
 
-  // Fetch products when query params change
-  useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true)
-      setError(null)
-      
-      const params: Record<string, unknown> = {
-        page,
-        per_page: perPage,
-      }
+  const queryFilters: Record<string, unknown> = { page, per_page: perPage }
+  if (search) queryFilters.search = search
+  if (isApprovedFilter !== "all") {
+    queryFilters.is_approved = isApprovedFilter === "1" ? 1 : 0
+  }
 
-      if (search) params.search = search
-      if (isApprovedFilter !== "all") {
-        params.is_approved = isApprovedFilter === "1" ? 1 : 0
-      }
+  const productsQueryKey = queryKeys.adminProducts(page, perPage, search, isApprovedFilter)
 
-      const response = await getAdminProducts(page, params)
-      if (response.success) {
-        setProducts(response.data)
-        setLastPage(response.meta?.lastPage ?? 1)
-      } else {
-        setError(response.message || "Failed to fetch products")
-        setProducts([])
-      }
-      setLoading(false)
-    }
+  const productsQuery = useQuery({
+    queryKey: productsQueryKey,
+    queryFn: () => getAdminProducts(page, queryFilters),
+    placeholderData: (previousData) => previousData,
+  })
 
-    fetchProducts()
-  }, [search, isApprovedFilter, perPage, page])
+  const products = productsQuery.data?.success ? productsQuery.data.data : []
+  const meta = productsQuery.data?.success ? productsQuery.data.meta : null
+  const error = productsQuery.data?.success === false ? (productsQuery.data.message || p.fetchFailed) : null
+
+  const updateApprovalMutation = useMutation({
+    mutationFn: ({ productId, isApproved }: { productId: number; isApproved: boolean }) =>
+      updateAdminProductApprovalStatus(productId, isApproved),
+  })
+
+  const deleteProductMutation = useMutation({
+    mutationFn: (productId: number) => deleteAdminProduct(productId),
+  })
 
   // Handle product approval status update
   const handleApprovalStatusChange = async (
@@ -110,22 +104,30 @@ export default function AdminProductsPage() {
     isApproved: boolean
   ) => {
     setUpdatingIds((prev) => new Set([...prev, productId]))
-    const response = await updateAdminProductApprovalStatus(productId, isApproved)
+    const response = await updateApprovalMutation.mutateAsync({ productId, isApproved })
     
     if (response.success) {
-      // Update local state
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === productId ? { ...p, is_approved: isApproved } : p
-        )
-      )
+      queryClient.setQueryData(productsQueryKey, (previous: {
+        success: boolean
+        data: AdminProduct[]
+        meta: AdminProductMeta | null
+        message?: string
+      } | undefined) => {
+        if (!previous?.success) return previous
+        return {
+          ...previous,
+          data: previous.data.map((product) =>
+            product.id === productId ? { ...product, is_approved: isApproved } : product
+          ),
+        }
+      })
       
       // Show success alert
       await Swal.fire({
         icon: "success",
-        title: "Success!",
-        text: `Product ${isApproved ? "approved" : "rejected"} successfully`,
-        confirmButtonText: "OK",
+        title: c.success,
+        text: isApproved ? p.productApproved : p.productRejected,
+        confirmButtonText: c.ok,
         confirmButtonColor: "#503322",
         customClass: {
           confirmButton: "rounded-lg px-6 py-2 font-semibold",
@@ -135,9 +137,9 @@ export default function AdminProductsPage() {
       // Show error alert
       await Swal.fire({
         icon: "error",
-        title: "Error",
-        text: response.message || "Failed to update product status",
-        confirmButtonText: "OK",
+        title: c.error,
+        text: response.message || p.updateStatusFailed,
+        confirmButtonText: c.ok,
         confirmButtonColor: "#6366f1",
         customClass: {
           confirmButton: "rounded-lg px-6 py-2 font-semibold",
@@ -156,11 +158,11 @@ export default function AdminProductsPage() {
   const handleDeleteProduct = async (productId: number, productName: string) => {
     const result = await Swal.fire({
       icon: "warning",
-      title: "Delete Product",
-      text: `Are you sure you want to delete "${productName}"? This action cannot be undone.`,
+      title: p.deleteProduct,
+      text: p.deleteConfirmNamed.replace("{name}", productName),
       showCancelButton: true,
-      confirmButtonText: "Delete",
-      cancelButtonText: "Cancel",
+      confirmButtonText: c.delete,
+      cancelButtonText: c.cancel,
       confirmButtonColor: "#dc2626",
       cancelButtonColor: "#6b7280",
       customClass: {
@@ -174,18 +176,35 @@ export default function AdminProductsPage() {
     }
 
     setUpdatingIds((prev) => new Set([...prev, productId]))
-    const response = await deleteAdminProduct(productId)
+    const response = await deleteProductMutation.mutateAsync(productId)
     
     if (response.success) {
-      // Remove product from local state
-      setProducts((prev) => prev.filter((p) => p.id !== productId))
+      queryClient.setQueryData(productsQueryKey, (previous: {
+        success: boolean
+        data: AdminProduct[]
+        meta: AdminProductMeta | null
+        message?: string
+      } | undefined) => {
+        if (!previous?.success) return previous
+
+        const nextProducts = previous.data.filter((product) => product.id !== productId)
+        const nextMeta = previous.meta
+          ? { ...previous.meta, total: Math.max(previous.meta.total - 1, 0) }
+          : previous.meta
+
+        return {
+          ...previous,
+          data: nextProducts,
+          meta: nextMeta,
+        }
+      })
       
       // Show success alert
       await Swal.fire({
         icon: "success",
-        title: "Deleted!",
-        text: "Product has been deleted successfully",
-        confirmButtonText: "OK",
+        title: c.deleted,
+        text: p.productDeleted,
+        confirmButtonText: c.ok,
         confirmButtonColor: "#503322",
         customClass: {
           confirmButton: "rounded-lg px-6 py-2 font-semibold",
@@ -195,9 +214,9 @@ export default function AdminProductsPage() {
       // Show error alert
       await Swal.fire({
         icon: "error",
-        title: "Error",
-        text: response.message || "Failed to delete product",
-        confirmButtonText: "OK",
+        title: c.error,
+        text: response.message || p.deleteFailed,
+        confirmButtonText: c.ok,
         confirmButtonColor: "#6366f1",
         customClass: {
           confirmButton: "rounded-lg px-6 py-2 font-semibold",
@@ -216,10 +235,10 @@ export default function AdminProductsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-serif text-2xl font-medium text-foreground">
-          Products
+          {p.title}
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Review and manage product listings
+          {p.subtitle}
         </p>
       </div>
 
@@ -228,7 +247,7 @@ export default function AdminProductsPage() {
         <div className="relative flex-1 max-w-sm">
           <Icons.Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search products..."
+            placeholder={c.searchProducts}
             value={search}
             onChange={(e) =>
               updateQueryParams({ search: e.target.value, page: 1 })
@@ -243,20 +262,20 @@ export default function AdminProductsPage() {
           }
         >
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Approval Status" />
+            <SelectValue placeholder={p.approvalStatus} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="1">Approved</SelectItem>
-            <SelectItem value="0">Pending</SelectItem>
+            <SelectItem value="all">{c.allStatus}</SelectItem>
+            <SelectItem value="1">{c.approved}</SelectItem>
+            <SelectItem value="0">{c.pending}</SelectItem>
           </SelectContent>
         </Select> */}
       </div>
 
       {/* Loading State */}
-      {loading && (
+      {productsQuery.isLoading && (
         <div className="flex items-center justify-center py-12">
-          <p className="text-muted-foreground">Loading products...</p>
+          <p className="text-muted-foreground">{p.loading}</p>
         </div>
       )}
 
@@ -268,13 +287,13 @@ export default function AdminProductsPage() {
       )}
 
       {/* Products Grid */}
-      {!loading && products.length === 0 && (
+      {!productsQuery.isLoading && products.length === 0 && (
         <div className="flex items-center justify-center py-12">
-          <p className="text-muted-foreground">No products found</p>
+          <p className="text-muted-foreground">{p.noProducts}</p>
         </div>
       )}
 
-      {!loading && (
+      {!productsQuery.isLoading && (
         <>
           <div className="grid gap-4">
             {products.map((product) => {
@@ -330,7 +349,7 @@ export default function AdminProductsPage() {
                           className="cursor-pointer text-destructive"
                         >
                           <Icons.Trash2 className="mr-2 h-4 w-4" />
-                          Delete
+                          {c.delete}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -340,34 +359,14 @@ export default function AdminProductsPage() {
             })}
           </div>
 
-          {/* Pagination */}
-          {lastPage > 1 && (
-            <div className="flex items-center justify-center gap-2 py-4">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page === 1}
-                onClick={() =>
-                  updateQueryParams({ page: Math.max(1, page - 1) })
-                }
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Page {page} of {lastPage}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page === lastPage}
-                onClick={() =>
-                  updateQueryParams({ page: Math.min(lastPage, page + 1) })
-                }
-              >
-                Next
-              </Button>
-            </div>
-          )}
+          <AdminPagination
+            page={page}
+            meta={meta}
+            itemCount={products.length}
+            onPageChange={(nextPage) => updateQueryParams({ page: nextPage })}
+            variant="card"
+            className="mt-2"
+          />
         </>
       )}
     </div>

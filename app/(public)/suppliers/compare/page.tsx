@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -79,8 +79,8 @@ export default function SupplierComparePage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-background">
+      <SiteHeader />
       <main className="flex-1">
         {/* Breadcrumb */}
         <div className="border-b border-border bg-muted/50">

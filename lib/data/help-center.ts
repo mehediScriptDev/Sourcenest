@@ -718,3 +718,40 @@ export function getCategoryNames(data: HelpCenterData): Record<string, string> {
   })
   return names
 }
+
+export interface HelpSearchResult {
+  article: HelpArticle
+  categorySlug: string
+  categoryTitle: string
+}
+
+export function searchHelpArticles(data: HelpCenterData, query: string): HelpSearchResult[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+
+  const results: HelpSearchResult[] = []
+
+  for (const category of getEnabledCategories(data)) {
+    for (const article of getEnabledArticles(category)) {
+      const haystack = [
+        article.title,
+        article.content,
+        ...(article.steps ?? []),
+        category.title,
+        category.description,
+      ]
+        .join(" ")
+        .toLowerCase()
+
+      if (haystack.includes(q)) {
+        results.push({
+          article,
+          categorySlug: category.slug,
+          categoryTitle: category.title,
+        })
+      }
+    }
+  }
+
+  return results
+}

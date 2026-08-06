@@ -3,12 +3,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
+export type PayPalSuccessMeta = {
+  orderId?: string;
+  vaultId?: string | null;
+};
+
 interface PayPalButtonProps {
   amount: number;
-  onSuccess?: (transactionId: string) => void;
+  onSuccess?: (transactionId: string, meta?: PayPalSuccessMeta) => void;
   onError?: (error: string) => void;
   currency?: string;
   className?: string;
+  /** When true, asks PayPal to store the payment method for later auto-renew charges. */
+  vault?: boolean;
 }
 
 declare global {
@@ -16,6 +23,7 @@ declare global {
     paypal?: {
       Buttons: (config: Record<string, unknown>) => {
         render: (selector: string | HTMLElement) => Promise<void>;
+        close?: () => Promise<void>;
       };
     };
   }
@@ -23,23 +31,71 @@ declare global {
 
 let sdkLoadPromise: Promise<void> | null = null;
 
+function loadPayPalSdk(clientId: string, currency: string): Promise<void> {
+  if (!sdkLoadPromise) {
+    sdkLoadPromise = new Promise<void>((resolve, reject) => {
+      if (window.paypal?.Buttons) {
+        resolve();
+        return;
+      }
+      const script = document.createElement('script');
+      // vault=true enables vault capability; one-time payments still work when store_in_vault is omitted
+      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=${currency}&intent=capture&vault=true`;
+      script.async = true;
+      script.onload = () => {
+        let retries = 0;
+        const check = () => {
+          if (window.paypal?.Buttons) resolve();
+          else if (retries++ < 10) setTimeout(check, 100);
+          else reject(new Error('PayPal SDK failed to initialize'));
+        };
+        check();
+      };
+      script.onerror = () => reject(new Error('Failed to load PayPal SDK'));
+      document.body.appendChild(script);
+    });
+  }
+
+  return sdkLoadPromise;
+}
+
+function extractVaultId(details: Record<string, unknown>): string | null {
+  const paymentSource = details.payment_source as Record<string, unknown> | undefined;
+  const paypal = paymentSource?.paypal as Record<string, unknown> | undefined;
+  const attributes = paypal?.attributes as Record<string, unknown> | undefined;
+  const vault = attributes?.vault as Record<string, unknown> | undefined;
+  const id = vault?.id;
+
+  return typeof id === 'string' && id !== '' ? id : null;
+}
+
 export function PayPalButton({
   amount,
   onSuccess,
   onError,
   currency = 'USD',
   className = '',
+  vault = false,
 }: PayPalButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const isMountedRef = useRef(true);
   const buttonRenderedRef = useRef(false);
+  const vaultRef = useRef(vault);
+  const amountRef = useRef(amount);
+  const currencyRef = useRef(currency);
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+
+  vaultRef.current = vault;
+  amountRef.current = amount;
+  currencyRef.current = currency;
+  onSuccessRef.current = onSuccess;
+  onErrorRef.current = onError;
 
   useEffect(() => {
     isMountedRef.current = true;
 
-    // Guard: already rendered - handles React StrictMode double-invoke in dev
-    // buttonRenderedRef is intentionally NOT reset in cleanup so the 2nd run skips
     if (buttonRenderedRef.current) {
       setIsLoading(false);
       return;
@@ -50,35 +106,10 @@ export function PayPalButton({
         const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
         if (!clientId) throw new Error('PayPal Client ID not configured');
 
-        if (!sdkLoadPromise) {
-          sdkLoadPromise = new Promise<void>((resolve, reject) => {
-            if (window.paypal?.Buttons) {
-              resolve();
-              return;
-            }
-            const script = document.createElement('script');
-            script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=${currency}&intent=capture`;
-            script.async = true;
-            script.onload = () => {
-              let retries = 0;
-              const check = () => {
-                if (window.paypal?.Buttons) resolve();
-                else if (retries++ < 10) setTimeout(check, 100);
-                else reject(new Error('PayPal SDK failed to initialize'));
-              };
-              check();
-            };
-            script.onerror = () => reject(new Error('Failed to load PayPal SDK'));
-            document.body.appendChild(script);
-          });
-        }
+        await loadPayPalSdk(clientId, currencyRef.current);
 
-        await sdkLoadPromise;
-
-        // Component may have unmounted during async wait
         if (!isMountedRef.current || !containerRef.current) return;
 
-        // Race-condition guard: another concurrent run may have already rendered
         if (buttonRenderedRef.current) {
           setIsLoading(false);
           return;
@@ -86,30 +117,81 @@ export function PayPalButton({
 
         if (!window.paypal?.Buttons) throw new Error('PayPal not available');
 
-        // Mark as rendered BEFORE calling render() to block any concurrent runs
         buttonRenderedRef.current = true;
 
         const buttons = window.paypal.Buttons({
-          createOrder: async (_data: unknown, actions: any) => {
-            return await actions.order.create({
+          createOrder: async (_data: unknown, actions: {
+            order: {
+              create: (payload: Record<string, unknown>) => Promise<string>;
+            };
+          }) => {
+            const orderPayload: Record<string, unknown> = {
               intent: 'CAPTURE',
               purchase_units: [
-                { amount: { currency_code: currency, value: amount.toFixed(2) } },
+                {
+                  amount: {
+                    currency_code: currencyRef.current,
+                    value: amountRef.current.toFixed(2),
+                  },
+                },
               ],
-            });
+            };
+
+            if (vaultRef.current) {
+              const origin =
+                typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+              const currentPath =
+                typeof window !== 'undefined'
+                  ? `${window.location.origin}${window.location.pathname}`
+                  : `${origin}/pricing`;
+
+              orderPayload.payment_source = {
+                paypal: {
+                  attributes: {
+                    vault: {
+                      store_in_vault: 'ON_SUCCESS',
+                      usage_type: 'MERCHANT',
+                      customer_type: 'CONSUMER',
+                    },
+                  },
+                  experience_context: {
+                    return_url: currentPath,
+                    cancel_url: currentPath,
+                    shipping_preference: 'NO_SHIPPING',
+                    user_action: 'PAY_NOW',
+                  },
+                },
+              };
+            }
+
+            return await actions.order.create(orderPayload);
           },
-          onApprove: async (data: any, actions: any) => {
+          onApprove: async (data: { orderID?: string }, actions: {
+            order: {
+              capture: () => Promise<Record<string, unknown>>;
+            };
+          }) => {
             const details = await actions.order.capture();
             if (details.status === 'COMPLETED') {
-              // Get the actual transaction (capture) ID from the payments object
-              const transactionId = details.purchase_units?.[0]?.payments?.captures?.[0]?.id || details.id;
-              onSuccess?.(transactionId);
+              const purchaseUnits = details.purchase_units as Array<Record<string, unknown>> | undefined;
+              const payments = purchaseUnits?.[0]?.payments as Record<string, unknown> | undefined;
+              const captures = payments?.captures as Array<Record<string, unknown>> | undefined;
+              const transactionId =
+                (captures?.[0]?.id as string | undefined) ||
+                (details.id as string | undefined) ||
+                data.orderID ||
+                '';
+
+              onSuccessRef.current?.(transactionId, {
+                orderId: (details.id as string | undefined) || data.orderID,
+                vaultId: extractVaultId(details),
+              });
             } else {
-              onError?.(`Payment status: ${details.status}`);
+              onErrorRef.current?.(`Payment status: ${String(details.status ?? 'unknown')}`);
             }
           },
-          onError: (err: any) => {
-            onError?.(err?.message || 'Payment failed');
+          onError: (err: { message?: string }) => {
+            onErrorRef.current?.(err?.message || 'Payment failed');
           },
         });
 
@@ -118,8 +200,8 @@ export function PayPalButton({
         if (isMountedRef.current) setIsLoading(false);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load PayPal';
-        buttonRenderedRef.current = false; // allow retry on error
-        onError?.(message);
+        buttonRenderedRef.current = false;
+        onErrorRef.current?.(message);
         if (isMountedRef.current) setIsLoading(false);
       }
     };
@@ -128,7 +210,6 @@ export function PayPalButton({
 
     return () => {
       isMountedRef.current = false;
-      // Do NOT reset buttonRenderedRef here - prevents StrictMode double-render
     };
   }, []);
 

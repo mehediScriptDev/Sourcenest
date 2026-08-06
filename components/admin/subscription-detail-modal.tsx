@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { AdminDialogContent } from "@/components/admin/admin-dialog-content"
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, DollarSign, Calendar, RefreshCcw } from "lucide-react"
 import { getAdminSubscriptionDetail, AdminSubscriptionDetail } from "@/lib/api/admin-subscriptions"
 import { format } from "date-fns"
+import { useTranslation } from "@/lib/i18n"
 
 interface SubscriptionDetailModalProps {
   subscriptionId: number | string | null
@@ -19,6 +20,9 @@ interface SubscriptionDetailModalProps {
 }
 
 export function SubscriptionDetailModal({ subscriptionId, isOpen, onClose }: SubscriptionDetailModalProps) {
+  const { t } = useTranslation()
+  const c = t.admin.components.subscriptionDetail
+  const common = t.admin.common
   const [loading, setLoading] = useState(false)
   const [detail, setDetail] = useState<AdminSubscriptionDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -32,7 +36,7 @@ export function SubscriptionDetailModal({ subscriptionId, isOpen, onClose }: Sub
         if (res.success && res.data) {
           setDetail(res.data)
         } else {
-          setError(res.message || "Failed to load details")
+          setError(res.message || c.loadFailed)
         }
         setLoading(false)
       }
@@ -40,13 +44,13 @@ export function SubscriptionDetailModal({ subscriptionId, isOpen, onClose }: Sub
     } else {
       setDetail(null)
     }
-  }, [isOpen, subscriptionId])
+  }, [isOpen, subscriptionId, c.loadFailed])
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <AdminDialogContent mobile="fullscreen" size="lg">
         <DialogHeader>
-          <DialogTitle>Subscription Details</DialogTitle>
+          <DialogTitle>{c.title}</DialogTitle>
         </DialogHeader>
 
         {loading ? (
@@ -59,11 +63,10 @@ export function SubscriptionDetailModal({ subscriptionId, isOpen, onClose }: Sub
           </div>
         ) : detail ? (
           <div className="space-y-6">
-            {/* Header Info */}
             <div className="flex items-start justify-between border-b border-border pb-4">
               <div>
                 <h3 className="text-lg font-semibold text-foreground">
-                  {detail.manufacturer?.name || "Unknown Company"}
+                  {detail.manufacturer?.name || c.unknownCompany}
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   {detail.manufacturer?.email || ""}
@@ -74,44 +77,42 @@ export function SubscriptionDetailModal({ subscriptionId, isOpen, onClose }: Sub
               </Badge>
             </div>
 
-            {/* Plan Info */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-lg border border-border bg-card p-4">
-                <div className="mb-2 text-sm text-muted-foreground">Current Plan</div>
-                <div className="font-semibold text-foreground">{detail.plan?.name || "N/A"}</div>
+                <div className="mb-2 text-sm text-muted-foreground">{c.currentPlan}</div>
+                <div className="font-semibold text-foreground">{detail.plan?.name || common.na}</div>
                 <div className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
                   <DollarSign className="h-3 w-3" />
                   {detail.billing_interval === "year" 
-                    ? `${detail.plan?.yearly_price?.amount}/year` 
-                    : `${detail.plan?.monthly_price?.amount}/month`}
+                    ? `${detail.plan?.yearly_price?.amount}${common.perYear}` 
+                    : `${detail.plan?.monthly_price?.amount}${common.perMonth}`}
                 </div>
               </div>
 
               <div className="rounded-lg border border-border bg-card p-4">
-                <div className="mb-2 text-sm text-muted-foreground">Billing Status</div>
+                <div className="mb-2 text-sm text-muted-foreground">{c.billingStatus}</div>
                 <div className="flex items-center gap-2 text-sm text-foreground">
                   <RefreshCcw className="h-4 w-4 text-muted-foreground" />
-                  Auto-renew: {detail.auto_renew ? "Enabled" : "Disabled"}
+                  {detail.auto_renew ? c.autoRenewEnabled : c.autoRenewDisabled}
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-sm text-foreground">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
-                  Next billing: {detail.ends_at ? format(new Date(detail.ends_at), "MMM dd, yyyy") : "N/A"}
+                  {c.nextBilling} {detail.ends_at ? format(new Date(detail.ends_at), "MMM dd, yyyy") : common.na}
                 </div>
               </div>
             </div>
 
-            {/* Payments History */}
             <div>
-              <h4 className="mb-3 font-medium text-foreground">Payment History</h4>
+              <h4 className="mb-3 font-medium text-foreground">{c.paymentHistory}</h4>
               {detail.payments && detail.payments.length > 0 ? (
                 <div className="rounded-md border border-border">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50 text-muted-foreground">
                       <tr>
-                        <th className="px-4 py-2 text-left font-medium">Date</th>
-                        <th className="px-4 py-2 text-left font-medium">Amount</th>
-                        <th className="px-4 py-2 text-left font-medium">Status</th>
-                        <th className="px-4 py-2 text-left font-medium">Method</th>
+                        <th className="px-4 py-2 text-left font-medium">{common.date}</th>
+                        <th className="px-4 py-2 text-left font-medium">{common.amount}</th>
+                        <th className="px-4 py-2 text-left font-medium">{common.status}</th>
+                        <th className="px-4 py-2 text-left font-medium">{common.method}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -127,13 +128,12 @@ export function SubscriptionDetailModal({ subscriptionId, isOpen, onClose }: Sub
                   </table>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No payments found.</p>
+                <p className="text-sm text-muted-foreground">{c.noPayments}</p>
               )}
             </div>
 
-            {/* Logs */}
             <div>
-              <h4 className="mb-3 font-medium text-foreground">Subscription Logs</h4>
+              <h4 className="mb-3 font-medium text-foreground">{c.subscriptionLogs}</h4>
               {detail.logs && detail.logs.length > 0 ? (
                 <div className="space-y-3">
                   {detail.logs.map((log) => (
@@ -144,12 +144,12 @@ export function SubscriptionDetailModal({ subscriptionId, isOpen, onClose }: Sub
                         </p>
                         {log.from_plan && log.to_plan && (
                           <p className="text-muted-foreground">
-                            Changed from {log.from_plan.name} to {log.to_plan.name}
+                            {c.changedFrom.replace("{from}", log.from_plan.name).replace("{to}", log.to_plan.name)}
                           </p>
                         )}
                         {!log.from_plan && log.to_plan && (
                           <p className="text-muted-foreground">
-                            Subscribed to {log.to_plan.name}
+                            {c.subscribedTo.replace("{plan}", log.to_plan.name)}
                           </p>
                         )}
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -165,12 +165,12 @@ export function SubscriptionDetailModal({ subscriptionId, isOpen, onClose }: Sub
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No logs found.</p>
+                <p className="text-sm text-muted-foreground">{c.noLogs}</p>
               )}
             </div>
           </div>
         ) : null}
-      </DialogContent>
+      </AdminDialogContent>
     </Dialog>
   )
 }

@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
 import Link from "next/link"
+import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import {
   Accordion,
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/accordion"
 import { ArrowRight } from "lucide-react"
 import { getFaqCategories } from "@/lib/api/faqs"
+import { queryKeys } from "@/lib/query-keys"
 import { useTranslation } from "@/lib/i18n"
 
 type FaqEntry = {
@@ -21,52 +23,43 @@ type FaqEntry = {
   categorySort: number
 }
 
+function mapFaqCategoriesToEntries(
+  data: Awaited<ReturnType<typeof getFaqCategories>>["data"]
+): FaqEntry[] {
+  return data
+    .flatMap((category) =>
+      category.faqs.map((faq, faqIndex) => ({
+        id: `${category.id}-${faq.id || faqIndex + 1}`,
+        question: faq.question,
+        answer: faq.answer,
+        sort: faq.sort,
+        categorySort: category.sort,
+      }))
+    )
+    .filter((faq) => faq.question.trim().length > 0 && faq.answer.trim().length > 0)
+    .sort((a, b) => {
+      if (a.categorySort !== b.categorySort) {
+        return a.categorySort - b.categorySort
+      }
+      return a.sort - b.sort
+    })
+    .slice(0, 6)
+}
+
 export function FaqSection() {
   const { t } = useTranslation()
-  const [apiFaqs, setApiFaqs] = useState<FaqEntry[]>([])
 
-  useEffect(() => {
-    let active = true
-
-    const loadFaqs = async () => {
-      const response = await getFaqCategories()
-      if (!active || !response.success) {
-        return
-      }
-
-      const nextFaqs = response.data
-        .flatMap((category) =>
-          category.faqs.map((faq, faqIndex) => ({
-            id: `${category.id}-${faq.id || faqIndex + 1}`,
-            question: faq.question,
-            answer: faq.answer,
-            sort: faq.sort,
-            categorySort: category.sort,
-          }))
-        )
-        .filter((faq) => faq.question.trim().length > 0 && faq.answer.trim().length > 0)
-        .sort((a, b) => {
-          if (a.categorySort !== b.categorySort) {
-            return a.categorySort - b.categorySort
-          }
-
-          return a.sort - b.sort
-        })
-        .slice(0, 6)
-
-      setApiFaqs(nextFaqs)
-    }
-
-    loadFaqs()
-
-    return () => {
-      active = false
-    }
-  }, [])
+  const faqQuery = useQuery({
+    queryKey: queryKeys.publicFaqCategories(),
+    queryFn: () => getFaqCategories(),
+  })
 
   const faqs = useMemo(() => {
-    if (apiFaqs.length > 0) {
-      return apiFaqs
+    if (faqQuery.data?.success && faqQuery.data.data) {
+      const entries = mapFaqCategoriesToEntries(faqQuery.data.data)
+      if (entries.length > 0) {
+        return entries
+      }
     }
 
     return [
@@ -78,10 +71,10 @@ export function FaqSection() {
         categorySort: 0,
       },
     ]
-  }, [apiFaqs])
+  }, [faqQuery.data])
 
   return (
-    <section className="py-8 sm:py-12 lg:py-28">
+    <section className="py-8 sm:py-12 lg:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl">
           <div className="text-center">

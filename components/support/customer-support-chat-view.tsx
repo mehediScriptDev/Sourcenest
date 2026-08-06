@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import { useTranslation } from "@/lib/i18n"
 import {
   createCustomerSupportTicket,
   getMyCustomerSupportTickets,
@@ -22,13 +23,15 @@ import {
   ArrowLeft,
   MessageSquare,
   CheckCircle2,
-  CornerDownLeft,
   Headset,
   ShieldCheck,
   Clock,
   Sparkles,
-  Loader2
+  Loader2,
+  Paperclip,
 } from "lucide-react"
+import { SupportComposerAttachments, SupportMessageAttachments, SUPPORT_ATTACHMENT_ACCEPT } from "@/components/support/support-message-attachments"
+import { SupportErrorDialog } from "@/components/support/support-error-dialog"
 
 const TOPICS = [
   "Orders & delivery",
@@ -128,6 +131,11 @@ export function initials(name: string) {
 
 function StatusPill({ status, className }: { status: CustomerTicketStatus | "unknown"; className?: string }) {
   const c = STATUS_CONFIG[status] || STATUS_CONFIG.unknown
+  const { t } = useTranslation()
+  const label = status === "open" ? t.mfg.supportTickets.open :
+                status === "in_progress" ? t.mfg.supportTickets.inProgress :
+                status === "resolved" ? t.mfg.supportTickets.resolved :
+                status === "closed" ? t.mfg.supportTickets.closed : c.label
   return (
     <span
       className={cn(
@@ -137,7 +145,7 @@ function StatusPill({ status, className }: { status: CustomerTicketStatus | "unk
       )}
     >
       <span className={cn("h-1.5 w-1.5 rounded-full", c.dot)} />
-      {c.label}
+      {label}
     </span>
   )
 }
@@ -151,6 +159,7 @@ interface CustomerSupportChatViewProps {
 export function CustomerSupportChatView({ title, basePath, initialTicketId }: CustomerSupportChatViewProps) {
   const { user } = useAuth()
   const { toast } = useToast()
+  const { t } = useTranslation()
 
   const [tickets, setTickets] = useState<CustomerTicket[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -164,12 +173,24 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
 
   const [reply, setReply] = useState("")
   const [isReplying, setIsReplying] = useState(false)
+  const [replyFiles, setReplyFiles] = useState<File[]>([])
+  const replyFileInputRef = useRef<HTMLInputElement>(null)
 
   // New conversation form
   const [topic, setTopic] = useState(TOPICS[0])
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
+  const [createFiles, setCreateFiles] = useState<File[]>([])
+  const createFileInputRef = useRef<HTMLInputElement>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const [errorDialog, setErrorDialog] = useState<{ title: string; message: string } | null>(null)
+
+  const showError = (title: string, message?: string) => {
+    setErrorDialog({
+      title,
+      message: message?.trim() || "Something went wrong. Please try again.",
+    })
+  }
 
   const fullName = user ? `${user.firstName} ${user.lastName}` : "You"
 
@@ -218,13 +239,14 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
   }
 
   const submitNew = async () => {
-    if (!body.trim()) return
+    if (!body.trim() && createFiles.length === 0) return
     setIsCreating(true)
     const response = await createCustomerSupportTicket({
       subject: subject.trim() || topic,
       departmentType: getDepartmentForTopic(topic),
-      message: body.trim(),
-      priority: "medium", // default priority, backend will handle
+      message: body.trim() || " ",
+      priority: "medium",
+      attachments: createFiles.length > 0 ? createFiles : undefined,
     })
     setIsCreating(false)
 
@@ -232,37 +254,38 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
       toast({ title: "Ticket created successfully" })
       setSubject("")
       setBody("")
+      setCreateFiles([])
+      if (createFileInputRef.current) createFileInputRef.current.value = ""
       setTopic(TOPICS[0])
       setComposing(false)
       loadTickets()
       openConversation(response.data.id)
     } else {
-      toast({
-        title: "Failed to create ticket",
-        description: response.message || "Please try again.",
-        variant: "destructive",
-      })
+      showError("Failed to create ticket", response.message)
     }
   }
 
   const sendReply = async () => {
-    if (!activeId || !reply.trim()) return
+    if (!activeId || activeDetail?.status === "closed" || (!reply.trim() && replyFiles.length === 0)) return
     setIsReplying(true)
     const response = await replyCustomerSupportTicket(activeId, {
-      message: reply.trim(),
+      message: reply.trim() || " ",
+      attachments: replyFiles.length > 0 ? replyFiles : undefined,
     })
     setIsReplying(false)
 
     if (response.success && response.data) {
       setActiveDetail(response.data)
       setReply("")
+      setReplyFiles([])
+      if (replyFileInputRef.current) replyFileInputRef.current.value = ""
     } else {
-      toast({ title: "Failed to send reply", variant: "destructive" })
+      showError("Failed to send reply", response.message)
     }
   }
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col gap-4">
+    <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-x-hidden h-[calc(100dvh-8rem)]">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -270,13 +293,13 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
             <Headset className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="font-serif text-2xl font-medium text-foreground">Support</h1>
-            <p className="text-sm text-muted-foreground">Get help from the SourceNest team.</p>
+            <h1 className="font-serif text-2xl font-medium text-foreground">{t.mfg.supportTickets.title}</h1>
+            <p className="text-sm text-muted-foreground">{t.mfg.supportTickets.subtitle}</p>
           </div>
         </div>
         <Button onClick={startNew} className="gap-1.5 self-start sm:self-auto">
           <Plus className="h-4 w-4" />
-          New conversation
+          {t.mfg.supportTickets.createTicket}
         </Button>
       </div>
 
@@ -290,7 +313,7 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
           )}
         >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <span className="text-sm font-semibold text-foreground">Your conversations</span>
+            <span className="text-sm font-semibold text-foreground">{t.mfg.messages.title || "Your conversations"}</span>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
               {tickets.length}
             </span>
@@ -304,10 +327,10 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
             ) : tickets.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
                 <MessageSquare className="h-8 w-8 opacity-40" />
-                No conversations yet.
+                {t.mfg.supportTickets.noTickets}
                 <Button variant="outline" size="sm" className="mt-1 gap-1.5 bg-transparent" onClick={startNew}>
                   <Plus className="h-4 w-4" />
-                  Start one
+                  {t.mfg.dashboard.viewAll || "Start one"}
                 </Button>
               </div>
             ) : (
@@ -361,7 +384,7 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
           {/* Reassurance footer */}
           <div className="flex items-center gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground">
             <ShieldCheck className="h-4 w-4 text-secondary" />
-            Avg. first reply under an hour
+            {t.mfg.supportTickets.responseTime}
           </div>
         </div>
 
@@ -380,21 +403,24 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
               setSubject={setSubject}
               body={body}
               setBody={setBody}
+              files={createFiles}
+              onFilesChange={setCreateFiles}
+              fileInputRef={createFileInputRef}
               onSubmit={submitNew}
               onBack={() => {
                 setMobileThreadOpen(false)
                 if (tickets.length) setComposing(false)
               }}
-              canSubmit={!!body.trim()}
+              canSubmit={!!body.trim() || createFiles.length > 0}
               isCreating={isCreating}
             />
           ) : !activeId ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
               <LifeBuoy className="h-10 w-10 opacity-40" />
-              Select a conversation, or start a new one.
+              {t.mfg.messages.selectChat}
               <Button onClick={startNew} className="gap-1.5">
                 <Plus className="h-4 w-4" />
-                New conversation
+                {t.mfg.supportTickets.createTicket}
               </Button>
             </div>
           ) : isLoadingDetail ? (
@@ -428,10 +454,16 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
 
               {/* Messages */}
               <div className="min-h-0 flex-1 space-y-1 overflow-y-auto bg-muted/20 px-4 py-5">
+                {activeDetail.status === "closed" && (
+                  <div className="mx-auto mb-4 flex w-fit items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    {t.mfg.supportTickets.closed}
+                  </div>
+                )}
                 {activeDetail.status === "resolved" && (
                   <div className="mx-auto mb-4 flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    Support marked this resolved — reply to reopen
+                    {t.mfg.supportTickets.resolved}
                   </div>
                 )}
                 {activeDetail.messages.map((m, i) => {
@@ -465,6 +497,10 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
                             )}
                           >
                             <div className="whitespace-pre-wrap">{m.message}</div>
+                            <SupportMessageAttachments
+                              attachments={m.attachments}
+                              linkClassName={isCustomer ? "text-primary-foreground/90" : "text-secondary"}
+                            />
                           </div>
                           <div
                             className={cn(
@@ -490,9 +526,25 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
 
               {/* Composer */}
               <div className="border-t border-border p-3">
+                {activeDetail.status === "closed" ? (
+                  <div className="space-y-3 rounded-lg border border-dashed border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                    <p className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 shrink-0" />
+                      {t.mfg.supportTickets.conversationClosed}
+                    </p>
+                    <Button size="sm" variant="outline" className="gap-1.5 bg-transparent" onClick={startNew}>
+                      <Plus className="h-4 w-4" />
+                      {t.mfg.supportTickets.createNewForMoreHelp}
+                    </Button>
+                  </div>
+                ) : (
                 <div className="rounded-xl border border-border bg-background focus-within:ring-2 focus-within:ring-ring">
+                  <SupportComposerAttachments
+                    files={replyFiles}
+                    onRemove={(index) => setReplyFiles((prev) => prev.filter((_, i) => i !== index))}
+                  />
                   <Textarea
-                    placeholder="Write a message to support…"
+                    placeholder={t.mfg.supportTicketDetails.typeReply}
                     value={reply}
                     onChange={(e) => setReply(e.target.value)}
                     onKeyDown={(e) => {
@@ -505,21 +557,54 @@ export function CustomerSupportChatView({ title, basePath, initialTicketId }: Cu
                     rows={2}
                   />
                   <div className="flex items-center justify-between gap-2 px-2 pb-2">
-                    <span className="hidden items-center gap-1 px-1 text-[11px] text-muted-foreground sm:flex">
-                      <CornerDownLeft className="h-3 w-3" />
-                      ⌘ + Enter to send
-                    </span>
-                    <Button onClick={sendReply} disabled={!reply.trim() || isReplying} size="sm" className="ml-auto gap-1.5">
+                    <div className="flex items-center gap-1">
+                      <input
+                        ref={replyFileInputRef}
+                        type="file"
+                        multiple
+                        accept={SUPPORT_ATTACHMENT_ACCEPT}
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files) {
+                            setReplyFiles((prev) => [...prev, ...Array.from(e.target.files!)])
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        onClick={() => replyFileInputRef.current?.click()}
+                        aria-label="Attach file"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Button
+                      onClick={sendReply}
+                      disabled={(!reply.trim() && replyFiles.length === 0) || isReplying}
+                      size="sm"
+                      className="gap-1.5"
+                    >
                       {isReplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Send
+                      {t.mfg.messages.send}
                     </Button>
                   </div>
                 </div>
+                )}
               </div>
             </>
           ) : null}
         </div>
       </div>
+
+      <SupportErrorDialog
+        open={!!errorDialog}
+        title={errorDialog?.title ?? ""}
+        message={errorDialog?.message ?? ""}
+        onClose={() => setErrorDialog(null)}
+      />
     </div>
   )
 }
@@ -531,6 +616,9 @@ function NewConversationForm({
   setSubject,
   body,
   setBody,
+  files,
+  onFilesChange,
+  fileInputRef,
   onSubmit,
   onBack,
   canSubmit,
@@ -542,11 +630,15 @@ function NewConversationForm({
   setSubject: (v: string) => void
   body: string
   setBody: (v: string) => void
+  files: File[]
+  onFilesChange: (files: File[]) => void
+  fileInputRef: React.RefObject<HTMLInputElement | null>
   onSubmit: () => void
   onBack: () => void
   canSubmit: boolean
   isCreating: boolean
 }) {
+  const { t } = useTranslation()
   return (
     <>
       <div className="flex items-center gap-3 border-b border-border px-4 py-3">
@@ -557,15 +649,15 @@ function NewConversationForm({
           <Sparkles className="h-4 w-4" />
         </div>
         <div>
-          <p className="font-semibold text-foreground">New conversation</p>
-          <p className="text-xs text-muted-foreground">Tell us what you need help with.</p>
+          <p className="font-semibold text-foreground">{t.mfg.supportTickets.createTicket}</p>
+          <p className="text-xs text-muted-foreground">{t.mfg.supportTickets.subtitle}</p>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
         <div className="mx-auto max-w-xl space-y-5">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Topic</label>
+            <label className="text-sm font-medium text-foreground">{t.mfg.supportTickets.ticketCategory}</label>
             <div className="flex flex-wrap gap-2">
               {TOPICS.map((t) => (
                 <button
@@ -586,7 +678,7 @@ function NewConversationForm({
 
           <div className="space-y-2">
             <label htmlFor="support-subject" className="text-sm font-medium text-foreground">
-              Subject <span className="font-normal text-muted-foreground">(optional)</span>
+              {t.mfg.supportTickets.ticketSubject} <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <input
               id="support-subject"
@@ -599,7 +691,7 @@ function NewConversationForm({
 
           <div className="space-y-2">
             <label htmlFor="support-body" className="text-sm font-medium text-foreground">
-              How can we help?
+              {t.mfg.supportTickets.ticketDescription}
             </label>
             <Textarea
               id="support-body"
@@ -610,9 +702,41 @@ function NewConversationForm({
             />
           </div>
 
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-foreground">Attachments</label>
+            <SupportComposerAttachments
+              files={files}
+              onRemove={(index) => onFilesChange(files.filter((_, i) => i !== index))}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={SUPPORT_ATTACHMENT_ACCEPT}
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) {
+                  onFilesChange([...files, ...Array.from(e.target.files)])
+                }
+              }}
+            />
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Paperclip className="h-4 w-4" />
+                Add files
+              </Button>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
             <Clock className="h-4 w-4 shrink-0 text-secondary" />
-            Our support team typically replies within an hour during business hours.
+            {t.mfg.supportTickets.responseTime}
           </div>
         </div>
       </div>
@@ -620,7 +744,7 @@ function NewConversationForm({
       <div className="flex items-center justify-end gap-2 border-t border-border p-3">
         <Button onClick={onSubmit} disabled={!canSubmit || isCreating} className="gap-1.5">
           {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          Send to support
+          {t.mfg.supportTickets.submitTicket}
         </Button>
       </div>
     </>

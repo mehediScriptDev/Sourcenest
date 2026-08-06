@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import Swal from 'sweetalert2'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -56,31 +57,35 @@ import {
   Paperclip
 } from "lucide-react"
 
-import { getManufacturerRFQ, type ManufacturerRFQ } from "@/lib/api/rfqs"
+import { getManufacturerRFQ, submitManufacturerQuote } from "@/lib/api/rfqs"
+import { queryKeys } from "@/lib/query-keys"
 import { format } from "date-fns"
+import { useTranslation } from "@/lib/i18n"
 
 export default function InquiryDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const id = params.id as string
-  
-  const [inquiry, setInquiry] = useState<ManufacturerRFQ | null>(null)
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { t } = useTranslation()
 
-  useEffect(() => {
-    async function loadInquiry() {
-      const response = await getManufacturerRFQ(id)
-      if (response.success && response.data) {
-        setInquiry(response.data)
-      }
-      setLoading(false)
-    }
-    loadInquiry()
-  }, [id])
-  
+  const inquiryQueryKey = queryKeys.manufacturerRfqDetail(id)
+
+  const inquiryQuery = useQuery({
+    queryKey: inquiryQueryKey,
+    queryFn: () => getManufacturerRFQ(id),
+    enabled: Boolean(id),
+  })
+
+  const submitQuoteMutation = useMutation({
+    mutationFn: (formData: FormData) => submitManufacturerQuote(id, formData),
+  })
+
+  const inquiry = inquiryQuery.data?.success ? inquiryQuery.data.data : null
+  const loading = inquiryQuery.isLoading
+  const isSubmitting = submitQuoteMutation.isPending
+
   const [showQuoteDialog, setShowQuoteDialog] = useState(false)
   const [reply, setReply] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [quoteSubmitted, setQuoteSubmitted] = useState(false)
   const [quoteData, setQuoteData] = useState({
     unitPrice: "",
@@ -165,16 +170,13 @@ export default function InquiryDetailPage() {
   }
 
   const handleSubmitQuote = async () => {
-    setIsSubmitting(true)
-    
-    // Parse numeric fields safely
     const quoted_price = parseFloat(quoteData.unitPrice.replace(/[^0-9.]/g, '')) || 0
     const minimum_order_quantity = parseInt(quoteData.moq.replace(/[^0-9]/g, ''), 10) || 0
     const lead_time_days = parseInt(quoteData.leadTime.replace(/[^0-9]/g, ''), 10) || 0
-    
+
     const formData = new FormData()
     formData.append('quoted_price', quoted_price.toString())
-    formData.append('quote_currency_code', 'USD') // Assuming USD for now
+    formData.append('quote_currency_code', 'USD')
     formData.append('minimum_order_quantity', minimum_order_quantity.toString())
     formData.append('lead_time_days', lead_time_days.toString())
     formData.append('lead_time', quoteData.leadTime)
@@ -184,11 +186,11 @@ export default function InquiryDetailPage() {
     formData.append('sample_cost', quoteData.sampleCost)
     formData.append('sample_lead_time', quoteData.sampleLeadTime)
     formData.append('quote_packaging_details', quoteData.packagingDetails)
-    
-    quoteData.certifications.forEach(cert => {
+
+    quoteData.certifications.forEach((cert) => {
       formData.append('quote_certifications[]', cert)
     })
-    
+
     formData.append('quote_notes', quoteData.notes)
 
     uploadedImages.forEach((img, index) => {
@@ -200,8 +202,7 @@ export default function InquiryDetailPage() {
     })
 
     try {
-      const { submitManufacturerQuote } = await import("@/lib/api/rfqs")
-      const response = await submitManufacturerQuote(id, formData)
+      const response = await submitQuoteMutation.mutateAsync(formData)
 
       if (response.success) {
         setShowQuoteDialog(false)
@@ -211,9 +212,9 @@ export default function InquiryDetailPage() {
           icon: 'success',
           confirmButtonColor: 'var(--primary)',
           confirmButtonText: 'Great!'
-        }).then(() => {
-          // Refresh the inquiry data
-          window.location.reload()
+        }).then(async () => {
+          await queryClient.invalidateQueries({ queryKey: inquiryQueryKey })
+          await queryClient.invalidateQueries({ queryKey: queryKeys.manufacturerRfqs() })
         })
       } else {
         Swal.fire({
@@ -231,8 +232,6 @@ export default function InquiryDetailPage() {
         icon: 'error',
         confirmButtonColor: 'var(--destructive)',
       })
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -245,43 +244,51 @@ export default function InquiryDetailPage() {
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-muted-foreground">Loading inquiry details...</div>
+    return <div className="py-12 text-center text-muted-foreground">{t.mfg.inquiries.loading}</div>
   }
 
   if (!inquiry) {
-    return <div className="py-12 text-center text-muted-foreground">Inquiry not found</div>
+    return <div className="py-12 text-center text-muted-foreground">{t.mfg.inquiries.noInquiriesFound}</div>
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 min-w-0">
+          <Button variant="ghost" size="icon" asChild className="shrink-0 self-start">
             <Link href="/dashboard/manufacturer/inquiries">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="font-serif text-2xl font-medium text-foreground">
-                Inquiry {inquiry.rfq_number}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h1 className="font-serif text-xl font-medium text-foreground sm:text-2xl">
+                {t.mfg.inquiryDetails.rfqNumber} {inquiry.rfq_number}
               </h1>
-              <Badge className={statusColors[inquiry.status] || ""}>{inquiry.status.charAt(0).toUpperCase() + inquiry.status.slice(1)}</Badge>
+              <Badge className={statusColors[inquiry.status] || ""}>
+                {inquiry.status === "pending" ? t.mfg.inquiries.pending :
+                 inquiry.status === "quoted" ? t.mfg.inquiries.quoted :
+                 inquiry.status === "accepted" ? t.mfg.inquiries.accepted :
+                 inquiry.status === "rejected" ? t.mfg.inquiries.rejected :
+                 inquiry.status === "expired" ? t.mfg.inquiries.expired : inquiry.status}
+              </Badge>
             </div>
             <p className="mt-1 text-muted-foreground">
-              Received {format(new Date(inquiry.created_at), 'PPP')}
+              {t.mfg.supportTicketDetails.created} {format(new Date(inquiry.created_at), 'PPP')}
             </p>
           </div>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" className="gap-2">
-            <MessageSquare className="h-4 w-4" />
-            Message Buyer
+        <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:gap-3">
+          <Button variant="outline" className="gap-2" asChild>
+            <Link href={`/dashboard/manufacturer/messages?buyer=${inquiry.buyer.id}`}>
+              <MessageSquare className="h-4 w-4" />
+              {t.mfg.inquiries.message}
+            </Link>
           </Button>
           <Button className="gap-2" onClick={() => setShowQuoteDialog(true)}>
             <FileText className="h-4 w-4" />
-            Send Quote
+            {t.mfg.inquiries.sendQuote}
           </Button>
         </div>
       </div>
@@ -297,7 +304,7 @@ export default function InquiryDetailPage() {
                 Product Request Details
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="min-w-0 space-y-6 overflow-x-hidden">
               {/* Product Info */}
               <div className="flex items-start gap-4">
                 <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-muted border border-border">
@@ -387,7 +394,7 @@ export default function InquiryDetailPage() {
               </CardTitle>
               <p className="text-sm text-muted-foreground">Fill in all details - buyer will see exactly what you submit</p>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="min-w-0 space-y-6 overflow-x-hidden">
               {quoteSubmitted ? (
                 <div className="text-center py-8">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
@@ -687,7 +694,7 @@ export default function InquiryDetailPage() {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6 overflow-x-hidden">
           {/* Buyer Info */}
           <Card>
             <CardHeader>
@@ -728,7 +735,7 @@ export default function InquiryDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex gap-3">
+                <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:gap-3">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary/10">
                     <FileText className="h-4 w-4 text-secondary" />
                   </div>
@@ -738,7 +745,7 @@ export default function InquiryDetailPage() {
                   </div>
                 </div>
                 {inquiry.status !== "pending" && inquiry.quoted_at && (
-                  <div className="flex gap-3">
+                  <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
                       <CheckCircle className="h-4 w-4 text-emerald-700" />
                     </div>
@@ -777,7 +784,7 @@ export default function InquiryDetailPage() {
             </div>
           ) : (
             <>
-              <div className="space-y-6">
+              <div className="min-w-0 space-y-6 overflow-x-hidden">
                 {/* Pricing Section */}
                 <div>
                   <h4 className="font-medium text-foreground mb-3 flex items-center gap-2">

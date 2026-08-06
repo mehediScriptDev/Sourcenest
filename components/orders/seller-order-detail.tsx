@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import {
   formatCurrency,
   formatOrderDate,
@@ -11,7 +11,10 @@ import {
   type OrderStatus,
 } from "@/lib/orders-context"
 import { useMessages } from "@/lib/messages-context"
-import { getManufacturerOrder, updateManufacturerOrderStatus, type ApiOrder, type OrderStatusUpdate } from "@/lib/api/orders"
+import { getManufacturerOrder, summarizeOrderItems, updateManufacturerOrderStatus, type OrderDetailResponse, type OrderStatusUpdate } from "@/lib/api/orders"
+import { queryKeys, queryKeyFamilies } from "@/lib/query-keys"
+import { OrderLineItemsTable } from "@/components/orders/order-line-items-table"
+import { useTranslation } from "@/lib/i18n"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -58,17 +61,47 @@ interface DetailConfig {
 }
 
 export function SellerOrderDetail({ orderId, config }: { orderId: string; config: DetailConfig }) {
-  const router = useRouter()
   const { postOrderUpdate } = useMessages()
-  
-  const [order, setOrder] = useState<ApiOrder | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const numericId = Number.parseInt(orderId, 10)
+  const isValidId = !Number.isNaN(numericId)
+  const orderQueryKey = queryKeys.manufacturerOrderDetail(orderId)
+
+  const orderQuery = useQuery({
+    queryKey: orderQueryKey,
+    queryFn: () => getManufacturerOrder(numericId),
+    enabled: isValidId && Boolean(orderId),
+  })
+
+  const updateStatusMutation = useMutation({
+    mutationFn: (payload: {
+      status: string
+      notes?: string
+      photos: File[]
+      attachments: File[]
+    }) =>
+      updateManufacturerOrderStatus(numericId, {
+        status: payload.status,
+        notes: payload.notes,
+        photos: payload.photos,
+        attachments: payload.attachments,
+      }),
+  })
+
+  const order = orderQuery.data?.success ? orderQuery.data.data : null
+  const isLoading = orderQuery.isLoading
+  const error = !isValidId
+    ? t.mfg.orderDetails.notFound || "Invalid order ID"
+    : orderQuery.data?.success === false
+      ? orderQuery.data.message || t.mfg.orderDetails.notFound || "Failed to load order details"
+      : !isLoading && !order
+        ? t.mfg.orderDetails.notFound || "Failed to load order details"
+        : null
 
   const [showForm, setShowForm] = useState(false)
   const [newStatus, setNewStatus] = useState<string>("in-production")
   const [note, setNote] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Real file attachment state
   const [photos, setPhotos] = useState<File[]>([])
@@ -76,28 +109,37 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
   const photoInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const isSubmitting = updateStatusMutation.isPending
+  const isService = config.kind === "service"
+
   useEffect(() => {
-    async function fetchOrder() {
-      setIsLoading(true)
-      const numericId = parseInt(orderId, 10)
-      if (isNaN(numericId)) {
-        setError("Invalid order ID")
-        setIsLoading(false)
-        return
-      }
-
-      const res = await getManufacturerOrder(numericId)
-      if (res.success && res.data) {
-        setOrder(res.data)
-        setNewStatus(res.data.status)
-      } else {
-        setError(res.message || "Failed to load order details")
-      }
-      setIsLoading(false)
+    if (order?.status) {
+      setNewStatus(order.status)
     }
+  }, [order?.status])
 
-    fetchOrder()
-  }, [orderId])
+  const getLocalizedStatusLabel = (s: string) => {
+    switch (s) {
+      case "created": return isService ? "Engagement Started" : (t.mfg.orders.statusPending || "Pending");
+      case "in-production": return isService ? "In Progress" : (t.mfg.orders.statusProcessing || "Processing");
+      case "ready": return isService ? "Deliverables Ready" : "Ready for Shipment";
+      case "shipped": return isService ? "Delivered" : (t.mfg.orders.statusShipped || "Shipped");
+      case "completed": return t.mfg.orders.statusDelivered || "Completed";
+      case "cancelled": return t.mfg.orders.statusCancelled || "Cancelled";
+      default: return s;
+    }
+  }
+
+  if (!isValidId) {
+    return (
+      <div className="mx-auto max-w-3xl py-12 text-center sm:py-16">
+        <h1 className="font-serif text-xl font-medium text-foreground">{t.mfg.orderDetails.notFound}</h1>
+        <Button asChild variant="outline" className="mt-4">
+          <Link href={config.basePath}>{t.mfg.orderDetails.backToList}</Link>
+        </Button>
+      </div>
+    )
+  }
 
   if (isLoading) {
     return (
@@ -109,41 +151,48 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
 
   if (error || !order) {
     return (
-      <div className="mx-auto max-w-3xl py-16 text-center">
-        <h1 className="font-serif text-xl font-medium text-foreground">{error || "Not found"}</h1>
+      <div className="mx-auto max-w-3xl py-12 text-center sm:py-16">
+        <h1 className="font-serif text-xl font-medium text-foreground">{error || t.mfg.orderDetails.notFound}</h1>
         <Button asChild variant="outline" className="mt-4">
-          <Link href={config.basePath}>Back to list</Link>
+          <Link href={config.basePath}>{t.mfg.orderDetails.backToList}</Link>
         </Button>
       </div>
     )
   }
 
-  const isService = config.kind === "service"
   const style = statusStyles[order.status] || { color: "bg-gray-100 text-gray-700", icon: Clock }
   const StatusIcon = style.icon
   const currentIndex = ORDER_STATUS_FLOW.indexOf(order.status as OrderStatus)
+  const itemsSummary = summarizeOrderItems(order.items, {
+    quantity: order.quantity,
+    quantityUnit: order.quantityUnit,
+    productName: order.productName !== "N/A" ? order.productName : undefined,
+  })
 
   const submitUpdate = async () => {
+    if (!order) return
     if (!note.trim() && order.status === newStatus) return
-    
-    setIsSubmitting(true)
+
     const trimmedNote = note.trim()
-    
-    // Passing the real selected files
-    const res = await updateManufacturerOrderStatus(order.id, {
+
+    const res = await updateStatusMutation.mutateAsync({
       status: newStatus,
       notes: trimmedNote || undefined,
       photos,
       attachments,
     })
-    
+
     if (res.success && res.data) {
-      setOrder(res.data)
-      
-      // Deliver the status change into the buyer↔seller message thread
+      queryClient.setQueryData(orderQueryKey, (previous: OrderDetailResponse | undefined) => {
+        if (!previous) return previous
+        return { ...previous, success: true, data: res.data }
+      })
+      void queryClient.invalidateQueries({ queryKey: queryKeyFamilies.manufacturerOrders })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.manufacturerOrderStats() })
+
       try {
-        postOrderUpdate(res.data as any, {
-          status: newStatus as any,
+        postOrderUpdate(res.data as unknown as Parameters<typeof postOrderUpdate>[0], {
+          status: newStatus as OrderStatus,
           note: trimmedNote,
           photos: photos.map((f) => f.name),
           files: attachments.map((f) => f.name),
@@ -152,7 +201,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
       } catch (e) {
         console.error("Failed to post message", e)
       }
-      
+
       setNote("")
       setPhotos([])
       setAttachments([])
@@ -160,8 +209,6 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
     } else {
       alert(res.message || "Failed to post update")
     }
-    
-    setIsSubmitting(false)
   }
 
   return (
@@ -169,7 +216,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
       <Button asChild variant="ghost" size="sm" className="mb-4 gap-1.5 text-muted-foreground">
         <Link href={config.basePath}>
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {t.common.back}
         </Link>
       </Button>
 
@@ -181,7 +228,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
               <span className="text-sm font-medium text-muted-foreground">{order.orderNumber}</span>
               <Badge className={cn("gap-1 text-xs", style.color)}>
                 <StatusIcon className="h-3 w-3" />
-                {getStatusLabel(order.status)}
+                {getLocalizedStatusLabel(order.status)}
               </Badge>
             </div>
             <h1 className="mt-1.5 font-serif text-2xl font-medium text-foreground">{order.title}</h1>
@@ -194,7 +241,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
             <p className="font-serif text-2xl font-medium text-foreground">
               {formatCurrency(order.totalAmount, order.currencyCode)}
             </p>
-            <p className="text-xs text-muted-foreground">{order.quantity} {order.quantityUnit}</p>
+            <p className="text-xs text-muted-foreground">{itemsSummary.quantityLabel}</p>
           </div>
         </div>
 
@@ -217,7 +264,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
                       {reached ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                     </div>
                     <span className="mt-1.5 hidden text-center text-[10px] leading-tight text-muted-foreground sm:block">
-                      {getStatusLabel(s)}
+                      {getLocalizedStatusLabel(s)}
                     </span>
                   </div>
                   {i < ORDER_STATUS_FLOW.length - 1 && (
@@ -230,17 +277,34 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
         )}
       </div>
 
+      <div className="mt-6">
+        <OrderLineItemsTable
+          items={order.items}
+          currencyCode={order.currencyCode}
+          totalAmount={order.totalAmount}
+          title={t.mfg.orderDetails.items}
+          labels={{
+            product: t.mfg.orderNew.selectProduct,
+            quantity: t.mfg.orderDetails.quantity,
+            unitPrice: t.mfg.orderNew.unitPrice,
+            lineTotal: t.mfg.orderNew.lineTotal,
+            orderTotal: t.mfg.orderDetails.total,
+            notes: t.mfg.inquiryDetails.notes || "Notes",
+          }}
+        />
+      </div>
+
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         {/* Main */}
         <div className="space-y-6 lg:col-span-2">
           {/* Add update */}
-          <div className="rounded-xl border border-border bg-card p-6">
-            <div className="flex items-center justify-between">
-              <h2 className="font-medium text-foreground">Progress updates</h2>
+          <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="font-medium text-foreground">{t.mfg.orderDetails.progressUpdates}</h2>
               {order.status !== "completed" && order.status !== "cancelled" && (
                 <Button size="sm" variant={showForm ? "outline" : "default"} className="gap-1.5" onClick={() => setShowForm(!showForm)}>
                   <Plus className="h-4 w-4" />
-                  {showForm ? "Cancel" : "Add update"}
+                  {showForm ? t.common.cancel : t.mfg.orderDetails.addUpdate}
                 </Button>
               )}
             </div>
@@ -248,7 +312,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
             {showForm && (
               <div className="mt-4 space-y-4 rounded-lg border border-border bg-muted/20 p-4">
                 <div className="space-y-2">
-                  <Label className="text-sm">Set status</Label>
+                  <Label className="text-sm">{t.mfg.orderDetails.setStatus}</Label>
                   <Select value={newStatus} onValueChange={(v) => setNewStatus(v)}>
                     <SelectTrigger>
                       <SelectValue />
@@ -256,14 +320,14 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
                     <SelectContent>
                       {ORDER_STATUS_FLOW.concat("cancelled" as OrderStatus).map((s) => (
                         <SelectItem key={s} value={s}>
-                          {getStatusLabel(s)}
+                          {getLocalizedStatusLabel(s)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm">Update note</Label>
+                  <Label className="text-sm">{t.mfg.orderDetails.updateNote}</Label>
                   <Textarea
                     placeholder={
                       isService
@@ -310,7 +374,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
                     onClick={() => photoInputRef.current?.click()}
                   >
                     <ImageIcon className="h-4 w-4" />
-                    Add photo
+                    {t.mfg.orderDetails.addPhoto}
                   </Button>
                   <Button
                     type="button"
@@ -320,7 +384,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <FileText className="h-4 w-4" />
-                    Attach file
+                    {t.mfg.orderDetails.attachFile}
                   </Button>
                 </div>
                 {(photos.length > 0 || attachments.length > 0) && (
@@ -347,7 +411,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
                 )}
                 <Button onClick={submitUpdate} disabled={isSubmitting || (!note.trim() && order.status === newStatus)} className="gap-1.5">
                   {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Post update
+                  {t.mfg.orderDetails.postUpdate}
                 </Button>
               </div>
             )}
@@ -366,7 +430,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
                     </div>
                     <div className="flex-1 pb-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium text-foreground">{getStatusLabel(u.status)}</span>
+                        <span className="text-sm font-medium text-foreground">{getLocalizedStatusLabel(u.status)}</span>
                         <span className="text-xs text-muted-foreground">{formatOrderDate(u.createdAt)}</span>
                         <Badge variant="outline" className="text-[10px] capitalize">{u.author}</Badge>
                       </div>
@@ -402,7 +466,7 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
               {order.statusUpdates.length === 0 && (
                 <div className="flex flex-col items-center py-8 text-center text-sm text-muted-foreground">
                   <Clock className="mb-2 h-6 w-6 opacity-20" />
-                  No updates yet.
+                  {t.mfg.orderDetails.noUpdatesYet}
                 </div>
               )}
             </div>
@@ -412,15 +476,16 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
         {/* Sidebar */}
         <div className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-5">
-            <h2 className="font-medium text-foreground">Details</h2>
+            <h2 className="font-medium text-foreground">{t.mfg.orderDetails.details || "Details"}</h2>
             <dl className="mt-3 space-y-3 text-sm">
-              <Row label={isService ? "Scope" : "Quantity"} value={`${order.quantity} ${order.quantityUnit}`} />
-              <Row label="Total" value={formatCurrency(order.totalAmount, order.currencyCode)} />
-              <Row label={isService ? "Timeline" : "Production time"} value={order.productionLead || "N/A"} />
-              <Row label={isService ? "Delivery date" : "Est. delivery"} value={formatOrderDate(order.estimatedDeliveryAt)} icon={Calendar} />
-              <Row label="Payment terms" value={order.paymentTerms || "N/A"} />
-              {!isService && <Row label="Shipping terms" value={order.shippingTerms || "N/A"} />}
-              {!isService && <Row label="Destination" value={order.destination || "N/A"} />}
+              <Row label={isService ? (t.mfg.orderDetails.scope || "Scope") : "Products"} value={itemsSummary.lineCount > 1 ? `${itemsSummary.lineCount} products` : itemsSummary.productLabel} />
+              <Row label={isService ? (t.mfg.orderDetails.scope || "Scope") : t.mfg.orderDetails.quantity} value={itemsSummary.quantityLabel} />
+              <Row label={t.mfg.orderDetails.total} value={formatCurrency(order.totalAmount, order.currencyCode)} />
+              <Row label={isService ? "Timeline" : t.mfg.orderDetails.productionTime} value={order.productionLead || "N/A"} />
+              <Row label={isService ? "Delivery date" : t.mfg.orderDetails.estDelivery} value={formatOrderDate(order.estimatedDeliveryAt)} icon={Calendar} />
+              <Row label={t.mfg.orderDetails.paymentTerms} value={order.paymentTerms || "N/A"} />
+              {!isService && <Row label={t.mfg.orderDetails.shippingTerms} value={order.shippingTerms || "N/A"} />}
+              {!isService && <Row label={t.mfg.orderDetails.destination} value={order.destination || "N/A"} />}
             </dl>
             {order.notes && (
               <p className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">{order.notes}</p>
@@ -428,10 +493,10 @@ export function SellerOrderDetail({ orderId, config }: { orderId: string; config
           </div>
 
           <div className="rounded-xl border border-border bg-card p-5">
-            <h2 className="font-medium text-foreground">Documents</h2>
+            <h2 className="font-medium text-foreground">{t.mfg.orderDetails.documents}</h2>
             <div className="mt-3 space-y-2">
               {order.attachments.length === 0 && (
-                <p className="text-sm text-muted-foreground">No documents attached.</p>
+                <p className="text-sm text-muted-foreground">{t.mfg.orderDetails.noDocuments}</p>
               )}
               {order.attachments.map((doc) => (
                 <a key={doc.id} href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2 hover:bg-muted/50 transition-colors">

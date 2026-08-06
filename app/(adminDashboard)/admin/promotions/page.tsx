@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -57,15 +58,66 @@ import {
   type Promotion
 } from "@/lib/api/admin-promotions"
 import { fetchPlans, type PricingPlan } from "@/lib/api/admin-pricing"
+import { queryKeys } from "@/lib/query-keys"
 import { useToast } from "@/hooks/use-toast"
+import { useTranslation } from "@/lib/i18n"
 
 export default function PromotionsPage() {
-  const [promotions, setPromotions] = useState<Promotion[]>([])
-  const [plans, setPlans] = useState<PricingPlan[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { t } = useTranslation()
+  const p = t.admin.pages.promotions
+  const c = t.admin.common
   const { toast } = useToast()
   const router = useRouter()
+  const queryClient = useQueryClient()
+
+  const promotionsQueryKey = queryKeys.adminPromotions()
+
+  const promotionsQuery = useQuery({
+    queryKey: promotionsQueryKey,
+    queryFn: fetchAdminPromotions,
+  })
+
+  const plansQuery = useQuery({
+    queryKey: queryKeys.adminPricingPlans(),
+    queryFn: fetchPlans,
+  })
+
+  const toggleMutation = useMutation({
+    mutationFn: (id: number | string) => toggleAdminPromotionStatus(id),
+  })
+
+  const resetMutation = useMutation({
+    mutationFn: resetAdminPromotions,
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: number | string
+      payload: {
+        plan_id: number
+        slots: number
+        duration_months: number
+        promotion_title: string
+        short_description: string
+        button_text: string
+        cta_button_text: string
+        highlight_text: string
+        expires_at: string | null
+        status: boolean
+      }
+    }) => updateAdminPromotion(id, payload),
+  })
+
+  const promotions = promotionsQuery.data?.success ? promotionsQuery.data.data : []
+  const plans = plansQuery.data ?? []
+  const loading = promotionsQuery.isLoading
+  const error =
+    promotionsQuery.data?.success === false
+      ? promotionsQuery.data.message || p.loadFailed
+      : null
 
   const [showResetDialog, setShowResetDialog] = useState(false)
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null)
@@ -84,55 +136,39 @@ export default function PromotionsPage() {
     expires_at: string | null
     status: boolean
   } | null>(null)
-  const [submitting, setSubmitting] = useState(false)
 
-  const loadPromotions = async (cancelled = false) => {
-    setLoading(true)
-    setError(null)
-    const res = await fetchAdminPromotions()
-    if (cancelled) return
-    if (res.success) {
-      setPromotions(res.data)
-    } else {
-      setError(res.message || "Failed to load promotions")
-    }
-    setLoading(false)
-  }
-
-  const loadPlans = async () => {
-    try {
-      const data = await fetchPlans()
-      setPlans(data)
-    } catch (err) {
-      console.error("Failed to load plans", err)
-    }
-  }
-
-  useEffect(() => {
-    let cancelled = false
-    void loadPromotions(cancelled)
-    void loadPlans()
-    return () => { cancelled = true }
-  }, [])
+  const submitting = updateMutation.isPending
 
   const handleToggleActive = async (promo: Promotion) => {
     toast({
-      title: "Updating...",
-      description: `Turning promotion ${!promo.status ? "ON" : "OFF"}...`,
+      title: c.updating,
+      description: !promo.status ? c.turningPromotionOn : c.turningPromotionOff,
     })
 
-    const res = await toggleAdminPromotionStatus(promo.id)
+    const res = await toggleMutation.mutateAsync(promo.id)
     
     if (res.success) {
-      toast({
-        title: "Success",
-        description: res.message || `Promotion ${!promo.status ? "activated" : "deactivated"} successfully.`,
+      queryClient.setQueryData(promotionsQueryKey, (previous: {
+        success: boolean
+        message?: string
+        data: Promotion[]
+      } | undefined) => {
+        if (!previous?.success) return previous
+        return {
+          ...previous,
+          data: previous.data.map((item) =>
+            item.id === promo.id ? { ...item, status: !item.status } : item
+          ),
+        }
       })
-      void loadPromotions()
+      toast({
+        title: c.success,
+        description: res.message || (!promo.status ? c.promotionActivated : c.promotionDeactivated),
+      })
     } else {
       toast({
-        title: "Error",
-        description: res.message || "Failed to update promotion status.",
+        title: c.error,
+        description: res.message || c.failedToUpdatePromotionStatus,
         variant: "destructive",
       })
     }
@@ -143,21 +179,21 @@ export default function PromotionsPage() {
     
     setShowResetDialog(false)
     toast({
-      title: "Resetting...",
-      description: "Resetting promotion counters...",
+      title: c.resetting,
+      description: p.resettingCounters,
     })
     
-    const res = await resetAdminPromotions()
+    const res = await resetMutation.mutateAsync()
     if (res.success) {
       toast({
-        title: "Success",
-        description: res.message || "Promotion counters reset successfully.",
+        title: c.success,
+        description: res.message || c.countersResetSuccess,
       })
-      void loadPromotions()
+      void queryClient.invalidateQueries({ queryKey: promotionsQueryKey })
     } else {
       toast({
-        title: "Error",
-        description: res.message || "Failed to reset counters.",
+        title: c.error,
+        description: res.message || c.failedToResetCounters,
         variant: "destructive",
       })
     }
@@ -182,8 +218,7 @@ export default function PromotionsPage() {
 
   const handleUpdatePromotion = async () => {
     if (!editPromoData) return
-    
-    setSubmitting(true)
+
     const payload = {
       plan_id: editPromoData.plan_id,
       slots: editPromoData.slots,
@@ -197,20 +232,19 @@ export default function PromotionsPage() {
       status: editPromoData.status,
     }
 
-    const res = await updateAdminPromotion(editPromoData.id, payload)
-    setSubmitting(false)
+    const res = await updateMutation.mutateAsync({ id: editPromoData.id, payload })
 
     if (res.success) {
       toast({
-        title: "Success",
-        description: res.message || "Promotion updated successfully.",
+        title: c.success,
+        description: res.message || c.promotionUpdated,
       })
       setShowEditDialog(false)
-      void loadPromotions()
+      void queryClient.invalidateQueries({ queryKey: promotionsQueryKey })
     } else {
       toast({
-        title: "Error",
-        description: res.message || "Failed to update promotion.",
+        title: c.error,
+        description: res.message || c.failedToUpdatePromotion,
         variant: "destructive",
       })
     }
@@ -228,37 +262,34 @@ export default function PromotionsPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Promotional Offers</h1>
-          <p className="text-muted-foreground">Manage special offers and founding programs</p>
+          <h1 className="text-2xl font-bold text-foreground">{p.title}</h1>
+          <p className="text-muted-foreground">{p.subtitle}</p>
         </div>
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
-          <p className="font-semibold">Error loading promotions</p>
+          <p className="font-semibold">{c.errorLoadingPromotions}</p>
           <p className="mt-1">{error}</p>
         </div>
       </div>
     )
   }
 
-  // Aggregate stats across all promotions
-  const totalSpots = promotions.reduce((sum, p) => sum + p.total_spots, 0)
-  const totalApproved = promotions.reduce((sum, p) => sum + p.approved, 0)
-  const totalRemaining = promotions.reduce((sum, p) => sum + p.spots_remaining, 0)
-  const totalPending = promotions.reduce((sum, p) => sum + p.pending_review, 0)
+  const totalSpots = promotions.reduce((sum, promo) => sum + promo.total_spots, 0)
+  const totalApproved = promotions.reduce((sum, promo) => sum + promo.approved, 0)
+  const totalRemaining = promotions.reduce((sum, promo) => sum + promo.spots_remaining, 0)
+  const totalPending = promotions.reduce((sum, promo) => sum + promo.pending_review, 0)
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Promotional Offers</h1>
-          <p className="text-muted-foreground">Manage special offers and founding programs</p>
+          <h1 className="text-2xl font-bold text-foreground">{p.title}</h1>
+          <p className="text-muted-foreground">{p.subtitle}</p>
         </div>
       </div>
 
-      {/* Stats Overview */}
       <div className="grid gap-4 md:grid-cols-4">
         <AdminStatCard
-          title="Total Spots"
+          title={p.totalSpots}
           value={totalSpots}
           icon={Users}
           iconClassName="text-primary"
@@ -266,7 +297,7 @@ export default function PromotionsPage() {
           layout="spaceBetween"
         />
         <AdminStatCard
-          title="Approved"
+          title={p.approved}
           value={totalApproved}
           icon={CheckCircle}
           iconClassName="text-secondary"
@@ -274,7 +305,7 @@ export default function PromotionsPage() {
           layout="spaceBetween"
         />
         <AdminStatCard
-          title="Spots Remaining"
+          title={p.spotsRemaining}
           value={totalRemaining}
           icon={TrendingUp}
           iconClassName="text-amber-500"
@@ -282,7 +313,7 @@ export default function PromotionsPage() {
           layout="spaceBetween"
         />
         <AdminStatCard
-          title="Pending Review"
+          title={p.pendingReview}
           value={totalPending}
           icon={Clock}
           iconClassName="text-blue-500"
@@ -291,7 +322,6 @@ export default function PromotionsPage() {
         />
       </div>
 
-      {/* Promotion Cards */}
       {promotions.map((promo) => {
         const percentUsed = promo.stats.fill_percentage
         const spotsRemaining = promo.stats.spots_remaining
@@ -299,26 +329,26 @@ export default function PromotionsPage() {
         return (
           <Card key={promo.id}>
             <CardHeader>
-              <div className="flex items-start justify-between">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary/10">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-secondary/10">
                     <Sparkles className="h-6 w-6 text-secondary" />
                   </div>
                   <div>
-                    <CardTitle className="flex items-center gap-2">
+                    <CardTitle className="flex flex-wrap items-center gap-2">
                       {promo.promotion_title}
                       {promo.status ? (
-                        <Badge className="bg-secondary text-secondary-foreground">Active</Badge>
+                        <Badge className="bg-secondary text-secondary-foreground">{c.active}</Badge>
                       ) : (
-                        <Badge variant="secondary">Inactive</Badge>
+                        <Badge variant="secondary">{c.inactive}</Badge>
                       )}
                     </CardTitle>
-                    <CardDescription>{promo.short_description}</CardDescription>
+                    <CardDescription className="wrap-break-word">{promo.short_description}</CardDescription>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 mr-4">
-                    <Label htmlFor={`active-toggle-${promo.id}`} className="text-sm text-muted-foreground">Active</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2 mr-2 md:mr-4">
+                    <Label htmlFor={`active-toggle-${promo.id}`} className="text-sm text-muted-foreground">{c.active}</Label>
                     <Switch
                       id={`active-toggle-${promo.id}`}
                       checked={promo.status}
@@ -327,72 +357,70 @@ export default function PromotionsPage() {
                   </div>
                   <Button variant="default" size="sm" onClick={() => router.push(`/admin/promotions/${promo.id}`)}>
                     <Users className="mr-2 h-4 w-4" />
-                    Participants
+                    {c.participants}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => handleOpenEditDialog(promo)}>
                     <Edit className="mr-2 h-4 w-4" />
-                    Edit Details
+                    {c.editDetails}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => {
                     setSelectedPromotion(promo)
                     setShowResetDialog(true)
                   }}>
                     <RotateCcw className="mr-2 h-4 w-4" />
-                    Reset Counter
+                    {c.resetCounter}
                   </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid gap-6 md:grid-cols-2">
-                {/* Program Details */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-foreground">Program Details</h4>
+                  <h4 className="font-medium text-foreground">{p.programDetails}</h4>
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Linked Plan:</span>
+                      <span className="text-muted-foreground">{p.linkedPlan}</span>
                       <span className="font-medium text-foreground">
                         {promo.plan.name}
                         {promo.plan.is_popular && (
-                          <Badge variant="secondary" className="ml-2 text-xs">Popular</Badge>
+                          <Badge variant="secondary" className="ml-2 text-xs">{c.popular}</Badge>
                         )}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Plan Price:</span>
+                      <span className="text-muted-foreground">{c.planPrice}</span>
                       <span className="font-medium text-foreground">
-                        ${parseFloat(promo.plan.monthly_price.amount).toFixed(0)}/mo · ${parseFloat(promo.plan.yearly_price.amount).toFixed(0)}/yr
+                        ${parseFloat(promo.plan.monthly_price.amount).toFixed(0)}{c.perMonthShort} · ${parseFloat(promo.plan.yearly_price.amount).toFixed(0)}{c.perYearShort}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Duration:</span>
-                      <span className="font-medium text-foreground">{promo.duration_months} months free</span>
+                      <span className="text-muted-foreground">{p.duration}</span>
+                      <span className="font-medium text-foreground">{c.monthsFree.replace("{count}", String(promo.duration_months))}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Max Spots:</span>
+                      <span className="text-muted-foreground">{p.maxSpots}</span>
                       <span className="font-medium text-foreground">{promo.slots}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Created:</span>
+                      <span className="text-muted-foreground">{p.created}</span>
                       <span className="font-medium text-foreground">
                         {promo.created_at ? new Date(promo.created_at).toLocaleDateString() : "—"}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Expires:</span>
+                      <span className="text-muted-foreground">{p.expires}</span>
                       <span className="font-medium text-foreground">
-                        {promo.expires_at ? new Date(promo.expires_at).toLocaleDateString() : "No expiration"}
+                        {promo.expires_at ? new Date(promo.expires_at).toLocaleDateString() : c.noExpiration}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Progress */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-foreground">Enrollment Progress</h4>
+                  <h4 className="font-medium text-foreground">{p.enrollmentProgress}</h4>
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Spots Used (Approved Only):</span>
+                      <span className="text-muted-foreground">{c.spotsUsedApproved}</span>
                       <span className="font-medium text-foreground">{promo.stats.spots_joined} / {promo.stats.slots_total}</span>
                     </div>
                     <div className="h-3 rounded-full bg-secondary/20">
@@ -402,34 +430,36 @@ export default function PromotionsPage() {
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {percentUsed.toFixed(1)}% filled • {spotsRemaining} spots remaining
+                      {c.percentFilled
+                        .replace("{percent}", percentUsed.toFixed(1))
+                        .replace("{remaining}", String(spotsRemaining))}
                     </p>
 
                     <div className="grid grid-cols-3 gap-2 pt-1">
                       <div className="rounded-lg bg-green-500/10 p-2 text-center">
                         <p className="text-lg font-bold text-green-600">{promo.stats.accepted}</p>
-                        <p className="text-xs text-muted-foreground">Accepted</p>
+                        <p className="text-xs text-muted-foreground">{p.accepted}</p>
                       </div>
                       <div className="rounded-lg bg-amber-500/10 p-2 text-center">
                         <p className="text-lg font-bold text-amber-600">{promo.stats.pending}</p>
-                        <p className="text-xs text-muted-foreground">Pending</p>
+                        <p className="text-xs text-muted-foreground">{c.pending}</p>
                       </div>
                       <div className="rounded-lg bg-red-500/10 p-2 text-center">
                         <p className="text-lg font-bold text-red-600">{promo.stats.rejected}</p>
-                        <p className="text-xs text-muted-foreground">Rejected</p>
+                        <p className="text-xs text-muted-foreground">{c.rejected}</p>
                       </div>
                     </div>
 
                     {spotsRemaining < 50 && (
                       <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 p-2 text-sm text-amber-600">
                         <AlertTriangle className="h-4 w-4" />
-                        <span>Running low on spots! Consider adjusting the limit.</span>
+                        <span>{p.runningLowSpotsAdjust}</span>
                       </div>
                     )}
                     {promo.stats.is_full && (
                       <div className="flex items-center gap-2 rounded-lg bg-red-500/10 p-2 text-sm text-red-600">
                         <AlertTriangle className="h-4 w-4" />
-                        <span>This promotion is full! No more spots available.</span>
+                        <span>{p.promotionFullNoSpots}</span>
                       </div>
                     )}
                   </div>
@@ -438,20 +468,19 @@ export default function PromotionsPage() {
 
               <Separator className="my-6" />
 
-              {/* Display Settings Preview */}
               <div className="space-y-4">
-                <h4 className="font-medium text-foreground">Display Settings</h4>
+                <h4 className="font-medium text-foreground">{c.displaySettings}</h4>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <Label className="text-xs text-muted-foreground">Button Text</Label>
+                    <Label className="text-xs text-muted-foreground">{c.buttonText}</Label>
                     <p className="text-sm font-medium text-foreground">{promo.button_text}</p>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">CTA Button Text</Label>
+                    <Label className="text-xs text-muted-foreground">{c.ctaButtonText}</Label>
                     <p className="text-sm font-medium text-foreground">{promo.cta_button_text}</p>
                   </div>
                   <div className="md:col-span-2">
-                    <Label className="text-xs text-muted-foreground">Highlight Text</Label>
+                    <Label className="text-xs text-muted-foreground">{c.highlightText}</Label>
                     <p className="text-sm text-foreground">{promo.highlight_text}</p>
                   </div>
                 </div>
@@ -461,51 +490,50 @@ export default function PromotionsPage() {
         )
       })}
 
-      {/* Empty state */}
       {promotions.length === 0 && (
         <Card>
           <CardContent className="py-16 text-center">
             <Sparkles className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 font-semibold text-foreground">No promotions found</h3>
-            <p className="mt-2 text-muted-foreground">There are no promotional offers configured yet.</p>
+            <h3 className="mt-4 font-semibold text-foreground">{c.noPromotions}</h3>
+            <p className="mt-2 text-muted-foreground">{c.noPromotionsDesc}</p>
           </CardContent>
         </Card>
       )}
 
-      {/* Reset Counter Dialog */}
       <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reset Counter</DialogTitle>
+            <DialogTitle>{c.resetCounterTitle}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to reset the spots counter for &quot;{selectedPromotion?.promotion_title}&quot;? This will not affect existing enrolled suppliers, but will show the full capacity as available on the pricing page.
+              {p.resetCounterDescLong.replace("{title}", selectedPromotion?.promotion_title ?? "")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowResetDialog(false)}>
-              Cancel
+              {c.cancel}
             </Button>
             <Button onClick={handleResetCounter}>
               <RotateCcw className="mr-2 h-4 w-4" />
-              Reset to 0
+              {c.resetToZero}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Promotion Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Promotion Settings</DialogTitle>
-            <DialogDescription>
-              Modify the configuration for the special promotional offer.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-xl flex flex-col max-h-[95dvh] gap-0 p-0 overflow-hidden">
+          <div className="p-6 pb-4">
+            <DialogHeader>
+              <DialogTitle>{c.editPromotionSettings}</DialogTitle>
+              <DialogDescription>
+                {p.editPromotionDescAlt}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
           {editPromoData && (
-            <div className="space-y-4 py-2">
+            <div className="flex-1 overflow-y-auto px-6 py-2 space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-title">Promotion Title</Label>
+                <Label htmlFor="edit-title">{c.promotionTitle}</Label>
                 <Input
                   id="edit-title"
                   value={editPromoData.promotion_title}
@@ -514,7 +542,7 @@ export default function PromotionsPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="edit-desc">Short Description</Label>
+                <Label htmlFor="edit-desc">{c.shortDescription}</Label>
                 <Textarea
                   id="edit-desc"
                   value={editPromoData.short_description}
@@ -524,18 +552,18 @@ export default function PromotionsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-plan">Linked Plan</Label>
+                  <Label htmlFor="edit-plan">{p.linkedPlan.replace(/:$/, "")}</Label>
                   <Select
                     value={String(editPromoData.plan_id)}
                     onValueChange={(val) => setEditPromoData({ ...editPromoData, plan_id: Number(val) })}
                   >
                     <SelectTrigger id="edit-plan">
-                      <SelectValue placeholder="Select Plan" />
+                      <SelectValue placeholder={p.selectPlan} />
                     </SelectTrigger>
                     <SelectContent>
                       {plans.map((plan) => (
                         <SelectItem key={plan.id} value={String(plan.id)}>
-                          {plan.name} (${parseFloat(plan.monthly_price?.amount || "0").toFixed(0)}/mo)
+                          {plan.name} (${parseFloat(plan.monthly_price?.amount || "0").toFixed(0)}{c.perMonthShort})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -543,7 +571,7 @@ export default function PromotionsPage() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-slots">Max Spots / Slots</Label>
+                  <Label htmlFor="edit-slots">{c.maxSpotsSlots}</Label>
                   <Input
                     id="edit-slots"
                     type="number"
@@ -555,7 +583,7 @@ export default function PromotionsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-duration">Duration (Months Free)</Label>
+                  <Label htmlFor="edit-duration">{c.durationMonthsFree}</Label>
                   <Input
                     id="edit-duration"
                     type="number"
@@ -565,7 +593,7 @@ export default function PromotionsPage() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-expiry">Expires At</Label>
+                  <Label htmlFor="edit-expiry">{c.expiresAt}</Label>
                   <Input
                     id="edit-expiry"
                     type="date"
@@ -577,7 +605,7 @@ export default function PromotionsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-btn-text">Button Text (Pricing Card)</Label>
+                  <Label htmlFor="edit-btn-text">{c.buttonTextPricingCard}</Label>
                   <Input
                     id="edit-btn-text"
                     value={editPromoData.button_text}
@@ -586,7 +614,7 @@ export default function PromotionsPage() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-cta-text">CTA Button Text (Sign Up)</Label>
+                  <Label htmlFor="edit-cta-text">{c.ctaButtonTextSignUp}</Label>
                   <Input
                     id="edit-cta-text"
                     value={editPromoData.cta_button_text}
@@ -596,7 +624,7 @@ export default function PromotionsPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="edit-highlight">Highlight Text</Label>
+                <Label htmlFor="edit-highlight">{c.highlightText}</Label>
                 <Textarea
                   id="edit-highlight"
                   value={editPromoData.highlight_text}
@@ -606,9 +634,9 @@ export default function PromotionsPage() {
 
               <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
                 <div className="space-y-0.5">
-                  <Label>Promotion Status</Label>
+                  <Label>{c.promotionStatus}</Label>
                   <p className="text-xs text-muted-foreground">
-                    Whether this promotional offer is visible and active on the platform.
+                    {p.promotionStatusDesc}
                   </p>
                 </div>
                 <Switch
@@ -618,24 +646,26 @@ export default function PromotionsPage() {
               </div>
             </div>
           )}
-          <DialogFooter className="mt-4">
+          <div className="p-6 pt-4 mt-auto border-t bg-card">
+            <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)} disabled={submitting}>
-              Cancel
+              {c.cancel}
             </Button>
             <Button onClick={handleUpdatePromotion} disabled={submitting}>
               {submitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
+                  {c.saving}
                 </>
               ) : (
                 <>
                   <Save className="mr-2 h-4 w-4" />
-                  Save Changes
+                  {c.saveChanges}
                 </>
               )}
             </Button>
           </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

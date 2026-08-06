@@ -72,7 +72,7 @@ export function WhyUseSection() {
   ]
 
   return (
-    <section className="py-8 sm:py-12 lg:py-28">
+    <section className="py-8 sm:py-12 lg:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Why Buyers Use SourceNest */}
         <div>
@@ -85,15 +85,15 @@ export function WhyUseSection() {
             </p>
           </div>
 
-          <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-14 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
             {buyerBenefits.map((benefit) => (
-              <div key={benefit.title} className="flex gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-secondary/10">
-                  <benefit.icon className="h-6 w-6 text-secondary" />
+              <div key={benefit.title} className="flex gap-2.5 sm:gap-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/10 sm:h-12 sm:w-12 sm:rounded-xl">
+                  <benefit.icon className="h-4 w-4 text-secondary sm:h-6 sm:w-6" />
                 </div>
-                <div>
-                  <h3 className="font-semibold text-foreground">{benefit.title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{benefit.description}</p>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-foreground sm:text-base">{benefit.title}</h3>
+                  <p className="mt-0.5 line-clamp-3 text-xs leading-relaxed text-muted-foreground sm:mt-1 sm:line-clamp-none sm:text-sm">{benefit.description}</p>
                 </div>
               </div>
             ))}
@@ -101,7 +101,7 @@ export function WhyUseSection() {
         </div>
 
         {/* Divider */}
-        <div className="my-20 border-t border-border" />
+        <div className="my-8 border-t border-border sm:my-20" />
 
         {/* Why Manufacturers Join */}
         <div>
@@ -114,24 +114,23 @@ export function WhyUseSection() {
             </p>
           </div>
 
-          <div className="mt-14 grid gap-8 md:grid-cols-3">
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-14 sm:gap-5 lg:grid-cols-3 lg:gap-6">
             {manufacturerBenefits.map((benefit) => (
-              <div key={benefit.title} className="rounded-2xl border border-border bg-card p-8 text-center">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
-                  <benefit.icon className="h-8 w-8 text-primary-foreground" />
+              <div key={benefit.title} className="rounded-xl border border-border bg-card p-3 text-center sm:rounded-2xl sm:p-6 lg:p-8">
+                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-primary sm:h-14 sm:w-14 sm:rounded-2xl lg:h-16 lg:w-16">
+                  <benefit.icon className="h-5 w-5 text-primary-foreground sm:h-7 sm:w-7 lg:h-8 lg:w-8" />
                 </div>
-                <h3 className="mt-6 text-xl font-semibold text-foreground">{benefit.title}</h3>
-                <p className="mt-3 text-muted-foreground leading-relaxed">{benefit.description}</p>
+                <h3 className="mt-2 text-sm font-semibold text-foreground sm:mt-5 sm:text-xl lg:mt-6">{benefit.title}</h3>
+                <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground sm:mt-3 sm:line-clamp-none sm:text-sm lg:text-base">{benefit.description}</p>
               </div>
             ))}
           </div>
 
-          {/* Why Factories Pay */}
-          <div className="mt-14 rounded-2xl bg-primary p-8 text-center text-primary-foreground md:p-12">
-            <h3 className="font-serif text-2xl font-medium md:text-3xl">
+          <div className="mt-8 rounded-xl bg-primary p-4 text-center text-primary-foreground sm:mt-14 sm:rounded-2xl sm:p-8 md:p-12">
+            <h3 className="font-serif text-lg font-medium sm:text-2xl md:text-3xl">
               {t.landing.whyUse.whyPayTitle}
             </h3>
-            <p className="mx-auto mt-4 max-w-2xl text-primary-foreground/80 leading-relaxed">
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:mt-4 sm:text-base">
               {t.landing.whyUse.whyPayDesc}
             </p>
           </div>

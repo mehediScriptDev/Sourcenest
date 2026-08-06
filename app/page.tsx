@@ -1,21 +1,39 @@
-import { Header } from "@/components/layout/header"
+import dynamic from "next/dynamic"
+import { Header, HeaderSpacer } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { HeroSection } from "@/components/home/hero-section"
-import { WhatIsSection } from "@/components/home/what-is-section"
-import { HowItWorksSection } from "@/components/home/how-it-works-section"
-import { WhyUseSection } from "@/components/home/why-use-section"
-import { FeaturedSuppliersSection } from "@/components/home/featured-suppliers-section"
-import { FeaturedProductsSection } from "@/components/home/featured-products-section"
 import { IndustriesSection } from "@/components/home/industries-section"
-import { TrustSection } from "@/components/home/trust-section"
-import { TestimonialsSection } from "@/components/home/testimonials-section"
-import { FaqSection } from "@/components/home/faq-section"
-import { CtaSection } from "@/components/home/cta-section"
+import { WhatIsSection } from "@/components/home/what-is-section"
+
+const FeaturedSuppliersSection = dynamic(
+  () => import("@/components/home/featured-suppliers-section").then((m) => m.FeaturedSuppliersSection),
+)
+const HowItWorksSection = dynamic(
+  () => import("@/components/home/how-it-works-section").then((m) => m.HowItWorksSection),
+)
+const FeaturedProductsSection = dynamic(
+  () => import("@/components/home/featured-products-section").then((m) => m.FeaturedProductsSection),
+)
+const WhyUseSection = dynamic(
+  () => import("@/components/home/why-use-section").then((m) => m.WhyUseSection),
+)
+const TrustSection = dynamic(
+  () => import("@/components/home/trust-section").then((m) => m.TrustSection),
+)
+const TestimonialsSection = dynamic(
+  () => import("@/components/home/testimonials-section").then((m) => m.TestimonialsSection),
+)
+const FaqSection = dynamic(
+  () => import("@/components/home/faq-section").then((m) => m.FaqSection),
+)
+const CtaSection = dynamic(
+  () => import("@/components/home/cta-section").then((m) => m.CtaSection),
+)
 
 export default function HomePage() {
   return (
     <>
-      <Header />
+      <HeaderSpacer />
       <div className="flex min-h-screen min-w-0 flex-col overflow-x-hidden">
         <main className="min-w-0 flex-1">
           <HeroSection />
@@ -32,6 +50,7 @@ export default function HomePage() {
         </main>
         <Footer />
       </div>
+      <Header />
     </>
   )
 }

@@ -1,34 +1,63 @@
 "use client"
 
-import React from "react"
+import React, { useMemo } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { Header } from "@/components/layout/header"
+import { useQuery } from "@tanstack/react-query"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, User, Clock, ArrowLeft, ChevronRight, Globe } from "lucide-react"
 import {
-  STATIC_ARTICLES,
-  getArticleBySlug,
+  fetchPublicArticleBySlug,
+  fetchPublicArticles,
   formatPublishedDate,
-} from "@/lib/static-articles"
+} from "@/lib/api/articles"
+import { queryKeys } from "@/lib/query-keys"
 
 export default function BlogArticlePage() {
   const params = useParams()
   const slugParam = params?.slug
   const slug = slugParam ? decodeURIComponent(String(slugParam)) : ""
 
-  const article = getArticleBySlug(slug)
+  const articleQuery = useQuery({
+    queryKey: queryKeys.publicBlogArticle(slug),
+    queryFn: () => fetchPublicArticleBySlug(slug),
+    enabled: Boolean(slug),
+  })
 
-  const suggestedArticles = STATIC_ARTICLES.filter(
-    (a) => a.slug !== slug
-  ).slice(0, 3)
+  const articlesQuery = useQuery({
+    queryKey: queryKeys.publicBlogArticles(),
+    queryFn: () => fetchPublicArticles(),
+    enabled: Boolean(slug),
+  })
 
-  if (!article) {
+  const article = articleQuery.data ?? null
+  const suggestedArticles = useMemo(() => {
+    if (!articlesQuery.data || !slug) return []
+    return articlesQuery.data.filter((item) => item.slug !== slug).slice(0, 3)
+  }, [articlesQuery.data, slug])
+
+  const loading = Boolean(slug) && (articleQuery.isLoading || articlesQuery.isLoading)
+  const notFound = Boolean(slug) && articleQuery.isFetched && !articleQuery.data
+
+  if (loading) {
     return (
       <div className="flex min-h-screen flex-col">
-        <Header />
+        <SiteHeader />
+        <main className="flex-1 flex items-center justify-center">
+          <p className="text-muted-foreground">Loading article...</p>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
+  if (notFound || !article) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <SiteHeader />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center py-24 px-4">
             <div className="text-6xl mb-6">📄</div>
@@ -51,11 +80,10 @@ export default function BlogArticlePage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-background">
+      <SiteHeader />
       <main className="flex-1">
 
-        {/* ─── Hero ─── */}
         <section className="relative overflow-hidden bg-primary">
           <div
             className="absolute inset-0 opacity-[0.06]"
@@ -68,7 +96,6 @@ export default function BlogArticlePage() {
           <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-primary-foreground/5 blur-3xl" />
 
           <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-10 pb-12">
-            {/* Breadcrumb */}
             <nav className="flex items-center gap-2 text-sm text-primary-foreground/50 mb-7 flex-wrap">
               <Link href="/blog" className="hover:text-primary-foreground/80 transition-colors flex items-center gap-1">
                 <Globe className="h-3.5 w-3.5" />
@@ -113,10 +140,7 @@ export default function BlogArticlePage() {
           </div>
         </section>
 
-        {/* ─── Main Layout ─── */}
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-
-          {/* Featured Image — full width of content area */}
           <div className="relative mt-8 lg:mt-10 w-full h-72 sm:h-96 lg:h-[460px] overflow-hidden rounded-xl shadow-xl border border-border bg-muted">
             <Image
               src={article.imageUrl}
@@ -128,33 +152,21 @@ export default function BlogArticlePage() {
             />
           </div>
 
-          {/* Content grid */}
           <div className="py-10 lg:py-12 grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-10 lg:gap-14 items-start">
-
-            {/* ─── Article body ─── */}
             <article className="min-w-0">
-              {/* Inline styles force bullets to render regardless of Tailwind prose resets */}
               <div
                 className="text-base leading-relaxed text-muted-foreground"
-                style={{
-                  lineHeight: "1.85",
-                }}
+                style={{ lineHeight: "1.85" }}
                 dangerouslySetInnerHTML={{
                   __html: article.content
-                    // Ensure <p> styling
                     .replace(/<p>/g, '<p style="margin-bottom:1.25rem;color:inherit;">')
-                    // Ensure <ul> has bullets
                     .replace(/<ul>/g, '<ul style="list-style-type:disc;padding-left:1.5rem;margin-bottom:1.25rem;margin-top:0.5rem;">')
-                    // Ensure <ol> has numbers
                     .replace(/<ol>/g, '<ol style="list-style-type:decimal;padding-left:1.5rem;margin-bottom:1.25rem;margin-top:0.5rem;">')
-                    // Ensure <li> spacing
                     .replace(/<li>/g, '<li style="margin-bottom:0.4rem;padding-left:0.25rem;">')
-                    // Strong text
-                    .replace(/<strong>/g, '<strong style="color:var(--foreground);font-weight:600;">')
+                    .replace(/<strong>/g, '<strong style="color:var(--foreground);font-weight:600;">'),
                 }}
               />
 
-              {/* Tags */}
               {article.tags.length > 0 && (
                 <div className="mt-10 pt-8 border-t border-border">
                   <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Tags</p>
@@ -172,7 +184,6 @@ export default function BlogArticlePage() {
                 </div>
               )}
 
-              {/* Author card */}
               <div className="mt-10 rounded-xl border border-border bg-muted/40 p-6 flex items-start gap-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10">
                   <User className="h-5 w-5 text-primary" />
@@ -185,7 +196,6 @@ export default function BlogArticlePage() {
                 </div>
               </div>
 
-              {/* Back link */}
               <div className="mt-8 pb-4">
                 <Link
                   href="/blog"
@@ -197,7 +207,6 @@ export default function BlogArticlePage() {
               </div>
             </article>
 
-            {/* ─── Sidebar ─── */}
             <aside className="hidden lg:block">
               <div className="sticky top-24 space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-1 mb-5">
@@ -234,7 +243,6 @@ export default function BlogArticlePage() {
                   </Link>
                 ))}
 
-                {/* CTA box */}
                 <div className="rounded-xl bg-primary/5 border border-primary/15 p-5 text-center mt-2">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mx-auto mb-3">
                     <Globe className="h-5 w-5 text-primary" />
@@ -252,7 +260,6 @@ export default function BlogArticlePage() {
                 </div>
               </div>
             </aside>
-
           </div>
         </div>
 

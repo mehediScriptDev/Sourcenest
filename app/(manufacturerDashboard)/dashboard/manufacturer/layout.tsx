@@ -7,8 +7,10 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
-import { useSubscription } from "@/lib/subscription-context"
+import { SubscriptionProvider, useSubscription } from "@/lib/subscription-context"
+import { MessagesProvider } from "@/lib/messages-context"
 import { NotificationsDropdown } from "@/components/notifications-dropdown"
+import { useTranslation } from "@/lib/i18n"
 import { 
   LayoutDashboard, 
   MessageSquare, 
@@ -24,7 +26,7 @@ import {
   Factory,
   Star,
   Award,
-  // Globe,
+  Globe,
   CreditCard,
   FileBox,
   Clock,
@@ -35,23 +37,37 @@ import {
 import { useState } from "react"
 
 const navigation = [
-  { name: "Dashboard", href: "/dashboard/manufacturer", icon: LayoutDashboard },
-  { name: "Inquiries", href: "/dashboard/manufacturer/inquiries", icon: FileText },
-  { name: "Messages", href: "/dashboard/manufacturer/messages", icon: MessageSquare },
-  { name: "Support Tickets", href: "/dashboard/manufacturer/support-tickets", icon: HelpCircle },
-  { name: "Review Center", href: "/dashboard/manufacturer/review-center", icon: ScanEye },
-  { name: "Orders", href: "/dashboard/manufacturer/orders", icon: ShoppingBag },
-  { name: "Products", href: "/dashboard/manufacturer/products", icon: Package },
-  { name: "Catalogs", href: "/dashboard/manufacturer/catalogs", icon: FileBox },
-  { name: "Certifications", href: "/dashboard/manufacturer/certifications", icon: Award },
-  // { name: "Export Markets", href: "/dashboard/manufacturer/markets", icon: Globe },
-  { name: "Analytics", href: "/dashboard/manufacturer/analytics", icon: BarChart3 },
-  { name: "Company Profile", href: "/dashboard/manufacturer/profile", icon: Factory },
-  { name: "Subscription", href: "/dashboard/manufacturer/subscription", icon: CreditCard },
-  { name: "Settings", href: "/dashboard/manufacturer/settings", icon: Settings },
+  { name: "Dashboard", key: "dashboard", href: "/dashboard/manufacturer", icon: LayoutDashboard },
+  { name: "Inquiries", key: "inquiries", href: "/dashboard/manufacturer/inquiries", icon: FileText },
+  { name: "Messages", key: "messages", href: "/dashboard/manufacturer/messages", icon: MessageSquare },
+  { name: "Support Tickets", key: "supportTickets", href: "/dashboard/manufacturer/support-tickets", icon: HelpCircle },
+  { name: "Review Center", key: "reviewCenter", href: "/dashboard/manufacturer/review-center", icon: ScanEye },
+  { name: "Orders", key: "orders", href: "/dashboard/manufacturer/orders", icon: ShoppingBag },
+  { name: "Products", key: "products", href: "/dashboard/manufacturer/products", icon: Package },
+  { name: "Catalogs", key: "catalogs", href: "/dashboard/manufacturer/catalogs", icon: FileBox },
+  { name: "Certifications", key: "certifications", href: "/dashboard/manufacturer/certifications", icon: Award },
+  { name: "Export Markets", key: "exportMarkets", href: "/dashboard/manufacturer/markets", icon: Globe },
+  { name: "Analytics", key: "analytics", href: "/dashboard/manufacturer/analytics", icon: BarChart3 },
+  { name: "Company Profile", key: "companyProfile", href: "/dashboard/manufacturer/profile", icon: Factory },
+  { name: "Subscription", key: "subscription", href: "/dashboard/manufacturer/subscription", icon: CreditCard },
+  { name: "Settings", key: "settings", href: "/dashboard/manufacturer/settings", icon: Settings },
 ]
 
 export default function ManufacturerDashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <SubscriptionProvider>
+      <MessagesProvider>
+        <ManufacturerDashboardLayoutInner>{children}</ManufacturerDashboardLayoutInner>
+      </MessagesProvider>
+    </SubscriptionProvider>
+  )
+}
+
+function ManufacturerDashboardLayoutInner({
   children,
 }: {
   children: React.ReactNode
@@ -61,6 +77,7 @@ export default function ManufacturerDashboardLayout({
   const { user, isLoading, logout } = useAuth()
   const { plan } = useSubscription()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { t } = useTranslation()
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== "manufacturer")) {
@@ -73,7 +90,7 @@ export default function ManufacturerDashboardLayout({
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="mt-4 text-muted-foreground">Loading...</p>
+          <p className="mt-4 text-muted-foreground">{t.nav.loading || "Loading..."}</p>
         </div>
       </div>
     )
@@ -103,8 +120,8 @@ export default function ManufacturerDashboardLayout({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-dvh w-64 shrink-0 flex-col bg-sidebar shadow-lg transition-transform duration-200 ease-in-out lg:z-30 lg:shadow-none",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          "fixed inset-y-0 inset-s-0 z-50 flex h-dvh w-64 shrink-0 flex-col bg-sidebar shadow-lg transition-transform duration-200 ease-in-out lg:z-30 lg:shadow-none",
+          sidebarOpen ? "translate-x-0" : "ltr:-translate-x-full rtl:translate-x-full lg:translate-x-0 lg:rtl:translate-x-0 lg:ltr:translate-x-0"
         )}
       >
         <div className="flex h-full min-h-0 flex-col">
@@ -134,24 +151,24 @@ export default function ManufacturerDashboardLayout({
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4" />
                 <span className="font-medium">
-                  {user.manufacturerStatus === "pending_approval" && "Pending Approval"}
-                  {user.manufacturerStatus === "rejected" && "Application Rejected"}
-                  {user.manufacturerStatus === "suspended" && "Account Suspended"}
-                  {user.manufacturerStatus === "needs_more_info" && "More Info Needed"}
+                  {user.manufacturerStatus === "pending_approval" && t.nav.statusPendingApproval}
+                  {user.manufacturerStatus === "rejected" && t.nav.statusRejected}
+                  {user.manufacturerStatus === "suspended" && t.nav.statusSuspended}
+                  {user.manufacturerStatus === "needs_more_info" && t.nav.statusNeedsMoreInfo}
                 </span>
               </div>
               <p className="mt-1 opacity-80">
-                {user.manufacturerStatus === "pending_approval" && "Your account is under review."}
-                {user.manufacturerStatus === "rejected" && "Please contact support."}
-                {user.manufacturerStatus === "suspended" && "Please contact support."}
-                {user.manufacturerStatus === "needs_more_info" && "Check your messages."}
+                {user.manufacturerStatus === "pending_approval" && t.nav.descPendingApproval}
+                {user.manufacturerStatus === "rejected" && t.nav.descRejected}
+                {user.manufacturerStatus === "suspended" && t.nav.descSuspended}
+                {user.manufacturerStatus === "needs_more_info" && t.nav.descNeedsMoreInfo}
               </p>
             </div>
           )}
 
           <div className="shrink-0 border-b border-sidebar-border px-4 py-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-sidebar-foreground/60">Current Plan</span>
+              <span className="text-xs text-sidebar-foreground/60">{t.nav.currentPlan || "Current Plan"}</span>
               <Badge className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
                 {plan?.name || "Free"}
               </Badge>
@@ -177,11 +194,11 @@ export default function ManufacturerDashboardLayout({
                 >
                   <div className="flex items-center gap-3">
                     <item.icon className={cn("h-5 w-5", navItem.highlight && !isActive && "text-secondary")} />
-                    {item.name}
+                    {t.nav[item.key as keyof typeof t.nav] || item.name}
                   </div>
                   {navItem.highlight && !isActive && (
                     <Badge className="bg-secondary text-secondary-foreground text-xs">
-                      Required
+                      {t.nav.requiredBadge || "Required"}
                     </Badge>
                   )}
                 </Link>
@@ -199,15 +216,15 @@ export default function ManufacturerDashboardLayout({
               }}
             >
               <LogOut className="h-4 w-4" />
-              Sign Out
+              {t.auth.signOut || "Sign Out"}
             </Button>
           </div>
         </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:pl-64">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 lg:px-6">
-          <div className="flex items-center gap-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:ps-64">
+        <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-4 sm:gap-3 lg:px-6">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
             <button 
               className="lg:hidden"
               onClick={() => setSidebarOpen(true)}
@@ -225,10 +242,10 @@ export default function ManufacturerDashboardLayout({
             </div>
             */}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <NotificationsDropdown />
-            <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
-              Back to Site
+            <Link href="/" className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline">
+              {t.nav.backToSite || "Back to Site"}
             </Link>
           </div>
         </header>

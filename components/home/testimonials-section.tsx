@@ -30,7 +30,7 @@ const testimonials = [
 export function TestimonialsSection() {
   const { t } = useTranslation()
   return (
-    <section className="bg-muted/50 py-8 sm:py-12 lg:py-28">
+    <section className="bg-muted/50 py-8 sm:py-12 lg:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground sm:text-3xl lg:text-4xl">
@@ -41,20 +41,20 @@ export function TestimonialsSection() {
           </p>
         </div>
 
-        <div className="mt-14 grid gap-8 md:grid-cols-3">
+        <div className="mt-8 grid grid-cols-1 gap-3 sm:mt-14 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
           {testimonials.map((testimonial, index) => (
-            <div key={index} className="rounded-2xl bg-card p-8 shadow-sm">
-              <Quote className="h-10 w-10 text-secondary/30" />
-              <p className="mt-4 text-foreground leading-relaxed">
+            <div key={index} className="rounded-xl bg-card p-4 shadow-sm sm:rounded-2xl sm:p-6 lg:p-8">
+              <Quote className="h-7 w-7 text-secondary/30 sm:h-9 sm:w-9 lg:h-10 lg:w-10" />
+              <p className="mt-3 line-clamp-4 text-sm leading-relaxed text-foreground sm:mt-4 sm:line-clamp-none sm:text-base">
                 &ldquo;{testimonial.quote}&rdquo;
               </p>
-              <div className="mt-6 border-t border-border pt-6">
-                <div className="font-semibold text-foreground">{testimonial.author}</div>
-                <div className="mt-1 text-sm text-muted-foreground">
+              <div className="mt-4 border-t border-border pt-4 sm:mt-6 sm:pt-6">
+                <div className="text-sm font-semibold text-foreground sm:text-base">{testimonial.author}</div>
+                <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground sm:text-sm">
                   {testimonial.role}, {testimonial.company}
                 </div>
                 <div className="mt-2">
-                  <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium sm:px-3 sm:py-1 sm:text-xs ${
                     testimonial.type === "buyer" 
                       ? "bg-blue-100 text-blue-800" 
                       : "bg-amber-100 text-amber-800"

@@ -1,27 +1,10 @@
 import axios from "axios";
+import { readPreferredLanguage } from "./locale";
+
+export { readPreferredLanguage } from "./locale";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 const AUTH_STORAGE_KEYS = ["sourcenest_token", "access_token", "token", "TOKEN"] as const;
-
-function readPreferredLanguage(): string {
-  if (typeof window === "undefined") {
-    return "en";
-  }
-
-  const languageCandidates = [
-    localStorage.getItem("sourcenest_lang"),
-    localStorage.getItem("locale"),
-    localStorage.getItem("language"),
-  ];
-
-  for (const candidate of languageCandidates) {
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return "en";
-}
 
 function normalizeStoredToken(value: string | null): string | null {
   if (typeof value !== "string") {

@@ -41,21 +41,11 @@ export default function ManufacturerMessagesPage() {
       setIsLoading(true)
       try {
         const data = await getConversations()
-        
-        let finalConversations = data;
-        const hasAdmin = data.some(c => c.participants.some(p => p.id === "1" || p.role === "admin"));
-        
-        if (!hasAdmin && user.id) {
-          const newConv = await createConversation([1, user.id]);
-          if (newConv) {
-            finalConversations = [newConv, ...data];
-          }
-        }
 
         if (isMounted) {
-          setConversations(finalConversations)
-          if (finalConversations.length > 0 && !selectedConvId) {
-            setSelectedConvId(finalConversations[0].id)
+          setConversations(data)
+          if (data.length > 0 && !selectedConvId) {
+            setSelectedConvId(data[0].id)
           }
         }
       } catch (error) {
@@ -246,7 +236,7 @@ export default function ManufacturerMessagesPage() {
   }
 
   return (
-    <div className="h-[calc(100dvh-120px)] w-full max-w-full">
+    <div className="h-[calc(100dvh-8rem)] w-full min-w-0 max-w-full overflow-x-hidden">
       <ChatView
         conversations={conversations}
         messages={messages}

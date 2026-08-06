@@ -31,9 +31,9 @@ export function TrustSection() {
   ]
 
   return (
-    <section className="py-8 sm:py-12 lg:py-28">
+    <section className="py-8 sm:py-12 lg:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
           {/* Content */}
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-secondary/10 px-4 py-1.5 text-sm text-secondary">
@@ -71,31 +71,31 @@ export function TrustSection() {
 
           {/* Visual */}
           <div className="relative">
-            <div className="rounded-2xl bg-primary p-8 text-primary-foreground lg:p-12">
-              <div className="flex items-center gap-3">
-                <Shield className="h-10 w-10" />
-                <span className="font-serif text-2xl">{t.landing.trust.reviewedBadge}</span>
+            <div className="rounded-xl bg-primary p-4 text-primary-foreground sm:rounded-2xl sm:p-6 lg:p-12">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Shield className="h-7 w-7 sm:h-10 sm:w-10" />
+                <span className="font-serif text-lg sm:text-2xl">{t.landing.trust.reviewedBadge}</span>
               </div>
 
-              <div className="mt-8 space-y-4">
-                <div className="flex items-center gap-3 rounded-lg bg-primary-foreground/10 p-4">
-                  <CheckCircle className="h-5 w-5 text-primary-foreground" />
+              <div className="mt-4 space-y-2 sm:mt-6 sm:space-y-3 lg:mt-8 lg:space-y-4">
+                <div className="flex items-center gap-2 rounded-lg bg-primary-foreground/10 p-2.5 text-xs sm:gap-3 sm:p-4 sm:text-sm">
+                  <CheckCircle className="h-4 w-4 shrink-0 text-primary-foreground sm:h-5 sm:w-5" />
                   <span>{t.landing.trust.point1}</span>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg bg-primary-foreground/10 p-4">
-                  <CheckCircle className="h-5 w-5 text-primary-foreground" />
+                <div className="flex items-center gap-2 rounded-lg bg-primary-foreground/10 p-2.5 text-xs sm:gap-3 sm:p-4 sm:text-sm">
+                  <CheckCircle className="h-4 w-4 shrink-0 text-primary-foreground sm:h-5 sm:w-5" />
                   <span>{t.landing.trust.point2}</span>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg bg-primary-foreground/10 p-4">
-                  <CheckCircle className="h-5 w-5 text-primary-foreground" />
+                <div className="flex items-center gap-2 rounded-lg bg-primary-foreground/10 p-2.5 text-xs sm:gap-3 sm:p-4 sm:text-sm">
+                  <CheckCircle className="h-4 w-4 shrink-0 text-primary-foreground sm:h-5 sm:w-5" />
                   <span>{t.landing.trust.point3}</span>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg bg-primary-foreground/10 p-4">
-                  <CheckCircle className="h-5 w-5 text-primary-foreground" />
+                <div className="flex items-center gap-2 rounded-lg bg-primary-foreground/10 p-2.5 text-xs sm:gap-3 sm:p-4 sm:text-sm">
+                  <CheckCircle className="h-4 w-4 shrink-0 text-primary-foreground sm:h-5 sm:w-5" />
                   <span>{t.landing.trust.point4}</span>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg bg-primary-foreground/10 p-4">
-                  <CheckCircle className="h-5 w-5 text-primary-foreground" />
+                <div className="flex items-center gap-2 rounded-lg bg-primary-foreground/10 p-2.5 text-xs sm:gap-3 sm:p-4 sm:text-sm">
+                  <CheckCircle className="h-4 w-4 shrink-0 text-primary-foreground sm:h-5 sm:w-5" />
                   <span>{t.landing.trust.point5}</span>
                 </div>
               </div>

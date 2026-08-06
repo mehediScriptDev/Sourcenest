@@ -86,6 +86,7 @@ export async function getManufacturerMarkets(): Promise<ManufacturerMarketsRespo
 export async function getExportCountries(params?: {
   page?: number
   per_page?: number
+  search?: string
 }): Promise<ExportCountriesResponse> {
   try {
     const response = await apiClient.get<ExportCountriesResponse>("/manufacturer/markets/countries", {
@@ -94,6 +95,21 @@ export async function getExportCountries(params?: {
     return response.data
   } catch (error) {
     throw new Error(getApiErrorMessage(error, "Failed to fetch export countries."))
+  }
+}
+
+/**
+ * Sync all selected export countries in one request.
+ * PUT /manufacturer/markets/countries/sync
+ */
+export async function syncExportCountries(countryCodes: string[]): Promise<ManufacturerMarketsResponse> {
+  try {
+    const response = await apiClient.put<ManufacturerMarketsResponse>("/manufacturer/markets/countries/sync", {
+      country_codes: countryCodes,
+    })
+    return response.data
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Failed to sync export countries."))
   }
 }
 

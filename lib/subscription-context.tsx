@@ -43,6 +43,7 @@ export interface SubscriptionPlan {
   description: string
   monthlyPrice: number | null
   yearlyPrice: number | null
+  backendId?: number
   limits: PlanLimits
   features: PlanFeatures
   rawFeatures?: Array<{
@@ -77,6 +78,7 @@ export interface Subscription {
   priceAmount?: string
   priceCurrency?: string
   autoRenew?: boolean
+  hasReusablePaymentMethod?: boolean
 }
 
 // Plan definitions
@@ -250,13 +252,28 @@ interface SubscriptionContextType {
   upgradePlan: (planId: PlanId) => Promise<boolean>
   downgradePlan: (planId: PlanId) => Promise<boolean>
   cancelSubscription: () => Promise<boolean>
+  setAutoRenew: (payload: {
+    enabled: boolean
+    vault_setup_token?: string
+    paypal_vault_id?: string
+  }) => Promise<{ success: boolean; message: string }>
   subscribeToPlan: (payload: {
     plan_id: number
     payment_method: string
-    billing_interval: string
+    billing_interval: "yearly" | "monthly"
     payment_id: string
     auto_renew: boolean
     paid_amount: number
+    paypal_vault_id?: string
+  }) => Promise<{ success: boolean; message: string }>
+  upgradeSubscription: (payload: {
+    plan_id: number
+    payment_method: string
+    billing_interval: "yearly" | "monthly"
+    payment_id: string
+    auto_renew: boolean
+    paid_amount: number
+    paypal_vault_id?: string
   }) => Promise<{ success: boolean; message: string }>
   
   // Usage tracking
@@ -265,6 +282,11 @@ interface SubscriptionContextType {
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined)
+
+/** GET responses may use "year"/"month"; POST subscribe/upgrade use "yearly"/"monthly". */
+function isYearlyBillingInterval(interval?: string | null): boolean {
+  return interval === "year" || interval === "yearly"
+}
 
 function transformBackendPlanToSubscriptionPlan(backendPlan: any): SubscriptionPlan {
   const mappedId = backendPlan.name.toLowerCase() as PlanId;
@@ -352,7 +374,8 @@ function transformBackendPlanToSubscriptionPlan(backendPlan: any): SubscriptionP
     yearlyPrice: parseFloat(backendPlan.yearly_price?.amount || "0"),
     limits,
     features,
-    rawFeatures: backendPlan.features
+    rawFeatures: backendPlan.features,
+    backendId: backendPlan.id
   };
 }
 
@@ -380,8 +403,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      // For buyers, they always have "free" plan (no subscription needed)
-      if (user.role === "buyer") {
+      // Only manufacturers use subscription / promotion APIs
+      if (user.role !== "manufacturer") {
         setSubscription(null)
         setIsLoading(false)
         return
@@ -426,18 +449,19 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           setSubscription({
             planId: mappedPlanId,
             status: subData.status,
-            billingCycle: subData.billing_interval === "year" ? "yearly" : "monthly",
+            billingCycle: isYearlyBillingInterval(subData.billing_interval) ? "yearly" : "monthly",
             currentPeriodStart: subData.starts_at,
             currentPeriodEnd: subData.ends_at,
             cancelAtPeriodEnd: !subData.auto_renew,
             daysRemaining: subData.days_remaining,
-            priceAmount: subData.billing_interval === "year"
+            priceAmount: isYearlyBillingInterval(subData.billing_interval)
               ? subData.plan?.yearly_price?.amount
               : subData.plan?.monthly_price?.amount,
-            priceCurrency: subData.billing_interval === "year"
+            priceCurrency: isYearlyBillingInterval(subData.billing_interval)
               ? (subData.plan?.yearly_price?.currency || "USD")
               : (subData.plan?.monthly_price?.currency || "USD"),
-            autoRenew: subData.auto_renew
+            autoRenew: subData.auto_renew,
+            hasReusablePaymentMethod: Boolean(subData.has_reusable_payment_method),
           })
           hasSubscription = true
         } else {
@@ -454,44 +478,53 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
 
       if (!hasSubscription) {
-        try {
-          const promoAppRes = await apiClient.get('/manufacturer/promotions/my-application')
-          if (promoAppRes.data?.success && promoAppRes.data?.data) {
-            const promoAppData = promoAppRes.data.data
-            const appStatus = promoAppData.application?.status?.toLowerCase()
-            const planName = promoAppData.promotion?.plan?.name?.toLowerCase() || "growth"
-            
-            let mappedPlanId: PlanId = "growth"
-            if (["starter", "growth", "enterprise", "free"].includes(planName)) {
-              mappedPlanId = planName as PlanId
+        const promoAppRes = await apiClient
+          .get("/manufacturer/promotions/my-application")
+          .catch((error: unknown) => {
+            const status = (error as { response?: { status?: number } })?.response?.status
+            if (status !== 404 && status !== 403) {
+              console.error("Failed to fetch promotion application:", error)
             }
+            return null
+          })
 
-            setSubscription({
-              planId: mappedPlanId,
-              status: appStatus === "approved" ? "active" : "trialing",
-              billingCycle: "monthly",
-              currentPeriodStart: promoAppData.application?.joined_at || new Date().toISOString().split("T")[0],
-              currentPeriodEnd: promoAppData.application?.trial_ends_at || new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-              cancelAtPeriodEnd: false,
-              daysRemaining: 180,
-              priceAmount: "0.00",
-              priceCurrency: "USD",
-              autoRenew: false
-            })
+        if (promoAppRes?.data?.success && promoAppRes.data?.data) {
+          const promoAppData = promoAppRes.data.data
+          const appStatus = promoAppData.application?.status?.toLowerCase()
+          const planName = promoAppData.promotion?.plan?.name?.toLowerCase() || "growth"
 
-            // Construct mock subData so metrics work correctly
-            subData = {
-              status: appStatus === "approved" ? "active" : "trialing",
-              billing_interval: "month",
-              starts_at: promoAppData.application?.joined_at || new Date().toISOString().split("T")[0],
-              ends_at: promoAppData.application?.trial_ends_at || new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-              auto_renew: false,
-              days_remaining: 180,
-              plan: promoAppData.promotion?.plan
-            }
+          let mappedPlanId: PlanId = "growth"
+          if (["starter", "growth", "enterprise", "free"].includes(planName)) {
+            mappedPlanId = planName as PlanId
           }
-        } catch (promoErr) {
-          console.error("Failed to fetch promotion application:", promoErr)
+
+          setSubscription({
+            planId: mappedPlanId,
+            status: appStatus === "approved" ? "active" : "trialing",
+            billingCycle: "monthly",
+            currentPeriodStart: promoAppData.application?.joined_at || new Date().toISOString().split("T")[0],
+            currentPeriodEnd:
+              promoAppData.application?.trial_ends_at ||
+              new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            cancelAtPeriodEnd: false,
+            daysRemaining: 180,
+            priceAmount: "0.00",
+            priceCurrency: "USD",
+            autoRenew: false,
+          })
+
+          // Construct mock subData so metrics work correctly
+          subData = {
+            status: appStatus === "approved" ? "active" : "trialing",
+            billing_interval: "month",
+            starts_at: promoAppData.application?.joined_at || new Date().toISOString().split("T")[0],
+            ends_at:
+              promoAppData.application?.trial_ends_at ||
+              new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            auto_renew: false,
+            days_remaining: 180,
+            plan: promoAppData.promotion?.plan,
+          }
         }
       }
 
@@ -694,32 +727,118 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     return true
   }
 
-  // Cancel subscription
+  // Cancel subscription — real API call
   const cancelSubscription = async (): Promise<boolean> => {
     if (!user || !subscription) return false
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    const newSub: Subscription = {
-      ...subscription,
-      cancelAtPeriodEnd: true
+    try {
+      console.log("[SubscriptionContext] POST /manufacturer/subscriptions/cancel")
+      const response = await apiClient.post('/manufacturer/subscriptions/cancel')
+      const success = response?.data?.success ?? true
+
+      if (success) {
+        // Re-fetch subscription state from backend
+        try {
+          const subResponse = await apiClient.get('/manufacturer/subscriptions')
+          if (subResponse.data?.success && subResponse.data?.data) {
+            const subData = subResponse.data.data
+            let mappedPlanId: PlanId = "growth"
+            if (subData.plan?.name) {
+              const name = subData.plan.name.toLowerCase()
+              if (["starter", "growth", "enterprise"].includes(name)) {
+                mappedPlanId = name as PlanId
+              }
+            }
+            setSubscription({
+              planId: mappedPlanId,
+              status: subData.status,
+              billingCycle: isYearlyBillingInterval(subData.billing_interval) ? "yearly" : "monthly",
+              currentPeriodStart: subData.starts_at,
+              currentPeriodEnd: subData.ends_at,
+              cancelAtPeriodEnd: !subData.auto_renew,
+              daysRemaining: subData.days_remaining,
+              priceAmount: isYearlyBillingInterval(subData.billing_interval)
+                ? subData.plan?.yearly_price?.amount
+                : subData.plan?.monthly_price?.amount,
+              priceCurrency: isYearlyBillingInterval(subData.billing_interval)
+                ? (subData.plan?.yearly_price?.currency || "USD")
+                : (subData.plan?.monthly_price?.currency || "USD"),
+              autoRenew: subData.auto_renew,
+              hasReusablePaymentMethod: Boolean(subData.has_reusable_payment_method),
+            })
+          } else {
+            setSubscription(null)
+          }
+        } catch (refetchErr) {
+          console.error("[SubscriptionContext] Failed to refetch subscription after cancel:", refetchErr)
+        }
+      }
+
+      return success
+    } catch (error: any) {
+      console.error("[SubscriptionContext] Cancel subscription error:", error?.response?.data || error)
+      return false
     }
-    
-    setSubscription(newSub)
-    localStorage.setItem(`sourcenest_subscription_${user.id}`, JSON.stringify(newSub))
-    
-    return true
+  }
+
+  const setAutoRenew = async (payload: {
+    enabled: boolean
+    vault_setup_token?: string
+    paypal_vault_id?: string
+  }): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.post('/manufacturer/subscriptions/auto-renew', payload)
+      const success = response?.data?.success ?? false
+      const message = response?.data?.message || (payload.enabled ? "Auto-renew enabled" : "Auto-renew disabled")
+
+      if (success && response.data?.data) {
+        const subData = response.data.data
+        let mappedPlanId: PlanId = "growth"
+        if (subData.plan?.name) {
+          const name = subData.plan.name.toLowerCase()
+          if (["starter", "growth", "enterprise"].includes(name)) {
+            mappedPlanId = name as PlanId
+          }
+        }
+        setSubscription({
+          planId: mappedPlanId,
+          status: subData.status,
+          billingCycle: isYearlyBillingInterval(subData.billing_interval) ? "yearly" : "monthly",
+          currentPeriodStart: subData.starts_at,
+          currentPeriodEnd: subData.ends_at,
+          cancelAtPeriodEnd: !subData.auto_renew,
+          daysRemaining: subData.days_remaining,
+          priceAmount: isYearlyBillingInterval(subData.billing_interval)
+            ? subData.plan?.yearly_price?.amount
+            : subData.plan?.monthly_price?.amount,
+          priceCurrency: isYearlyBillingInterval(subData.billing_interval)
+            ? (subData.plan?.yearly_price?.currency || "USD")
+            : (subData.plan?.monthly_price?.currency || "USD"),
+          autoRenew: subData.auto_renew,
+          hasReusablePaymentMethod: Boolean(subData.has_reusable_payment_method),
+        })
+      }
+
+      return { success, message }
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.errors?.auto_renew?.[0] ||
+        "Failed to update auto-renew"
+      console.error("[SubscriptionContext] Auto-renew toggle error:", error?.response?.data || error)
+      return { success: false, message }
+    }
   }
 
   // Subscribe to plan via backend
   const subscribeToPlan = async (payload: {
     plan_id: number
     payment_method: string
-    billing_interval: string
+    billing_interval: "yearly" | "monthly"
     payment_id: string
     auto_renew: boolean
     paid_amount: number
+    paypal_vault_id?: string
   }): Promise<{ success: boolean; message: string }> => {
     try {
       console.log("[SubscriptionContext] POST /manufacturer/subscriptions/subscribe", payload)
@@ -747,18 +866,19 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
             setSubscription({
               planId: mappedPlanId,
               status: subData.status,
-              billingCycle: subData.billing_interval === "year" ? "yearly" : "monthly",
+              billingCycle: isYearlyBillingInterval(subData.billing_interval) ? "yearly" : "monthly",
               currentPeriodStart: subData.starts_at,
               currentPeriodEnd: subData.ends_at,
               cancelAtPeriodEnd: !subData.auto_renew,
               daysRemaining: subData.days_remaining,
-              priceAmount: subData.billing_interval === "year"
+              priceAmount: isYearlyBillingInterval(subData.billing_interval)
                 ? subData.plan?.yearly_price?.amount
                 : subData.plan?.monthly_price?.amount,
-              priceCurrency: subData.billing_interval === "year"
+              priceCurrency: isYearlyBillingInterval(subData.billing_interval)
                 ? (subData.plan?.yearly_price?.currency || "USD")
                 : (subData.plan?.monthly_price?.currency || "USD"),
-              autoRenew: subData.auto_renew
+              autoRenew: subData.auto_renew,
+              hasReusablePaymentMethod: Boolean(subData.has_reusable_payment_method),
             })
           } else {
             console.warn("[SubscriptionContext] Refetch returned no subscription data")
@@ -772,6 +892,66 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       console.error("[SubscriptionContext] Subscribe API error:", error?.response?.data || error)
       const msg = error?.response?.data?.message || "Failed to activate subscription"
+      return { success: false, message: msg }
+    }
+  }
+
+  // Upgrade subscription via real API — POST /manufacturer/subscriptions/upgrade
+  const upgradeSubscription = async (payload: {
+    plan_id: number
+    payment_method: string
+    billing_interval: "yearly" | "monthly"
+    payment_id: string
+    auto_renew: boolean
+    paid_amount: number
+    paypal_vault_id?: string
+  }): Promise<{ success: boolean; message: string }> => {
+    try {
+      console.log("[SubscriptionContext] POST /manufacturer/subscriptions/upgrade", payload)
+      const response = await apiClient.post('/manufacturer/subscriptions/upgrade', payload)
+      console.log("[SubscriptionContext] Upgrade response:", response.data)
+      const success = response?.data?.success ?? true
+      const message = response?.data?.message || "Plan upgraded successfully"
+
+      if (success) {
+        try {
+          const subResponse = await apiClient.get('/manufacturer/subscriptions')
+          if (subResponse.data?.success && subResponse.data?.data) {
+            const subData = subResponse.data.data
+            let mappedPlanId: PlanId = "growth"
+            if (subData.plan?.name) {
+              const name = subData.plan.name.toLowerCase()
+              if (["starter", "growth", "enterprise"].includes(name)) {
+                mappedPlanId = name as PlanId
+              }
+            }
+            setSubscription({
+              planId: mappedPlanId,
+              status: subData.status,
+              billingCycle: isYearlyBillingInterval(subData.billing_interval) ? "yearly" : "monthly",
+              currentPeriodStart: subData.starts_at,
+              currentPeriodEnd: subData.ends_at,
+              cancelAtPeriodEnd: !subData.auto_renew,
+              daysRemaining: subData.days_remaining,
+              priceAmount: isYearlyBillingInterval(subData.billing_interval)
+                ? subData.plan?.yearly_price?.amount
+                : subData.plan?.monthly_price?.amount,
+              priceCurrency: isYearlyBillingInterval(subData.billing_interval)
+                ? (subData.plan?.yearly_price?.currency || "USD")
+                : (subData.plan?.monthly_price?.currency || "USD"),
+              autoRenew: subData.auto_renew,
+              hasReusablePaymentMethod: Boolean(subData.has_reusable_payment_method),
+            })
+          }
+        } catch (refetchErr) {
+          console.error("[SubscriptionContext] Failed to refetch subscription after upgrade:", refetchErr)
+        }
+      }
+
+      return { success, message }
+    } catch (error: any) {
+      console.error("[SubscriptionContext] Upgrade API error:", error?.response?.data || error)
+      const msg = error?.response?.data?.message || "Failed to upgrade subscription"
       return { success: false, message: msg }
     }
   }
@@ -819,7 +999,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       upgradePlan,
       downgradePlan,
       cancelSubscription,
+      setAutoRenew,
       subscribeToPlan,
+      upgradeSubscription,
       incrementUsage,
       resetMonthlyUsage
     }}>

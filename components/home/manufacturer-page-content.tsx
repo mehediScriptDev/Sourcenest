@@ -102,20 +102,20 @@ export function ManufacturerPageContent() {
   return (
     <main className="flex-1">
       {/* Hero */}
-      <section className="bg-primary py-20 lg:py-28">
+      <section className="bg-primary py-8 sm:py-12 lg:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <div className="inline-flex items-center gap-2 rounded-full bg-secondary/20 px-4 py-1.5 text-sm text-primary-foreground">
               <TrendingUp className="h-4 w-4" />
               <span>{t.forManufacturers.hero.badge}</span>
             </div>
-            <h1 className="mt-6 font-serif text-4xl font-medium tracking-tight text-primary-foreground sm:text-5xl">
+            <h1 className="mt-4 font-serif text-3xl font-medium tracking-tight text-primary-foreground min-[400px]:text-4xl sm:mt-6 sm:text-5xl lg:text-6xl">
               {t.forManufacturers.hero.title}
             </h1>
-            <p className="mx-auto mt-6 max-w-2xl text-lg text-primary-foreground/80">
+            <p className="mx-auto mt-4 max-w-2xl text-sm text-primary-foreground/80 sm:mt-6 sm:text-base lg:text-lg">
               {t.forManufacturers.hero.subtitle}
             </p>
-            <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row w-full max-w-lg mx-auto">
+            <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:mt-10 sm:flex-row sm:gap-4 w-full max-w-lg mx-auto">
               <Button size="lg" variant="secondary" className="w-full sm:w-auto justify-center gap-2 bg-secondary text-secondary-foreground hover:bg-secondary/90" asChild>
                 <Link href="/pricing" className="w-full text-center sm:w-auto">
                   {t.forManufacturers.hero.viewPricing}
@@ -133,25 +133,25 @@ export function ManufacturerPageContent() {
       </section>
 
       {/* Features */}
-      <section className="py-20 lg:py-28">
+      <section className="py-8 sm:py-12 lg:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
-            <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground sm:text-3xl lg:text-4xl">
               {t.forManufacturers.features.title}
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
+            <p className="mt-3 text-sm text-muted-foreground sm:mt-4 sm:text-base">
               {t.forManufacturers.features.subtitle}
             </p>
           </div>
 
-          <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-12 sm:gap-5 lg:grid-cols-3 lg:gap-6">
             {features.map((feature) => (
-              <div key={feature.title} className="group relative overflow-hidden rounded-2xl border border-border bg-card p-8 transition-shadow hover:shadow-lg">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary/10">
-                  <feature.icon className="h-6 w-6 text-secondary" />
+              <div key={feature.title} className="group relative overflow-hidden rounded-xl border border-border bg-card p-3 transition-shadow hover:shadow-lg sm:rounded-2xl sm:p-6">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/10 sm:h-12 sm:w-12">
+                  <feature.icon className="h-5 w-5 text-secondary sm:h-6 sm:w-6" />
                 </div>
-                <h3 className="mt-4 font-semibold text-foreground">{feature.title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                <h3 className="mt-3 text-sm font-semibold text-foreground sm:mt-4 sm:text-base">{feature.title}</h3>
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed sm:mt-2 sm:text-sm">
                   {feature.description}
                 </p>
               </div>
@@ -161,18 +161,18 @@ export function ManufacturerPageContent() {
       </section>
 
       {/* How It Works */}
-      <section className="bg-muted/50 py-20 lg:py-28">
+      <section className="bg-muted/50 py-8 sm:py-12 lg:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
-            <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground sm:text-3xl lg:text-4xl">
               {t.forManufacturers.howItWorks.title}
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
+            <p className="mt-3 text-sm text-muted-foreground sm:mt-4 sm:text-base">
               {t.forManufacturers.howItWorks.subtitle}
             </p>
           </div>
 
-          <div className="mt-16 grid gap-6 md:grid-cols-6">
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-12 sm:gap-5 md:grid-cols-3 lg:grid-cols-6 lg:gap-6">
             {steps.map((step, index) => (
               <div key={step.step} className="relative text-center">
                 {index < steps.length - 1 && (
@@ -200,12 +200,12 @@ export function ManufacturerPageContent() {
       </section>
 
       {/* Benefits */}
-      <section className="py-20 lg:py-28">
+      <section className="py-8 sm:py-12 lg:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-            <div className="rounded-2xl bg-primary p-8 text-primary-foreground lg:p-12">
-              <Users className="h-12 w-12" />
-              <h3 className="mt-6 font-serif text-2xl font-medium">{t.forManufacturers.benefits.whyChoose}</h3>
+          <div className="grid items-center gap-6 sm:gap-8 lg:grid-cols-2 lg:gap-12">
+            <div className="rounded-xl bg-primary p-4 text-primary-foreground sm:rounded-2xl sm:p-6 lg:p-8">
+              <Users className="h-10 w-10 sm:h-12 sm:w-12" />
+              <h3 className="mt-4 font-serif text-xl font-medium sm:mt-6 sm:text-2xl">{t.forManufacturers.benefits.whyChoose}</h3>
               <p className="mt-4 text-primary-foreground/80 leading-relaxed">
                 {t.forManufacturers.benefits.desc1}
               </p>
@@ -214,7 +214,7 @@ export function ManufacturerPageContent() {
               </p>
             </div>
             <div>
-              <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+              <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground sm:text-3xl lg:text-4xl">
                 {t.forManufacturers.benefits.title}
               </h2>
               <ul className="mt-8 space-y-4">
@@ -239,7 +239,7 @@ export function ManufacturerPageContent() {
       </section>
 
       {/* CTA */}
-      <section className="bg-secondary py-20 lg:py-28">
+      <section className="bg-secondary py-8 sm:py-12 lg:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <h2 className="font-serif text-3xl font-medium tracking-tight text-secondary-foreground sm:text-4xl">

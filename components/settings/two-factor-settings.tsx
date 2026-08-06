@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
+import { useTranslation } from "@/lib/i18n"
 import { getApiErrorMessage } from "@/lib/api/errors"
 import {
   confirmTwoFactor,
@@ -271,6 +272,7 @@ function isSvgMarkup(value: string | null): boolean {
 
 export function TwoFactorSettings() {
   const { toast } = useToast()
+  const { t } = useTranslation()
 
   const [isEnabled, setIsEnabled] = useState(false)
   const [isCheckingState, setIsCheckingState] = useState(true)
@@ -283,14 +285,14 @@ export function TwoFactorSettings() {
   const [verificationCode, setVerificationCode] = useState("")
   const [qrCodeValue, setQrCodeValue] = useState<string | null>(null)
   const [manualKey, setManualKey] = useState<string | null>(null)
-  const [setupStatusMessage, setSetupStatusMessage] = useState(DEFAULT_SETUP_MESSAGE)
+  const [serverSetupMessage, setServerSetupMessage] = useState<string | null>(null)
 
   const [disableOpen, setDisableOpen] = useState(false)
   const [disablePassword, setDisablePassword] = useState("")
 
   const [recoveryOpen, setRecoveryOpen] = useState(false)
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([])
-  const [recoveryStatusMessage, setRecoveryStatusMessage] = useState(DEFAULT_RECOVERY_MESSAGE)
+  const [serverRecoveryMessage, setServerRecoveryMessage] = useState<string | null>(null)
 
   const [regenerateOpen, setRegenerateOpen] = useState(false)
   const [regeneratePassword, setRegeneratePassword] = useState("")
@@ -306,7 +308,7 @@ export function TwoFactorSettings() {
     setVerificationCode("")
     setQrCodeValue(null)
     setManualKey(null)
-    setSetupStatusMessage(DEFAULT_SETUP_MESSAGE)
+    setServerSetupMessage(null)
   }
 
   const loadTwoFactorState = async () => {
@@ -344,8 +346,8 @@ export function TwoFactorSettings() {
     e.preventDefault()
     if (!setupPassword.trim()) {
       toast({
-        title: "Password required",
-        description: "Please enter your password to enable two-factor authentication.",
+        title: t.settings.twoFactorPasswordRequired,
+        description: t.settings.twoFactorPasswordRequiredEnableDesc,
         variant: "destructive",
       })
       return
@@ -361,7 +363,7 @@ export function TwoFactorSettings() {
         throw new Error(
           typeof serverMessage === "string" && serverMessage.trim()
             ? serverMessage
-            : "Could not start two-factor setup."
+            : t.settings.twoFactorSetupError
         )
       }
 
@@ -378,7 +380,7 @@ export function TwoFactorSettings() {
           throw new Error(
             typeof serverMessage === "string" && serverMessage.trim()
               ? serverMessage
-              : "Could not fetch the QR code."
+              : t.settings.twoFactorLoadCodesError
           )
         }
 
@@ -391,16 +393,16 @@ export function TwoFactorSettings() {
       }
 
       if (!qrValue && !key) {
-        throw new Error("The server did not return a QR code or manual key. Please try again.")
+        throw new Error(t.settings.twoFactorSetupError)
       }
 
       setQrCodeValue(qrValue)
       setManualKey(key)
-      setSetupStatusMessage(setupMessage || DEFAULT_SETUP_MESSAGE)
+      setServerSetupMessage(setupMessage)
       setSetupStep("verify")
     } catch (err) {
       toast({
-        title: "Could not start 2FA setup",
+        title: t.settings.twoFactorSetupError,
         description: getApiErrorMessage(err),
         variant: "destructive",
       })
@@ -415,8 +417,8 @@ export function TwoFactorSettings() {
 
     if (!code) {
       toast({
-        title: "Code required",
-        description: "Enter the verification code from your authenticator app.",
+        title: t.settings.twoFactorCodeRequired,
+        description: t.settings.twoFactorCodeRequiredDesc,
         variant: "destructive",
       })
       return
@@ -434,19 +436,19 @@ export function TwoFactorSettings() {
       }
 
       setRecoveryCodes(codes)
-      setRecoveryStatusMessage(confirmMessage || DEFAULT_RECOVERY_MESSAGE)
+      setServerRecoveryMessage(confirmMessage)
       setIsEnabled(true)
       setSetupOpen(false)
       resetSetupDialog()
       setRecoveryOpen(true)
 
       toast({
-        title: "Two-factor enabled",
-        description: confirmMessage || "Save your recovery codes in a secure place.",
+        title: t.settings.twoFactorEnabledToast,
+        description: confirmMessage || t.settings.twoFactorEnabledToastDesc,
       })
     } catch (err) {
       toast({
-        title: "Could not verify code",
+        title: t.settings.twoFactorVerifyError,
         description: getApiErrorMessage(err),
         variant: "destructive",
       })
@@ -459,8 +461,8 @@ export function TwoFactorSettings() {
     e.preventDefault()
     if (!disablePassword.trim()) {
       toast({
-        title: "Password required",
-        description: "Please enter your password to disable two-factor authentication.",
+        title: t.settings.twoFactorPasswordRequired,
+        description: t.settings.twoFactorPasswordRequiredDisableDesc,
         variant: "destructive",
       })
       return
@@ -475,12 +477,12 @@ export function TwoFactorSettings() {
       setDisablePassword("")
 
       toast({
-        title: "Two-factor disabled",
-        description: "Your account now uses password-only sign-in.",
+        title: t.settings.twoFactorDisabledToast,
+        description: t.settings.twoFactorDisabledToastDesc,
       })
     } catch (err) {
       toast({
-        title: "Could not disable two-factor",
+        title: t.settings.twoFactorDisableError,
         description: getApiErrorMessage(err),
         variant: "destructive",
       })
@@ -495,11 +497,11 @@ export function TwoFactorSettings() {
       const response = await getTwoFactorRecoveryCodes()
       const codes = extractRecoveryCodes(response)
       setRecoveryCodes(codes)
-      setRecoveryStatusMessage(DEFAULT_RECOVERY_MESSAGE)
+      setServerRecoveryMessage(null)
       setRecoveryOpen(true)
     } catch (err) {
       toast({
-        title: "Could not load recovery codes",
+        title: t.settings.twoFactorLoadCodesError,
         description: getApiErrorMessage(err),
         variant: "destructive",
       })
@@ -512,8 +514,8 @@ export function TwoFactorSettings() {
     e.preventDefault()
     if (!regeneratePassword.trim()) {
       toast({
-        title: "Password required",
-        description: "Please enter your password to regenerate recovery codes.",
+        title: t.settings.twoFactorPasswordRequired,
+        description: t.settings.twoFactorPasswordRequiredRegenDesc,
         variant: "destructive",
       })
       return
@@ -530,18 +532,18 @@ export function TwoFactorSettings() {
       }
 
       setRecoveryCodes(codes)
-      setRecoveryStatusMessage(DEFAULT_RECOVERY_MESSAGE)
+      setServerRecoveryMessage(null)
       setRegenerateOpen(false)
       setRegeneratePassword("")
       setRecoveryOpen(true)
 
       toast({
-        title: "Recovery codes regenerated",
-        description: "Your old recovery codes are no longer valid.",
+        title: t.settings.twoFactorRegeneratedToast,
+        description: t.settings.twoFactorRegeneratedToastDesc,
       })
     } catch (err) {
       toast({
-        title: "Could not regenerate codes",
+        title: t.settings.twoFactorRegenerateError,
         description: getApiErrorMessage(err),
         variant: "destructive",
       })
@@ -558,13 +560,13 @@ export function TwoFactorSettings() {
     try {
       await navigator.clipboard.writeText(formattedRecoveryCodes.join("\n"))
       toast({
-        title: "Copied",
-        description: "Recovery codes copied to clipboard.",
+        title: t.settings.twoFactorCopiedToast,
+        description: t.settings.twoFactorCopiedToastDesc,
       })
     } catch {
       toast({
-        title: "Copy failed",
-        description: "Please copy the recovery codes manually.",
+        title: t.settings.twoFactorCopyFailedToast,
+        description: t.settings.twoFactorCopyFailedToastDesc,
         variant: "destructive",
       })
     }
@@ -574,11 +576,11 @@ export function TwoFactorSettings() {
     <>
       <div className="flex items-center justify-between py-2">
         <div>
-          <p className="font-medium text-foreground">Two-Factor Authentication</p>
+          <p className="font-medium text-foreground">{t.settings.twoFactor}</p>
           <p className="text-sm text-muted-foreground">
             {isEnabled
-              ? "Enabled. Use your authenticator app during sign-in."
-              : "Add an extra layer of security to your account."}
+              ? t.settings.twoFactorEnabledDesc
+              : t.settings.twoFactorDisabledDesc}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -600,7 +602,7 @@ export function TwoFactorSettings() {
             disabled={isBusy}
           >
             {actionState === "load-codes" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            View recovery codes
+            {t.settings.twoFactorViewRecoveryCodes}
           </Button>
           <Button
             variant="outline"
@@ -608,7 +610,7 @@ export function TwoFactorSettings() {
             onClick={() => setRegenerateOpen(true)}
             disabled={isBusy}
           >
-            Regenerate codes
+            {t.settings.twoFactorRegenerateCodes}
           </Button>
         </div>
       )}
@@ -626,13 +628,13 @@ export function TwoFactorSettings() {
           {setupStep === "password" ? (
             <form onSubmit={handleBeginSetup}>
               <DialogHeader>
-                <DialogTitle>Enable two-factor authentication</DialogTitle>
+                <DialogTitle>{t.settings.twoFactorEnableTitle}</DialogTitle>
                 <DialogDescription>
-                  Enter your account password to begin two-factor setup.
+                  {t.settings.twoFactorEnableDesc}
                 </DialogDescription>
               </DialogHeader>
               <div className="py-4">
-                <Label htmlFor="two-factor-enable-password">Password</Label>
+                <Label htmlFor="two-factor-enable-password">{t.settings.passwordLabel}</Label>
                 <div className="relative mt-2">
                   <Input
                     id="two-factor-enable-password"
@@ -659,10 +661,10 @@ export function TwoFactorSettings() {
                   {actionState === "enable" ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Starting...
+                      {t.settings.twoFactorStarting}
                     </>
                   ) : (
-                    "Start setup"
+                    t.settings.twoFactorStartSetup
                   )}
                 </Button>
               </DialogFooter>
@@ -670,8 +672,10 @@ export function TwoFactorSettings() {
           ) : (
             <form onSubmit={handleConfirmSetup}>
               <DialogHeader>
-                <DialogTitle>Scan and verify</DialogTitle>
-                <DialogDescription>{setupStatusMessage}</DialogDescription>
+                <DialogTitle>{t.settings.twoFactorScanAndVerify}</DialogTitle>
+                <DialogDescription>
+                  {serverSetupMessage || t.settings.twoFactorDefaultSetupMessage}
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 {qrCodeValue && isSvgMarkup(qrCodeValue) && (
@@ -691,12 +695,15 @@ export function TwoFactorSettings() {
 
                 {manualKey && (
                   <p className="rounded-lg border border-border bg-muted p-3 text-xs text-muted-foreground">
-                    Manual key: <span className="font-medium text-foreground">{manualKey}</span>
+                    {t.settings.twoFactorManualKey}{" "}
+                    <span className="font-medium text-foreground">{manualKey}</span>
                   </p>
                 )}
 
                 <div>
-                  <Label htmlFor="two-factor-verification-code">Verification code</Label>
+                  <Label htmlFor="two-factor-verification-code">
+                    {t.settings.twoFactorVerificationCode}
+                  </Label>
                   <Input
                     id="two-factor-verification-code"
                     inputMode="numeric"
@@ -716,10 +723,10 @@ export function TwoFactorSettings() {
                   {actionState === "verify" ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Verifying...
+                      {t.settings.twoFactorVerifying}
                     </>
                   ) : (
-                    "Confirm and enable"
+                    t.settings.twoFactorConfirmAndEnable
                   )}
                 </Button>
               </DialogFooter>
@@ -732,13 +739,13 @@ export function TwoFactorSettings() {
         <DialogContent>
           <form onSubmit={handleDisable}>
             <DialogHeader>
-              <DialogTitle>Disable two-factor authentication</DialogTitle>
+              <DialogTitle>{t.settings.twoFactorDisableTitle}</DialogTitle>
               <DialogDescription>
-                Enter your password to remove two-factor protection.
+                {t.settings.twoFactorDisableDesc}
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
-              <Label htmlFor="two-factor-disable-password">Password</Label>
+              <Label htmlFor="two-factor-disable-password">{t.settings.passwordLabel}</Label>
               <Input
                 id="two-factor-disable-password"
                 type="password"
@@ -754,10 +761,10 @@ export function TwoFactorSettings() {
                 {actionState === "disable" ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Disabling...
+                    {t.settings.twoFactorDisabling}
                   </>
                 ) : (
-                  "Disable"
+                  t.settings.twoFactorDisableBtn
                 )}
               </Button>
             </DialogFooter>
@@ -768,8 +775,10 @@ export function TwoFactorSettings() {
       <Dialog open={recoveryOpen} onOpenChange={setRecoveryOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Recovery codes</DialogTitle>
-            <DialogDescription>{recoveryStatusMessage}</DialogDescription>
+            <DialogTitle>{t.settings.twoFactorRecoveryCodesTitle}</DialogTitle>
+            <DialogDescription>
+              {serverRecoveryMessage || t.settings.twoFactorDefaultRecoveryMessage}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="max-h-64 overflow-y-auto rounded-lg border border-border bg-muted/40 p-3">
@@ -785,7 +794,9 @@ export function TwoFactorSettings() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No recovery codes available yet.</p>
+              <p className="text-sm text-muted-foreground">
+                {t.settings.twoFactorNoRecoveryCodes}
+              </p>
             )}
           </div>
 
@@ -796,10 +807,10 @@ export function TwoFactorSettings() {
               onClick={handleCopyRecoveryCodes}
               disabled={formattedRecoveryCodes.length === 0}
             >
-              Copy codes
+              {t.settings.twoFactorCopyCodes}
             </Button>
             <Button type="button" onClick={() => setRecoveryOpen(false)}>
-              Done
+              {t.settings.twoFactorDone}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -809,13 +820,13 @@ export function TwoFactorSettings() {
         <DialogContent>
           <form onSubmit={handleRegenerateCodes}>
             <DialogHeader>
-              <DialogTitle>Regenerate recovery codes</DialogTitle>
+              <DialogTitle>{t.settings.twoFactorRegenerateTitle}</DialogTitle>
               <DialogDescription>
-                Your current recovery codes will stop working immediately.
+                {t.settings.twoFactorRegenerateDesc}
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
-              <Label htmlFor="two-factor-regenerate-password">Password</Label>
+              <Label htmlFor="two-factor-regenerate-password">{t.settings.passwordLabel}</Label>
               <Input
                 id="two-factor-regenerate-password"
                 type="password"
@@ -831,10 +842,10 @@ export function TwoFactorSettings() {
                 {actionState === "regenerate" ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Regenerating...
+                    {t.settings.twoFactorRegenerating}
                   </>
                 ) : (
-                  "Regenerate"
+                  t.settings.twoFactorRegenerateBtn
                 )}
               </Button>
             </DialogFooter>

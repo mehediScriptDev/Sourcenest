@@ -1,12 +1,60 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Linkedin, Twitter, Facebook, Youtube } from "lucide-react"
+import { Instagram, Linkedin, Twitter, Facebook, Youtube, Music2, Share2, type LucideIcon } from "lucide-react"
 import { useTranslation } from "@/lib/i18n"
+import { getPublicCategories, type BackendCategory } from "@/lib/api/categories"
+import { fetchSocialMediaLinks, type SocialMediaLinkItem } from "@/lib/api/social-media-links"
+
+const socialIconMap: Record<string, LucideIcon> = {
+  Linkedin,
+  Twitter,
+  Facebook,
+  Youtube,
+  Instagram,
+  Music2,
+  Share2,
+}
 
 export function Footer() {
   const { t } = useTranslation()
+  const [popularIndustries, setPopularIndustries] = useState<BackendCategory[]>([])
+  const [socialLinks, setSocialLinks] = useState<SocialMediaLinkItem[]>([])
+
+  useEffect(() => {
+    let mounted = true
+    async function loadIndustries() {
+      const res = await getPublicCategories({ perPage: 50 })
+      if (!mounted || !res.success || !res.data) return
+
+      const featured = res.data.filter((c) => Number(c.featured) === 1)
+      const list = (featured.length > 0 ? featured : res.data).slice(0, 5)
+      setPopularIndustries(list)
+    }
+    void loadIndustries()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadSocialLinks() {
+      const links = await fetchSocialMediaLinks()
+      if (mounted) {
+        setSocialLinks(links)
+      }
+    }
+
+    void loadSocialLinks()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   // Guard against undefined translations during SSR/hydration
   if (!t || !t.landing || !t.landing.footer) {
@@ -60,12 +108,21 @@ export function Footer() {
     },
   }
 
-  const industries = [
+  const fallbackIndustries = [
     { label: t.landing.industries.electronicsElectrical, href: "/industries/electronics-electrical" },
     { label: t.landing.industries.machineryEquipment, href: "/industries/machinery-equipment" },
     { label: t.landing.industries.textilesApparel, href: "/industries/textiles-apparel" },
     { label: t.landing.industries.homeGarden, href: "/industries/home-garden" },
     { label: t.landing.industries.healthBeauty, href: "/industries/health-beauty" },
+  ]
+
+  const industries = [
+    ...(popularIndustries.length > 0
+      ? popularIndustries.map((c) => ({
+          label: c.name,
+          href: `/industries/${c.slug || c.id}`,
+        }))
+      : fallbackIndustries),
     { label: t.landing.footer.viewAll, href: "/industries" },
   ]
 
@@ -80,8 +137,9 @@ export function Footer() {
               <Image
                 src="/images/logoFooter.png"
                 alt="SourceNest"
-                width={120}
-                height={120}
+                width={110}
+                height={110}
+                sizes="(max-width: 768px) 110px, 150px"
                 className="rounded-lg object-contain h-27.5 w-27.5 md:h-37.5 md:w-37.5"
               />
             </Link>
@@ -90,42 +148,22 @@ export function Footer() {
             </p>
             {/* Social Links */}
             <div className="mt-6 flex gap-4">
-              <a
-                href="https://linkedin.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary-foreground/60 transition-colors hover:text-primary-foreground"
-                aria-label="LinkedIn"
-              >
-                <Linkedin className="h-5 w-5" />
-              </a>
-              <a
-                href="https://twitter.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary-foreground/60 transition-colors hover:text-primary-foreground"
-                aria-label="Twitter"
-              >
-                <Twitter className="h-5 w-5" />
-              </a>
-              <a
-                href="https://facebook.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary-foreground/60 transition-colors hover:text-primary-foreground"
-                aria-label="Facebook"
-              >
-                <Facebook className="h-5 w-5" />
-              </a>
-              <a
-                href="https://youtube.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary-foreground/60 transition-colors hover:text-primary-foreground"
-                aria-label="YouTube"
-              >
-                <Youtube className="h-5 w-5" />
-              </a>
+              {socialLinks.map((link) => {
+                const Icon = socialIconMap[link.icon] ?? Share2
+
+                return (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary-foreground/60 transition-colors hover:text-primary-foreground"
+                    aria-label={link.platform}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </a>
+                )
+              })}
             </div>
           </div>
 
@@ -199,9 +237,9 @@ export function Footer() {
         <div className="mt-12 border-t border-primary-foreground/10 pt-8">
           <h3 className="text-sm font-semibold">{t.landing.footer.popular}</h3>
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
-            {industries.map((industry) => (
+            {industries.map((industry, index) => (
               <Link
-                key={industry.href}
+                key={`${industry.href}-${index}`}
                 href={industry.href}
                 className="text-sm text-primary-foreground/70 transition-colors hover:text-primary-foreground"
               >

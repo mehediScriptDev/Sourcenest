@@ -50,6 +50,7 @@ import type {
   ManufacturerProductStatus,
   ManufacturerSelectOption,
 } from "@/lib/api/manufacturer-products"
+import { useTranslation } from "@/lib/i18n"
 
 const units = [
   { value: "pieces", label: "Pieces" },
@@ -135,6 +136,7 @@ export default function EditProductPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = use(params)
+  const { t } = useTranslation()
   const router = useRouter()
   const imageInputRef = useRef<HTMLInputElement>(null)
   const brochureInputRef = useRef<HTMLInputElement>(null)
@@ -192,7 +194,7 @@ export default function EditProductPage({
       if (cancelled) return
       setLoadingProduct(false)
       if (!res.success || !res.data) {
-        toast.error(res.message ?? "Could not load product.")
+        toast.error(res.message ?? (t.mfg.products.loadError || "Could not load product."))
         router.push("/dashboard/manufacturer/products")
         return
       }
@@ -262,7 +264,7 @@ export default function EditProductPage({
       if (cancelled) return
       setCategoriesLoading(false)
       if (!res.success) {
-        toast.error(res.message ?? "Could not load categories.")
+        toast.error(res.message ?? (t.mfg.products.loadCategoriesError || "Could not load categories."))
         setCategories([])
         return
       }
@@ -358,11 +360,11 @@ export default function EditProductPage({
     e.preventDefault()
     if (!productId) return
     if (!formData.categoryId.trim()) {
-      toast.error("Please select a category.")
+      toast.error(t.mfg.products.selectCategoryError || "Please select a category.")
       return
     }
     if (!formData.currencyId.trim()) {
-      toast.error("Please select a currency.")
+      toast.error(t.mfg.products.selectCurrencyError || "Please select a currency.")
       return
     }
 
@@ -424,16 +426,16 @@ export default function EditProductPage({
         }
       }
       await Swal.fire({
-        title: "Failed to Update Product",
+        title: t.mfg.products.updateFailed || "Failed to Update Product",
         html: errorLines.length
           ? `<div style="text-align:left;line-height:1.8">${errorLines.join("<br/>")}</div>`
-          : res.message ?? "Could not update product.",
+          : res.message ?? (t.mfg.products.updateFailed || "Could not update product."),
         icon: "error",
-        confirmButtonText: "OK",
+        confirmButtonText: t.common.ok || "OK",
       })
       return
     }
-    toast.success(res.message ?? "Product updated.")
+    toast.success(res.message ?? (t.mfg.productForm.successUpdate || "Product updated."))
     router.push("/dashboard/manufacturer/products")
   }
 
@@ -441,7 +443,7 @@ export default function EditProductPage({
     return (
       <div className="flex items-center justify-center py-24 text-muted-foreground">
         <Loader2 className="h-6 w-6 animate-spin mr-2" />
-        Loading product…
+        {t.mfg.products.loadingProduct || "Loading product…"}
       </div>
     )
   }
@@ -449,36 +451,36 @@ export default function EditProductPage({
   const totalImages = existingImageUrls.length + newImageSlots.length
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 pb-12">
+    <div className="mx-auto min-w-0 max-w-4xl space-y-6 overflow-x-hidden pb-8 sm:space-y-8 sm:pb-12">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 min-w-0">
         <Button variant="ghost" size="icon" asChild>
           <Link href="/dashboard/manufacturer/products">
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>
         <div>
-          <h1 className="font-serif text-2xl font-medium text-foreground">Edit Product</h1>
-          <p className="mt-1 text-muted-foreground">Update your product details</p>
+          <h1 className="font-serif text-2xl font-medium text-foreground">{t.mfg.productForm.editTitle}</h1>
+          <p className="mt-1 text-muted-foreground">{t.mfg.products.newSubtitle || "Fill in the details to list your product"}</p>
         </div>
       </div>
 
-      <form onSubmit={(e) => handleSubmit(e)} className="space-y-8">
+      <form onSubmit={(e) => handleSubmit(e)} className="space-y-6 sm:space-y-8">
         {/* Basic Information */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <Package className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Basic Information</h2>
-              <p className="text-sm text-muted-foreground">Product name and description</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.productForm.basicInfo}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.basicInfoDesc || "Product name and description"}</p>
             </div>
           </div>
 
           <div className="space-y-5">
             <div>
-              <Label htmlFor="name">Product Name *</Label>
+              <Label htmlFor="name">{t.mfg.productForm.productName} *</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -490,7 +492,7 @@ export default function EditProductPage({
             </div>
 
             <div>
-              <Label htmlFor="description">Product Description *</Label>
+              <Label htmlFor="description">{t.mfg.productForm.description} *</Label>
               <Textarea
                 id="description"
                 value={formData.description}
@@ -503,7 +505,7 @@ export default function EditProductPage({
 
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <Label htmlFor="category-parent">Category *</Label>
+                <Label htmlFor="category-parent">{t.mfg.productForm.category} *</Label>
                 <Select
                   value={formData.categoryId || undefined}
                   onValueChange={(value) =>
@@ -515,10 +517,10 @@ export default function EditProductPage({
                     <SelectValue
                       placeholder={
                         categoriesLoading
-                          ? "Loading categories…"
+                          ? (t.mfg.products.loadingCategories || "Loading categories…")
                           : categories.length === 0
-                            ? "No categories available"
-                            : "Select category"
+                            ? (t.mfg.products.noCategories || "No categories available")
+                            : (t.mfg.productForm.selectCategory || "Select category")
                       }
                     />
                   </SelectTrigger>
@@ -533,7 +535,7 @@ export default function EditProductPage({
               </div>
 
               <div>
-                <Label htmlFor="subcategory">Sub-category</Label>
+                <Label htmlFor="subcategory">{t.mfg.products.subcategory || "Sub-category"}</Label>
                 <Select
                   value={formData.subCategoryId || undefined}
                   onValueChange={(value) => setFormData({ ...formData, subCategoryId: value })}
@@ -543,10 +545,10 @@ export default function EditProductPage({
                     <SelectValue
                       placeholder={
                         !formData.categoryId
-                          ? "Select a category first"
+                          ? (t.mfg.products.selectCategoryFirst || "Select a category first")
                           : subcategoriesForCategory.length === 0
-                            ? "No sub-categories"
-                            : "Select sub-category"
+                            ? (t.mfg.products.noSubcategories || "No sub-categories")
+                            : (t.mfg.products.selectSubcategory || "Select sub-category")
                       }
                     />
                   </SelectTrigger>
@@ -562,7 +564,7 @@ export default function EditProductPage({
             </div>
 
             <div>
-              <Label htmlFor="status">Status</Label>
+              <Label htmlFor="status">{t.mfg.orders.status}</Label>
               <Select
                 value={formData.status}
                 onValueChange={(value) =>
@@ -573,9 +575,9 @@ export default function EditProductPage({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="active">{t.mfg.subscription.active}</SelectItem>
+                  <SelectItem value="draft">{t.mfg.products.draft || "Draft"}</SelectItem>
+                  <SelectItem value="inactive">{t.mfg.products.inactive || "Inactive"}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -583,15 +585,15 @@ export default function EditProductPage({
         </div>
 
         {/* Product Images */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <ImageIcon className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Product Images</h2>
+              <h2 className="font-semibold text-foreground">{t.mfg.productForm.images}</h2>
               <p className="text-sm text-muted-foreground">
-                Existing images are kept. Upload additional images below.
+                {t.mfg.products.imagesDesc || "Upload up to 10 high-quality images (required)"}
               </p>
             </div>
           </div>
@@ -615,7 +617,7 @@ export default function EditProductPage({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt="" className="h-full w-full object-cover" />
                 <span className="absolute bottom-1 left-1 rounded bg-black/50 px-1 text-[10px] text-white">
-                  saved
+                  {t.mfg.products.savedStatus || "saved"}
                 </span>
               </div>
             ))}
@@ -645,31 +647,31 @@ export default function EditProductPage({
                 className="flex aspect-square flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/50 text-muted-foreground transition-colors hover:border-secondary hover:text-secondary"
               >
                 <Upload className="h-6 w-6" />
-                <span className="text-xs">Add more</span>
+                <span className="text-xs">{t.mfg.products.addMore || "Add more"}</span>
               </button>
             )}
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Recommended: 800x800px or larger. JPG, PNG, or WebP format.
+            {t.mfg.products.imagesRecommend || "Recommended: 800x800px or larger. JPG, PNG, or WebP format."}
           </p>
         </div>
 
         {/* Pricing & MOQ */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <DollarSign className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Pricing & Quantity</h2>
-              <p className="text-sm text-muted-foreground">Set your price range and minimum order</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.pricingQuantity || "Pricing & Quantity"}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.pricingDesc || "Set your price range and minimum order"}</p>
             </div>
           </div>
 
           <div className="space-y-5">
             <div className="grid gap-5 sm:grid-cols-3">
               <div>
-                <Label htmlFor="priceMin">Price Min *</Label>
+                <Label htmlFor="priceMin">{t.mfg.products.priceMin || "Price Min"} *</Label>
                 <div className="relative mt-2">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     $
@@ -688,7 +690,7 @@ export default function EditProductPage({
                 </div>
               </div>
               <div>
-                <Label htmlFor="priceMax">Price Max *</Label>
+                <Label htmlFor="priceMax">{t.mfg.products.priceMax || "Price Max"} *</Label>
                 <div className="relative mt-2">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     $
@@ -707,7 +709,7 @@ export default function EditProductPage({
                 </div>
               </div>
               <div>
-                <Label htmlFor="currency">Currency *</Label>
+                <Label htmlFor="currency">{t.mfg.products.currency || "Currency"} *</Label>
                 <Select
                   value={formData.currencyId || undefined}
                   onValueChange={(value) => setFormData({ ...formData, currencyId: value })}
@@ -729,7 +731,7 @@ export default function EditProductPage({
 
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <Label htmlFor="moq">Minimum Order Quantity (MOQ) *</Label>
+                <Label htmlFor="moq">{t.mfg.productForm.minOrderQty} *</Label>
                 <div className="mt-2 flex gap-2">
                   <Input
                     id="moq"
@@ -759,7 +761,7 @@ export default function EditProductPage({
               </div>
 
               <div>
-                <Label htmlFor="leadTime">Lead Time *</Label>
+                <Label htmlFor="leadTime">{t.mfg.products.leadTime || "Lead Time"} *</Label>
                 <Input
                   id="leadTime"
                   value={formData.leadTime}
@@ -772,7 +774,7 @@ export default function EditProductPage({
             </div>
 
             <div>
-              <Label htmlFor="supplyCapacity">Supply Capacity</Label>
+              <Label htmlFor="supplyCapacity">{t.mfg.products.supplyCapacity || "Supply Capacity"}</Label>
               <div className="mt-2 flex gap-2">
                 <Input
                   id="supplyCapacity"
@@ -805,9 +807,9 @@ export default function EditProductPage({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="day">Per Day</SelectItem>
-                    <SelectItem value="week">Per Week</SelectItem>
-                    <SelectItem value="month">Per Month</SelectItem>
+                    <SelectItem value="day">{t.mfg.products.supplyPeriodDay || "Per Day"}</SelectItem>
+                    <SelectItem value="week">{t.mfg.products.supplyPeriodWeek || "Per Week"}</SelectItem>
+                    <SelectItem value="month">{t.mfg.products.supplyPeriodMonth || "Per Month"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -816,14 +818,14 @@ export default function EditProductPage({
         </div>
 
         {/* Specifications */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <FileText className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Product Specifications</h2>
-              <p className="text-sm text-muted-foreground">Add detailed specifications</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.specificationsTitle || "Product Specifications"}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.specificationsDesc || "Add detailed specifications"}</p>
             </div>
           </div>
 
@@ -870,21 +872,21 @@ export default function EditProductPage({
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
-              Add Specification
+              {t.mfg.products.addSpecification || "Add Specification"}
             </Button>
           </div>
         </div>
 
         {/* Key Features */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <Zap className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Key Features</h2>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.keyFeatures || "Key Features"}</h2>
               <p className="text-sm text-muted-foreground">
-                Highlight the main selling points of your product
+                {t.mfg.products.keyFeaturesDesc || "Highlight the main selling points of your product"}
               </p>
             </div>
           </div>
@@ -893,7 +895,7 @@ export default function EditProductPage({
             {keyFeatures.map((feature, index) => (
               <div key={index} className="flex gap-3">
                 <Input
-                  placeholder={`Feature ${index + 1}`}
+                  placeholder={`${t.common.feature || "Feature"} ${index + 1}`}
                   value={feature}
                   onChange={(e) => {
                     const updated = [...keyFeatures]
@@ -922,21 +924,21 @@ export default function EditProductPage({
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
-              Add Feature
+              {t.mfg.products.addFeature || "Add Feature"}
             </Button>
           </div>
         </div>
 
         {/* Customization Options */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <Sparkles className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Customization Options</h2>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.customizationOptions || "Customization Options"}</h2>
               <p className="text-sm text-muted-foreground">
-                What can buyers customize for this product?
+                {t.mfg.products.customizationDesc || "What can buyers customize for this product?"}
               </p>
             </div>
           </div>
@@ -945,7 +947,7 @@ export default function EditProductPage({
             {customizationOptions.map((option, index) => (
               <div key={index} className="flex gap-3">
                 <Input
-                  placeholder={`Option ${index + 1} (e.g., "Logo printing")`}
+                  placeholder={`${t.common.option || "Option"} ${index + 1}`}
                   value={option}
                   onChange={(e) => {
                     const updated = [...customizationOptions]
@@ -976,27 +978,27 @@ export default function EditProductPage({
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
-              Add Option
+              {t.mfg.products.addOption || "Add Option"}
             </Button>
           </div>
         </div>
 
         {/* Shipping & Packaging */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <Truck className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Shipping & Packaging</h2>
-              <p className="text-sm text-muted-foreground">Logistics and packaging details</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.shippingPackaging || "Shipping & Packaging"}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.shippingPackagingDesc || "Logistics and packaging details"}</p>
             </div>
           </div>
 
           <div className="space-y-5">
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <Label>Packaging Type</Label>
+                <Label>{t.mfg.products.packagingType || "Packaging Type"}</Label>
                 <Select
                   value={formData.packaging}
                   onValueChange={(value) => setFormData({ ...formData, packaging: value })}
@@ -1015,7 +1017,7 @@ export default function EditProductPage({
               </div>
 
               <div>
-                <Label htmlFor="portOfLoading">Port of Loading</Label>
+                <Label htmlFor="portOfLoading">{t.mfg.products.portOfLoading || "Port of Loading"}</Label>
                 <Input
                   id="portOfLoading"
                   value={formData.portOfLoading}
@@ -1028,7 +1030,7 @@ export default function EditProductPage({
 
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <Label htmlFor="packagingDimensions">Package Dimensions</Label>
+                <Label htmlFor="packagingDimensions">{t.mfg.products.packageDimensions || "Package Dimensions"}</Label>
                 <Input
                   id="packagingDimensions"
                   value={formData.packagingDimensions}
@@ -1040,7 +1042,7 @@ export default function EditProductPage({
                 />
               </div>
               <div>
-                <Label htmlFor="packagingWeight">Package Weight</Label>
+                <Label htmlFor="packagingWeight">{t.mfg.products.packageWeight || "Package Weight"}</Label>
                 <Input
                   id="packagingWeight"
                   value={formData.packagingWeight}
@@ -1050,7 +1052,7 @@ export default function EditProductPage({
                 />
               </div>
               <div>
-                <Label htmlFor="packagingCostPerUnit">Packaging cost per unit</Label>
+                <Label htmlFor="packagingCostPerUnit">{t.mfg.products.packagingCost || "Packaging cost per unit"}</Label>
                 <Input
                   id="packagingCostPerUnit"
                   type="number"
@@ -1067,7 +1069,7 @@ export default function EditProductPage({
             </div>
 
             <div>
-              <Label htmlFor="packagingDetails">Packaging Description</Label>
+              <Label htmlFor="packagingDetails">{t.mfg.products.packagingDesc || "Packaging Description"}</Label>
               <Textarea
                 id="packagingDetails"
                 value={formData.packagingDetails}
@@ -1078,11 +1080,11 @@ export default function EditProductPage({
             </div>
 
             <div>
-              <Label>Shipping Methods</Label>
+              <Label>{t.mfg.products.shippingMethods || "Shipping Methods"}</Label>
               <div className="mt-3 flex flex-wrap gap-3">
                 {shippingOptions.length === 0 ? (
                   <span className="text-sm text-muted-foreground">
-                    No shipping methods returned — you can still submit.
+                    {t.mfg.products.noShippingMethods || "No shipping methods returned."}
                   </span>
                 ) : (
                   shippingOptions.map((method) => {
@@ -1104,14 +1106,14 @@ export default function EditProductPage({
         </div>
 
         {/* Additional Options */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <Tags className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Additional Options</h2>
-              <p className="text-sm text-muted-foreground">Samples, customization, and keywords</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.additionalOptions || "Additional Options"}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.additionalOptionsDesc || "Samples, customization, and keywords"}</p>
             </div>
           </div>
 
@@ -1126,15 +1128,15 @@ export default function EditProductPage({
               />
               <div>
                 <Label htmlFor="sampleAvailable" className="cursor-pointer">
-                  Samples Available
+                  {t.mfg.products.samplesAvailable || "Samples Available"}
                 </Label>
-                <p className="text-sm text-muted-foreground">Buyers can request product samples</p>
+                <p className="text-sm text-muted-foreground">{t.mfg.products.samplesDesc || "Buyers can request product samples"}</p>
               </div>
             </div>
 
             {formData.sampleAvailable && (
               <div className="ml-6">
-                <Label htmlFor="samplePrice">Sample Price</Label>
+                <Label htmlFor="samplePrice">{t.mfg.products.samplePrice || "Sample Price"}</Label>
                 <div className="relative mt-2 max-w-xs">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                     $
@@ -1163,15 +1165,15 @@ export default function EditProductPage({
               />
               <div>
                 <Label htmlFor="customization" className="cursor-pointer">
-                  Customization Available
+                  {t.mfg.products.customizationAvailable || "Customization Available"}
                 </Label>
-                <p className="text-sm text-muted-foreground">OEM/ODM services for this product</p>
+                <p className="text-sm text-muted-foreground">{t.mfg.products.customizationAvailableDesc || "OEM/ODM services for this product"}</p>
               </div>
             </div>
 
             {formData.customization && (
               <div className="ml-6">
-                <Label htmlFor="customizationDetails">Customization Details</Label>
+                <Label htmlFor="customizationDetails">{t.mfg.products.customizationDetails || "Customization Details"}</Label>
                 <Textarea
                   id="customizationDetails"
                   value={formData.customizationDetails}
@@ -1185,7 +1187,7 @@ export default function EditProductPage({
             )}
 
             <div>
-              <Label htmlFor="keywords">Product Keywords</Label>
+              <Label htmlFor="keywords">{t.mfg.products.keywords || "Product Keywords"}</Label>
               <Input
                 id="keywords"
                 value={formData.keywords}
@@ -1193,14 +1195,14 @@ export default function EditProductPage({
                 placeholder="wireless earbuds, bluetooth headphones"
                 className="mt-2"
               />
-              <p className="mt-1 text-xs text-muted-foreground">Separate keywords with commas.</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t.mfg.products.keywordsDesc || "Separate keywords with commas."}</p>
             </div>
           </div>
         </div>
 
         {/* Brochure */}
-        <div className="rounded-xl border border-border bg-card p-6">
-          <h2 className="font-semibold text-foreground mb-4">Product Brochure</h2>
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
+          <h2 className="font-semibold text-foreground mb-4">{t.mfg.products.brochure || "Product Brochure"}</h2>
           <div className="space-y-3">
             <input
               ref={brochureInputRef}
@@ -1238,7 +1240,7 @@ export default function EditProductPage({
                 className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/50 p-8 text-muted-foreground transition-colors hover:border-secondary hover:text-secondary"
               >
                 <Upload className="h-6 w-6" />
-                <span className="text-sm">Upload new brochure (PDF, DOC)</span>
+                <span className="text-sm">{t.mfg.products.uploadPdf || "Upload new brochure (PDF, DOC)"}</span>
               </div>
             )}
           </div>
@@ -1253,11 +1255,11 @@ export default function EditProductPage({
             onClick={(e) => handleSubmit(e as unknown as React.FormEvent, true)}
           >
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Save as Draft
+            {t.mfg.products.saveAsDraft || "Save as Draft"}
           </Button>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Save Changes
+            {t.common.save}
           </Button>
         </div>
       </form>

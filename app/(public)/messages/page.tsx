@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { ChatView, ChatConversation, ChatMessage, ChatParticipant } from "@/components/chat/chat-view"
 import { useAuth } from "@/lib/auth-context"
@@ -165,8 +165,8 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-background">
+      <SiteHeader />
       <main className="flex-1">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="mb-6">

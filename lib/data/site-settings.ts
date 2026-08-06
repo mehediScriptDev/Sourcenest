@@ -2,6 +2,7 @@
 
 export interface SocialMediaLink {
   id: string
+  apiId?: number
   platform: string
   icon: string // lucide icon name
   url: string
@@ -11,6 +12,8 @@ export interface SocialMediaLink {
 
 export interface LegalPageSection {
   id: string
+  apiId?: number
+  sectionKey?: string
   title: string
   content: string
   order: number
@@ -18,6 +21,7 @@ export interface LegalPageSection {
 
 export interface LegalPage {
   id: string
+  apiId?: number
   slug: string
   title: string
   lastUpdated: string
@@ -26,6 +30,7 @@ export interface LegalPage {
 }
 
 export interface AboutPageData {
+  apiId?: number
   enabled: boolean
   hero: {
     title: string
@@ -35,11 +40,6 @@ export interface AboutPageData {
     title: string
     paragraphs: string[]
   }
-  stats: {
-    value: string
-    label: string
-    enabled: boolean
-  }[]
   mission: {
     title: string
     description: string
@@ -49,12 +49,16 @@ export interface AboutPageData {
     description: string
   }
   values: {
-    id: string
-    icon: string
     title: string
-    description: string
-    enabled: boolean
-  }[]
+    subtitle: string
+    items: {
+      id: string
+      icon: string
+      title: string
+      description: string
+      enabled: boolean
+    }[]
+  }
   whyDifferent: {
     title: string
     points: {
@@ -148,8 +152,8 @@ export const defaultSocialLinks: SocialMediaLink[] = [
     id: "instagram",
     platform: "Instagram",
     icon: "Instagram",
-    url: "https://instagram.com/sourcenest",
-    enabled: false,
+    url: "https://www.instagram.com/sourcenest1/",
+    enabled: true,
     order: 5
   },
   {
@@ -198,7 +202,7 @@ export const defaultLegalPages: LegalPage[] = [
       {
         id: "contact",
         title: "5. Contact Us",
-        content: "If you have any questions about this Privacy Policy, please contact us at info@sourcenest.tech.",
+        content: "If you have any questions about this Privacy Policy, please contact us at info@sourcenest.tesh.",
         order: 5
       }
     ]
@@ -243,7 +247,7 @@ export const defaultLegalPages: LegalPage[] = [
       {
         id: "contact",
         title: "6. Contact Information",
-        content: "Questions about the Terms of Service should be sent to us at info@sourcenest.tech.",
+        content: "Questions about the Terms of Service should be sent to us at info@sourcenest.tesh.",
         order: 6
       }
     ]
@@ -282,7 +286,7 @@ export const defaultLegalPages: LegalPage[] = [
       {
         id: "contact",
         title: "5. Contact Us",
-        content: "If you have any questions about our Cookie Policy, please contact us at info@sourcenest.tech.",
+        content: "If you have any questions about our Cookie Policy, please contact us at info@sourcenest.tesh.",
         order: 5
       }
     ]
@@ -305,12 +309,6 @@ export const defaultAboutPage: AboutPageData = {
       "Today, SourceNest connects thousands of buyers with reviewed manufacturers across 50+ countries, covering 45+ industries. We're proud to be making global trade more accessible, transparent, and efficient."
     ]
   },
-  stats: [
-    { value: "50+", label: "Countries", enabled: true },
-    { value: "2,000+", label: "Reviewed Suppliers", enabled: true },
-    { value: "15,000+", label: "Products Listed", enabled: true },
-    { value: "45+", label: "Industries Covered", enabled: true }
-  ],
   mission: {
     title: "Our Mission",
     description: "To make global sourcing more transparent, efficient, and trustworthy by connecting quality-focused buyers with reviewed manufacturers through a premium digital platform."
@@ -319,7 +317,10 @@ export const defaultAboutPage: AboutPageData = {
     title: "Our Vision",
     description: "A world where finding the right manufacturing partner is simple, safe, and successful — regardless of geography, company size, or industry."
   },
-  values: [
+  values: {
+    title: "Our Values",
+    subtitle: "The principles that guide everything we do",
+    items: [
     {
       id: "trust",
       icon: "Shield",
@@ -348,7 +349,8 @@ export const defaultAboutPage: AboutPageData = {
       description: "We continuously improve our platform with smart features that make sourcing more efficient and effective.",
       enabled: true
     }
-  ],
+    ]
+  },
   whyDifferent: {
     title: "Why SourceNest is Different",
     points: [

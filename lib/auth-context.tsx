@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import type { LoginInput, User as ApiUser } from "@/lib/types"
+import type { EmailVerificationChallenge, LoginInput, User as ApiUser } from "@/lib/types"
 import {
   completeSocialProfile,
   extractTwoFactorToken,
@@ -9,6 +9,8 @@ import {
   isTwoFactorRequiredResponse,
   login as loginRequest,
   register as registerRequest,
+  resendEmailVerification as resendEmailVerificationRequest,
+  verifyEmail as verifyEmailRequest,
   type SocialCompleteProfileInput,
 } from "@/lib/api/auth"
 import { getApiErrorMessage } from "@/lib/api/errors"
@@ -25,12 +27,37 @@ import {
 export type { UserRole }
 
 export type SignupResult =
+  | {
+      success: true
+      requiresEmailVerification: true
+      verificationToken: string
+      codeExpiryTime: number
+      pendingReview: boolean
+      message?: string
+      manufactureStatus?: string | null
+    }
   | { success: true; pendingReview: true; message: string; manufactureStatus?: string | null }
   | { success: true; pendingReview: false; redirectTo: string; message?: string }
   | { success: false; message?: string }
 
+export type VerifyEmailSignupResult =
+  | { success: true; pendingReview: true; message: string; manufactureStatus?: string | null }
+  | { success: true; pendingReview: false; redirectTo: string; message?: string }
+  | { success: false; message?: string; retryAfterSeconds?: number }
+
 export type LoginResult =
   | { success: true; redirectTo: string; message?: string }
+  | {
+      success: false
+      redirectTo: ""
+      message?: string
+      requiresEmailVerification: true
+      verificationToken: string
+      codeExpiryTime: number
+      pendingReview: boolean
+      manufactureStatus?: string | null
+      role: UserRole
+    }
   | {
       success: false
       redirectTo: ""
@@ -100,6 +127,14 @@ interface AuthContextType {
   loginWithGoogle: (googleIdToken: string, role?: UserRole) => Promise<GoogleLoginResult>
   completeGoogleProfile: (input: CompleteGoogleProfileInput) => Promise<CompleteGoogleProfileResult>
   signup: (data: SignupData) => Promise<SignupResult>
+  verifyEmailSignup: (input: {
+    verificationToken: string
+    otp: string
+    deviceName?: string
+    pendingReview?: boolean
+    manufactureStatus?: string | null
+  }) => Promise<VerifyEmailSignupResult>
+  resendEmailVerification: (verificationToken: string) => Promise<VerifyEmailSignupResult>
   logout: () => void
   setToken: (token: string | null) => void
   setUser: (user: User | ApiUser | null) => void
@@ -165,6 +200,58 @@ function extractSetupToken(payload: unknown): string | null {
 
   const trimmed = tokenValue.trim()
   return trimmed.length > 0 ? trimmed : null
+}
+
+function isEmailVerificationChallenge(
+  data: LoginResponse["data"]
+): data is EmailVerificationChallenge {
+  return Boolean(
+    data &&
+      typeof data === "object" &&
+      "verification_token" in data &&
+      typeof data.verification_token === "string" &&
+      data.verification_token.trim().length > 0
+  )
+}
+
+function isAuthTokenPayload(data: LoginResponse["data"]): data is import("@/lib/types").AuthTokenPayload {
+  return Boolean(
+    data &&
+      typeof data === "object" &&
+      "access_token" in data &&
+      typeof data.access_token === "string" &&
+      data.access_token.length > 0
+  )
+}
+
+function readVerificationChallenge(payload: unknown): {
+  verificationToken: string
+  codeExpiryTime: number
+} | null {
+  if (!payload || typeof payload !== "object") {
+    return null
+  }
+
+  const source = payload as Record<string, unknown>
+  const nested =
+    source.data && typeof source.data === "object"
+      ? (source.data as Record<string, unknown>)
+      : null
+
+  const tokenCandidate = nested?.verification_token ?? source.verification_token
+  if (typeof tokenCandidate !== "string" || !tokenCandidate.trim()) {
+    return null
+  }
+
+  const expiryCandidate = nested?.code_expiry_time ?? source.code_expiry_time
+  const codeExpiryTime = typeof expiryCandidate === "number" && Number.isFinite(expiryCandidate)
+    ? expiryCandidate
+    : 10
+
+  return {
+    verificationToken: tokenCandidate.trim(),
+    codeExpiryTime,
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -244,6 +331,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const loginPayload: LoginInput = { email, password, role }
       const response = await loginRequest(loginPayload)
+
+      // Backend may return success=true with verification challenge payload.
+      // Redirect user to OTP flow instead of allowing a broken dashboard session.
+      const verificationChallenge = readVerificationChallenge(response)
+      if (verificationChallenge) {
+        return {
+          success: false,
+          redirectTo: "",
+          requiresEmailVerification: true,
+          verificationToken: verificationChallenge.verificationToken,
+          codeExpiryTime: verificationChallenge.codeExpiryTime,
+          pendingReview: false,
+          manufactureStatus: null,
+          role,
+          message: response.message || "Please verify your email before signing in.",
+        }
+      }
 
       if (response.success && response.data?.access_token && response.data?.user) {
         setToken(response.data.access_token)
@@ -337,8 +441,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, message: response.message || undefined }
       }
 
+      if (isEmailVerificationChallenge(response.data)) {
+        return {
+          success: true,
+          requiresEmailVerification: true,
+          verificationToken: response.data.verification_token,
+          codeExpiryTime: response.data.code_expiry_time,
+          pendingReview: Boolean(response.manufacture_status),
+          message: response.message || undefined,
+          manufactureStatus: response.manufacture_status ?? null,
+        }
+      }
+
       const session = response.data
-      if (session?.access_token && session.user) {
+      if (isAuthTokenPayload(session)) {
         setToken(session.access_token)
         setUser(session.user)
         return {
@@ -365,6 +481,100 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, message: getApiErrorMessage(err) }
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const verifyEmailSignup = async (input: {
+    verificationToken: string
+    otp: string
+    deviceName?: string
+    pendingReview?: boolean
+    manufactureStatus?: string | null
+  }): Promise<VerifyEmailSignupResult> => {
+    setIsLoading(true)
+
+    try {
+      const response = await verifyEmailRequest({
+        verificationToken: input.verificationToken,
+        otp: input.otp,
+        deviceName: input.deviceName,
+      })
+
+      if (!response.success || !isAuthTokenPayload(response.data)) {
+        const retryAfterSeconds =
+          response.data &&
+          typeof response.data === "object" &&
+          "retry_after_seconds" in response.data &&
+          typeof response.data.retry_after_seconds === "number"
+            ? response.data.retry_after_seconds
+            : undefined
+
+        return {
+          success: false,
+          message: response.message || "Verification failed. Please try again.",
+          retryAfterSeconds,
+        }
+      }
+
+      setToken(response.data.access_token)
+      setUser(response.data.user)
+
+      if (input.pendingReview) {
+        return {
+          success: true,
+          pendingReview: true,
+          message:
+            "Thank you for registering. We will notify you when your account is ready.",
+          manufactureStatus: input.manufactureStatus ?? response.data.user.manufacture_status ?? null,
+        }
+      }
+
+      return {
+        success: true,
+        pendingReview: false,
+        redirectTo: getDashboardPathByRole(
+          response.data.user.role,
+          response.data.user.manufacture_status
+        ),
+        message: response.message || undefined,
+      }
+    } catch (err: unknown) {
+      return { success: false, message: getApiErrorMessage(err) }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const resendEmailVerification = async (
+    verificationToken: string
+  ): Promise<VerifyEmailSignupResult> => {
+    try {
+      const response = await resendEmailVerificationRequest(verificationToken)
+
+      if (!response.success) {
+        const retryAfterSeconds =
+          response.data &&
+          typeof response.data === "object" &&
+          "retry_after_seconds" in response.data &&
+          typeof response.data.retry_after_seconds === "number"
+            ? response.data.retry_after_seconds
+            : undefined
+
+        return {
+          success: false,
+          message: response.message || "Unable to resend verification code.",
+          retryAfterSeconds,
+        }
+      }
+
+      return {
+        success: true,
+        pendingReview: false,
+        redirectTo: "",
+        message: response.message || undefined,
+      }
+    } catch (err: unknown) {
+      return { success: false, message: getApiErrorMessage(err) }
     }
   }
 
@@ -510,6 +720,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithGoogle,
         completeGoogleProfile,
         signup,
+        verifyEmailSignup,
+        resendEmailVerification,
         logout,
         setToken,
         setUser,

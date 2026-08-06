@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -41,11 +42,10 @@ import {
   getManufacturerAnalyticsMetrics, 
   getManufacturerAnalyticsPerformance,
   getManufacturerAnalyticsFunnel,
-  AnalyticsMetricItem,
-  AnalyticsPerformanceItem,
-  AnalyticsFunnelStep
 } from "@/lib/api/manufacturer-analytics"
+import { queryKeys } from "@/lib/query-keys"
 import ManufacturerStatCard from "@/components/manufacturer/manufacturer-stat-card"
+import { useTranslation } from "@/lib/i18n"
 
 const metricIcons: Record<string, React.ComponentType<any>> = {
   profile_views: Eye,
@@ -61,118 +61,100 @@ const periodApiMap: Record<string, string> = {
   "365": "last_year"
 }
 
-const chartConfig = {
-  profile_views: {
-    label: "Profile Views",
-    color: "var(--chart-1)",
-  },
-  inquiries: {
-    label: "Inquiries Received",
-    color: "var(--chart-2)",
-  },
-  messages: {
-    label: "Messages",
-    color: "var(--chart-3)",
-  },
-  quote_requests: {
-    label: "Quote Requests",
-    color: "var(--chart-4)",
-  },
-} satisfies ChartConfig
-
-const topProducts = [
-  { name: "TWS Wireless Earbuds Pro", views: 1234, inquiries: 45 },
-  { name: "Smart Fitness Tracker V3", views: 987, inquiries: 38 },
-  { name: "Bluetooth Speaker 20W", views: 756, inquiries: 29 },
-  { name: "USB-C Fast Charger 65W", views: 654, inquiries: 24 },
-  { name: "Wireless Mouse Ergonomic", views: 543, inquiries: 18 },
-]
-
 const topCountries = [
   { country: "United States", flag: "US", percentage: 35 },
   { country: "Germany", flag: "DE", percentage: 18 },
   { country: "United Kingdom", flag: "GB", percentage: 15 },
   { country: "Australia", flag: "AU", percentage: 12 },
   { country: "Canada", flag: "CA", percentage: 10 },
-  { country: "Other", flag: "OT", percentage: 10 },
 ]
 
 export default function ManufacturerAnalyticsPage() {
-  const [metrics, setMetrics] = useState<AnalyticsMetricItem[]>([])
-  const [performanceData, setPerformanceData] = useState<AnalyticsPerformanceItem[]>([])
-  const [funnelSteps, setFunnelSteps] = useState<AnalyticsFunnelStep[]>([])
-  
-  const [isLoading, setIsLoading] = useState(true)
-  const [isChartLoading, setIsChartLoading] = useState(true)
-  const [isFunnelLoading, setIsFunnelLoading] = useState(true)
+  const { t } = useTranslation()
+  const a = t.mfg.analytics
+
+  const chartConfig = {
+    profile_views: {
+      label: a.profileViews,
+      color: "var(--chart-1)",
+    },
+    inquiries: {
+      label: a.inquiriesReceived,
+      color: "var(--chart-2)",
+    },
+    messages: {
+      label: a.messages,
+      color: "var(--chart-3)",
+    },
+    quote_requests: {
+      label: a.quoteRequests,
+      color: "var(--chart-4)",
+    },
+  } satisfies ChartConfig
+
+  const topProducts = [
+    { name: "TWS Wireless Earbuds Pro", views: 1234, inquiries: 45 },
+    { name: "Smart Fitness Tracker V3", views: 987, inquiries: 38 },
+    { name: "Bluetooth Speaker 20W", views: 756, inquiries: 29 },
+    { name: "USB-C Fast Charger 65W", views: 654, inquiries: 24 },
+    { name: "Wireless Mouse Ergonomic", views: 543, inquiries: 18 },
+  ]
+
+  const topCountriesWithOther = [
+    ...topCountries,
+    { country: a.other, flag: "OT", percentage: 10 },
+  ]
   const [period, setPeriod] = useState("30")
+  const apiPeriod = periodApiMap[period] || "last_30_days"
 
-  const loadAnalytics = useCallback(async (selectedPeriod: string) => {
-    const apiPeriod = periodApiMap[selectedPeriod] || "last_30_days"
-    
-    // Fetch metrics
-    try {
-      setIsLoading(true)
-      const res = await getManufacturerAnalyticsMetrics({ period: apiPeriod })
-      if (res.success && res.data?.metrics) {
-        setMetrics(res.data.metrics)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setIsLoading(false)
-    }
+  const metricsQuery = useQuery({
+    queryKey: queryKeys.manufacturerAnalyticsMetrics(apiPeriod),
+    queryFn: () => getManufacturerAnalyticsMetrics({ period: apiPeriod }),
+  })
 
-    // Fetch performance data
-    try {
-      setIsChartLoading(true)
-      const res = await getManufacturerAnalyticsPerformance({ period: apiPeriod })
-      if (res.success && res.data) {
-        // Reverse array to render chronologically (oldest to newest)
-        setPerformanceData([...res.data].reverse())
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setIsChartLoading(false)
-    }
+  const performanceQuery = useQuery({
+    queryKey: queryKeys.manufacturerAnalyticsPerformance(apiPeriod),
+    queryFn: () => getManufacturerAnalyticsPerformance({ period: apiPeriod }),
+  })
 
-    // Fetch funnel data
-    try {
-      setIsFunnelLoading(true)
-      const res = await getManufacturerAnalyticsFunnel({ period: apiPeriod })
-      if (res.success && res.data?.steps) {
-        setFunnelSteps(res.data.steps)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setIsFunnelLoading(false)
-    }
-  }, [])
+  const funnelQuery = useQuery({
+    queryKey: queryKeys.manufacturerAnalyticsFunnel(apiPeriod),
+    queryFn: () => getManufacturerAnalyticsFunnel({ period: apiPeriod }),
+  })
 
-  useEffect(() => {
-    loadAnalytics(period)
-  }, [period, loadAnalytics])
+  const metrics =
+    metricsQuery.data?.success && metricsQuery.data.data?.metrics
+      ? metricsQuery.data.data.metrics
+      : []
+  const performanceData =
+    performanceQuery.data?.success && performanceQuery.data.data
+      ? [...performanceQuery.data.data].reverse()
+      : []
+  const funnelSteps =
+    funnelQuery.data?.success && funnelQuery.data.data?.steps
+      ? funnelQuery.data.data.steps
+      : []
+
+  const isLoading = metricsQuery.isLoading
+  const isChartLoading = performanceQuery.isLoading
+  const isFunnelLoading = funnelQuery.isLoading
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-serif text-2xl font-medium text-foreground">Analytics</h1>
-          <p className="mt-1 text-muted-foreground">
-            Track your performance and buyer engagement
-          </p>
+          <h1 className="font-serif text-2xl font-medium text-foreground">{a.title}</h1>
+          <p className="mt-1 text-muted-foreground">{a.subtitle}</p>
         </div>
         <Select value={period} onValueChange={setPeriod}>
           <SelectTrigger className="w-36">
-            <SelectValue placeholder="Time period" />
+            <SelectValue placeholder={a.timePeriod} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="7">Last 7 days</SelectItem>
-            <SelectItem value="30">Last 30 days</SelectItem>
-            <SelectItem value="90">Last 90 days</SelectItem>
-            <SelectItem value="365">Last year</SelectItem>
+            <SelectItem value="7">{a.last7Days}</SelectItem>
+            <SelectItem value="30">{a.last30Days}</SelectItem>
+            <SelectItem value="90">{a.last90Days}</SelectItem>
+            <SelectItem value="365">{a.lastYear}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -221,11 +203,11 @@ export default function ManufacturerAnalyticsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5" />
-              Performance Overview
+              {a.performanceOverview}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-80 w-full flex items-center justify-center">
+          <CardContent className="overflow-x-auto">
+            <div className="h-80 min-w-[280px] w-full flex items-center justify-center">
               {isChartLoading ? (
                 <div className="flex flex-col items-center justify-center gap-2">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -302,7 +284,7 @@ export default function ManufacturerAnalyticsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
-              Top Performing Products
+              {a.topProductsTitle}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -315,7 +297,7 @@ export default function ManufacturerAnalyticsPage() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground truncate">{product.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {product.views.toLocaleString()} views • {product.inquiries} inquiries
+                      {product.views.toLocaleString()} {a.views.toLowerCase()} • {product.inquiries} {a.inquiries.toLowerCase()}
                     </p>
                   </div>
                 </div>
@@ -329,12 +311,12 @@ export default function ManufacturerAnalyticsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Globe className="h-5 w-5" />
-              Buyer Locations
+              {a.buyerCountries}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {topCountries.map((item) => (
+              {topCountriesWithOther.map((item) => (
                 <div key={item.country} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-foreground">{item.country}</span>
@@ -357,7 +339,7 @@ export default function ManufacturerAnalyticsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              Conversion Funnel
+              {a.conversionFunnel}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -371,7 +353,7 @@ export default function ManufacturerAnalyticsPage() {
                 No funnel data available for this period.
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                 {funnelSteps.map((step) => (
                   <div key={step.key} className="rounded-lg border border-border bg-muted/50 p-4 text-center">
                     <p className="text-2xl font-bold text-foreground">{step.value_formatted}</p>

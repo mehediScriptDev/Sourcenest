@@ -339,6 +339,14 @@ export function getArticleBySlug(slug: string): StaticArticle | undefined {
   return STATIC_ARTICLES.find((a) => a.slug === slug)
 }
 
+export function estimateReadTime(html: string): string {
+  const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+  const words = text ? text.split(" ").length : 0
+  const minutes = Math.max(1, Math.round(words / 200))
+
+  return `${minutes} min read`
+}
+
 export function formatPublishedDate(dateStr: string): string {
   try {
     return new Date(dateStr).toLocaleDateString("en-US", {

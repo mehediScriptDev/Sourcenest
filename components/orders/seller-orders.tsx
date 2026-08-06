@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import Link from "next/link"
 import {
   formatCurrency,
@@ -9,7 +10,8 @@ import {
   ORDER_STATUS_FLOW,
   type OrderStatus,
 } from "@/lib/orders-context"
-import { getManufacturerOrders, getManufacturerOrderStats, type ApiOrder, type OrderStats } from "@/lib/api/orders"
+import { getManufacturerOrders, getManufacturerOrderStats, type ApiOrder } from "@/lib/api/orders"
+import { queryKeys } from "@/lib/query-keys"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
@@ -145,66 +147,52 @@ function OrderCard({ order, config }: { order: ApiOrder; config: SellerConfig })
 }
 
 export function SellerOrdersList({ config }: { config: SellerConfig }) {
-  const [orders, setOrders] = useState<ApiOrder[]>([])
-  const [stats, setStats] = useState<OrderStats | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(false)
 
-  // Debounce search
   const [debouncedSearch, setDebouncedSearch] = useState("")
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500)
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  useEffect(() => {
-    async function fetchStats() {
-      const res = await getManufacturerOrderStats()
-      if (res.success && res.data) {
-        setStats(res.data)
-      }
-    }
-    fetchStats()
-  }, [])
+  const statsQuery = useQuery({
+    queryKey: queryKeys.manufacturerOrderStats(),
+    queryFn: getManufacturerOrderStats,
+  })
 
-  useEffect(() => {
-    async function fetchOrders() {
-      setIsLoading(true)
-      const res = await getManufacturerOrders({
-        page: 1,
+  const ordersQuery = useInfiniteQuery({
+    queryKey: queryKeys.manufacturerOrders(debouncedSearch, statusFilter),
+    queryFn: ({ pageParam }) =>
+      getManufacturerOrders({
+        page: pageParam,
         per_page: 15,
         search: debouncedSearch || undefined,
         status: statusFilter === "all" ? undefined : statusFilter,
-      })
-      
-      if (res.success) {
-        setOrders(res.data)
-        setHasMore(res.meta ? res.meta.currentPage < res.meta.lastPage : false)
-        setPage(1)
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.success || !lastPage.meta) {
+        return undefined
       }
-      setIsLoading(false)
-    }
-    
-    fetchOrders()
-  }, [debouncedSearch, statusFilter])
+      return lastPage.meta.currentPage < lastPage.meta.lastPage
+        ? lastPage.meta.currentPage + 1
+        : undefined
+    },
+    placeholderData: (previousData) => previousData,
+  })
 
-  const loadMore = async () => {
-    const nextPage = page + 1
-    const res = await getManufacturerOrders({
-      page: nextPage,
-      per_page: 15,
-      search: debouncedSearch || undefined,
-      status: statusFilter === "all" ? undefined : statusFilter,
-    })
-    
-    if (res.success) {
-      setOrders(prev => [...prev, ...res.data])
-      setHasMore(res.meta ? res.meta.currentPage < res.meta.lastPage : false)
-      setPage(nextPage)
-    }
+  const orders = useMemo(
+    () =>
+      ordersQuery.data?.pages.flatMap((page) => (page.success ? page.data : [])) ?? [],
+    [ordersQuery.data]
+  )
+  const stats = statsQuery.data?.success ? statsQuery.data.data : null
+  const isLoading = ordersQuery.isLoading && !ordersQuery.data
+  const hasMore = ordersQuery.hasNextPage ?? false
+
+  const loadMore = () => {
+    void ordersQuery.fetchNextPage()
   }
 
   return (
@@ -265,7 +253,7 @@ export function SellerOrdersList({ config }: { config: SellerConfig }) {
         </Select>
       </div>
 
-      {isLoading && page === 1 ? (
+      {isLoading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -274,17 +262,28 @@ export function SellerOrdersList({ config }: { config: SellerConfig }) {
           {orders.map((order) => (
             <OrderCard key={order.id} order={order} config={config} />
           ))}
-          
+
           {hasMore && (
             <div className="pt-4 text-center">
-              <Button variant="outline" onClick={loadMore}>
-                Load More
+              <Button
+                variant="outline"
+                onClick={loadMore}
+                disabled={ordersQuery.isFetchingNextPage}
+              >
+                {ordersQuery.isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Load More
+                  </>
+                ) : (
+                  "Load More"
+                )}
               </Button>
             </div>
           )}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card py-16 text-center">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card py-12 text-center sm:py-16">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <PackageCheck className="h-6 w-6 text-muted-foreground" />
           </div>

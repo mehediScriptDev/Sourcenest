@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
+import { useTranslation } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -45,58 +46,6 @@ type SidebarItem = {
   badge?: string
   exact?: boolean
 }
-
-const sidebarItems: SidebarItem[] = [
-  {
-    title: "Overview",
-    href: "/dashboard/buyer",
-    icon: LayoutDashboard,
-    exact: true
-  },
-  {
-    title: "My RFQs",
-    href: "/dashboard/buyer/rfqs",
-    icon: FileText,
-    exact: true
-  },
-  {
-    title: "Saved Suppliers",
-    href: "/dashboard/buyer/saved",
-    icon: Heart,
-    exact: true
-  },
-  {
-    title: "Orders",
-    href: "/dashboard/buyer/orders",
-    icon: ShoppingBag,
-    exact: false
-  },
-  {
-    title: "Messages",
-    href: "/dashboard/buyer/messages",
-    icon: MessageSquare,
-    exact: true
-  },
-  {
-    title: "Support Tickets",
-    href: "/dashboard/buyer/support-tickets",
-    icon: HelpCircle,
-    exact: false
-  },
-  {
-    title: "Recent Activity",
-    href: "/dashboard/buyer/activity",
-    icon: Activity,
-    exact: true
-  },
-  {
-    title: "Settings",
-    href: "/dashboard/buyer/settings",
-    icon: Settings,
-    exact: true
-  }
-]
-
 export default function BuyerDashboardLayout({
   children,
 }: {
@@ -105,7 +54,59 @@ export default function BuyerDashboardLayout({
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout, isAuthenticated, isLoading } = useAuth()
+  const { t } = useTranslation()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+
+  const sidebarItems: SidebarItem[] = [
+    {
+      title: t.buyer.layout.nav.overview,
+      href: "/dashboard/buyer",
+      icon: LayoutDashboard,
+      exact: true
+    },
+    {
+      title: t.buyer.layout.nav.myRfqs,
+      href: "/dashboard/buyer/rfqs",
+      icon: FileText,
+      exact: true
+    },
+    {
+      title: t.buyer.layout.nav.savedSuppliers,
+      href: "/dashboard/buyer/saved",
+      icon: Heart,
+      exact: true
+    },
+    {
+      title: t.buyer.layout.nav.orders,
+      href: "/dashboard/buyer/orders",
+      icon: ShoppingBag,
+      exact: false
+    },
+    {
+      title: t.buyer.layout.nav.messages,
+      href: "/dashboard/buyer/messages",
+      icon: MessageSquare,
+      exact: true
+    },
+    {
+      title: t.buyer.layout.nav.supportTickets,
+      href: "/dashboard/buyer/support-tickets",
+      icon: HelpCircle,
+      exact: false
+    },
+    {
+      title: t.buyer.layout.nav.recentActivity,
+      href: "/dashboard/buyer/activity",
+      icon: Activity,
+      exact: true
+    },
+    {
+      title: t.buyer.layout.nav.settings,
+      href: "/dashboard/buyer/settings",
+      icon: Settings,
+      exact: true
+    }
+  ]
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -122,7 +123,7 @@ export default function BuyerDashboardLayout({
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="mt-4 text-muted-foreground">Loading...</p>
+          <p className="mt-4 text-muted-foreground">{t.buyer.layout.loading}</p>
         </div>
       </div>
     )
@@ -170,10 +171,10 @@ export default function BuyerDashboardLayout({
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{user?.name || "Buyer"}</p>
-            <p className="text-xs text-muted-foreground truncate">{user?.company || "Your Company"}</p>
+            <p className="text-sm font-medium text-foreground truncate">{user?.name || t.buyer.layout.buyer}</p>
+            <p className="text-xs text-muted-foreground truncate">{user?.company || t.buyer.layout.yourCompany}</p>
           </div>
-          <Badge variant="secondary" className="text-xs">Buyer</Badge>
+          <Badge variant="secondary" className="text-xs">{t.buyer.layout.buyer}</Badge>
         </div>
       </div>
 
@@ -209,7 +210,7 @@ export default function BuyerDashboardLayout({
         <Button className="w-full gap-2" asChild>
           <Link href="/rfq/new">
             <FileText className="h-4 w-4" />
-            Submit New RFQ
+            {t.buyer.layout.submitRfq}
           </Link>
         </Button>
       </div>
@@ -218,11 +219,11 @@ export default function BuyerDashboardLayout({
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <Link href="/help" className="flex items-center gap-1 hover:text-foreground">
             <HelpCircle className="h-3 w-3" />
-            Help
+            {t.buyer.layout.help}
           </Link>
           <Link href="/suppliers" className="flex items-center gap-1 text-foreground">
             <Globe className="h-3 w-3" />
-            Browse Suppliers
+            {t.buyer.layout.browseSuppliers}
           </Link>
         </div>
       </div>
@@ -242,15 +243,15 @@ export default function BuyerDashboardLayout({
       {/* Sidebar: fixed to viewport; main area uses lg:pl-64 so content is not hidden */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-dvh w-64 shrink-0 flex-col border-r border-border bg-card shadow-lg transition-transform duration-200 ease-in-out lg:z-30 lg:shadow-none",
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          "fixed inset-y-0 inset-s-0 z-50 flex h-dvh w-64 shrink-0 flex-col border-e border-border bg-card shadow-lg transition-transform duration-200 ease-in-out lg:z-30 lg:shadow-none",
+          isMobileMenuOpen ? "translate-x-0" : "ltr:-translate-x-full rtl:translate-x-full lg:translate-x-0 lg:rtl:translate-x-0 lg:ltr:translate-x-0"
         )}
       >
         <SidebarContent />
       </aside>
 
       {/* Main column: only this region scrolls */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:pl-64">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:ps-64">
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 lg:px-6">
           <div className="flex items-center gap-4">
             <button 
@@ -287,14 +288,14 @@ export default function BuyerDashboardLayout({
                       {user?.name?.charAt(0) || "B"}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="hidden text-sm font-medium md:inline-block">{user?.name || "Buyer"}</span>
+                  <span className="hidden text-sm font-medium md:inline-block">{user?.name || t.buyer.layout.buyer}</span>
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
                   <div>
-                    <p className="font-medium">{user?.name || "Buyer"}</p>
+                    <p className="font-medium">{user?.name || t.buyer.layout.buyer}</p>
                     <p className="text-xs text-muted-foreground">{user?.email}</p>
                   </div>
                 </DropdownMenuLabel>
@@ -302,19 +303,19 @@ export default function BuyerDashboardLayout({
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard/buyer/settings" className="cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
-                    Settings
+                    {t.buyer.layout.nav.settings}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/" className="cursor-pointer">
                     <Globe className="mr-2 h-4 w-4" />
-                    View Website
+                    {t.buyer.layout.viewWebsite}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
-                  Log Out
+                  {t.buyer.layout.logOut}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

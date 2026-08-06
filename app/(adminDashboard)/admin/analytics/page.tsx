@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Badge } from "@/components/ui/badge"
@@ -15,7 +15,8 @@ import {
   DollarSign,
   Globe,
   BarChart3,
-  Loader2
+  Loader2,
+  type LucideIcon
 } from "lucide-react"
 import {
   BarChart,
@@ -33,8 +34,10 @@ import {
   type ChartConfig
 } from "@/components/ui/chart"
 import { getAdminAnalyticsMetrics, getAdminAnalyticsGrowth, getAdminAnalyticsCountries, getAdminAnalyticsIndustries, AdminAnalyticsMetricItem, GrowthItem, CountryDistributionItem, IndustryItem } from "@/lib/api/admin-analytics"
+import { useTranslation } from "@/lib/i18n"
+import { queryKeys } from "@/lib/query-keys"
 
-const metricIcons: Record<string, React.ComponentType<any>> = {
+const metricIcons: Record<string, LucideIcon> = {
   total_revenue: DollarSign,
   active_users: Users,
   active_suppliers: Factory,
@@ -43,102 +46,72 @@ const metricIcons: Record<string, React.ComponentType<any>> = {
   messages_sent: MessageSquare,
 }
 
-const chartConfig = {
-  users: {
-    label: "Users",
-    color: "var(--chart-1)",
-  },
-  suppliers: {
-    label: "Suppliers",
-    color: "var(--chart-2)",
-  },
-  rfqs: {
-    label: "RFQs",
-    color: "var(--chart-3)",
-  },
-} satisfies ChartConfig
-
 export default function AdminAnalyticsPage() {
-  const [metrics, setMetrics] = useState<AdminAnalyticsMetricItem[]>([])
-  const [growthData, setGrowthData] = useState<GrowthItem[]>([])
-  const [countries, setCountries] = useState<CountryDistributionItem[]>([])
-  const [industries, setIndustries] = useState<IndustryItem[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isChartLoading, setIsChartLoading] = useState(true)
-  const [isCountriesLoading, setIsCountriesLoading] = useState(true)
-  const [isIndustriesLoading, setIsIndustriesLoading] = useState(true)
+  const { t } = useTranslation()
+  const p = t.admin.pages.analytics
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true)
-    setIsChartLoading(true)
-    setIsCountriesLoading(true)
-    setIsIndustriesLoading(true)
+  const chartConfig = {
+    users: {
+      label: p.users,
+      color: "var(--chart-1)",
+    },
+    suppliers: {
+      label: p.suppliers,
+      color: "var(--chart-2)",
+    },
+    rfqs: {
+      label: p.rfqs,
+      color: "var(--chart-3)",
+    },
+  } satisfies ChartConfig
 
-    // Fetch metrics
-    try {
-      const res = await getAdminAnalyticsMetrics()
-      if (res.success && res.data?.metrics) {
-        setMetrics(res.data.metrics)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setIsLoading(false)
-    }
+  const metricsQuery = useQuery({
+    queryKey: queryKeys.adminAnalyticsMetrics(),
+    queryFn: () => getAdminAnalyticsMetrics(),
+  })
 
-    // Fetch growth
-    try {
-      const res = await getAdminAnalyticsGrowth()
-      if (res.success && res.data) {
-        // Reverse array to render chronologically (oldest to newest)
-        setGrowthData([...res.data].reverse())
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setIsChartLoading(false)
-    }
+  const growthQuery = useQuery({
+    queryKey: queryKeys.adminAnalyticsGrowth(),
+    queryFn: () => getAdminAnalyticsGrowth(),
+  })
 
-    // Fetch countries
-    try {
-      const res = await getAdminAnalyticsCountries()
-      if (res.success && res.data) {
-        setCountries(res.data)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setIsCountriesLoading(false)
-    }
+  const countriesQuery = useQuery({
+    queryKey: queryKeys.adminAnalyticsCountries(),
+    queryFn: () => getAdminAnalyticsCountries(),
+  })
 
-    // Fetch industries
-    try {
-      const res = await getAdminAnalyticsIndustries()
-      if (res.success && res.data) {
-        setIndustries(res.data)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setIsIndustriesLoading(false)
-    }
-  }, [])
+  const industriesQuery = useQuery({
+    queryKey: queryKeys.adminAnalyticsIndustries(),
+    queryFn: () => getAdminAnalyticsIndustries(),
+  })
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  const metrics: AdminAnalyticsMetricItem[] =
+    metricsQuery.data?.success && metricsQuery.data.data?.metrics
+      ? metricsQuery.data.data.metrics
+      : []
+  const growthData: GrowthItem[] =
+    growthQuery.data?.success && growthQuery.data.data ? [...growthQuery.data.data].reverse() : []
+  const countries: CountryDistributionItem[] =
+    countriesQuery.data?.success && countriesQuery.data.data ? countriesQuery.data.data : []
+  const industries: IndustryItem[] =
+    industriesQuery.data?.success && industriesQuery.data.data ? industriesQuery.data.data : []
+
+  const isLoading = metricsQuery.isLoading
+  const isChartLoading = growthQuery.isLoading
+  const isCountriesLoading = countriesQuery.isLoading
+  const isIndustriesLoading = industriesQuery.isLoading
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-serif text-2xl font-medium text-foreground">Analytics</h1>
+        <h1 className="font-serif text-2xl font-medium text-foreground">{p.title}</h1>
         <p className="mt-1 text-muted-foreground">
-          Platform performance and insights
+          {p.subtitle}
         </p>
       </div>
 
       {/* Key Metrics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
           Array.from({ length: 6 }).map((_, idx) => (
             <Card key={idx} className="animate-pulse px-6 py-4 flex flex-col justify-between h-[120px]">
@@ -173,21 +146,21 @@ export default function AdminAnalyticsPage() {
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         {/* Real Chart */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5" />
-              Platform Growth
+              {p.platformGrowth}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-80 w-full flex items-center justify-center">
+          <CardContent className="px-2 sm:px-6 pb-2">
+            <div className="h-80 w-full min-w-0 flex items-center justify-center">
               {isChartLoading ? (
                 <div className="flex flex-col items-center justify-center gap-2">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Loading growth data...</p>
+                  <p className="text-sm text-muted-foreground">{p.loadingGrowth}</p>
                 </div>
               ) : (
                 <ChartContainer config={chartConfig} className="h-full w-full">
@@ -195,8 +168,8 @@ export default function AdminAnalyticsPage() {
                     data={growthData}
                     margin={{
                       top: 20,
-                      right: 30,
-                      left: 20,
+                      right: 10,
+                      left: 0,
                       bottom: 5,
                     }}
                   >
@@ -220,7 +193,7 @@ export default function AdminAnalyticsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Globe className="h-5 w-5" />
-              User Distribution by Country
+              {p.userDistributionByCountry}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -234,7 +207,11 @@ export default function AdminAnalyticsPage() {
                   <div key={item.country} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-foreground">{item.country}</span>
-                      <span className="text-sm text-muted-foreground">{item.users} users ({item.percentage}%)</span>
+                      <span className="text-sm text-muted-foreground">
+                        {p.usersCountTemplate
+                          .replace("{count}", String(item.users))
+                          .replace("{percent}", String(item.percentage))}
+                      </span>
                     </div>
                     <div className="h-2 rounded-full bg-muted">
                       <div 
@@ -254,7 +231,7 @@ export default function AdminAnalyticsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Factory className="h-5 w-5" />
-              Top Industries
+              {p.topIndustries}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -272,7 +249,9 @@ export default function AdminAnalyticsPage() {
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{item.industry}</p>
                       <p className="text-sm text-muted-foreground">
-                        {item.suppliers} suppliers • {item.products.toLocaleString()} products
+                        {p.industryStatsTemplate
+                          .replace("{suppliers}", String(item.suppliers))
+                          .replace("{products}", item.products.toLocaleString())}
                       </p>
                     </div>
                   </div>

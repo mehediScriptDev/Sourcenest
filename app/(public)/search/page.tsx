@@ -1,17 +1,19 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useMemo, useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Header } from "@/components/layout/header"
+import { useQueries } from "@tanstack/react-query"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { getProducts, type Product } from "@/lib/api/products"
-import { getPublicSuppliers, type Supplier } from "@/lib/api/public-suppliers"
-import { getAllPublicCategories, type BackendCategory } from "@/lib/api/categories"
+import { getProducts } from "@/lib/api/products"
+import { getPublicSuppliers } from "@/lib/api/public-suppliers"
+import { getAllPublicCategories } from "@/lib/api/categories"
+import { queryKeys } from "@/lib/query-keys"
 import { 
   Search, 
   Package,
@@ -28,61 +30,47 @@ function SearchContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const initialQuery = searchParams.get("q") || ""
-  
+  const q = searchParams.get("q") || ""
+
   const [searchQuery, setSearchQuery] = useState(initialQuery)
   const [activeTab, setActiveTab] = useState("all")
-
-  const [products, setProducts] = useState<Product[]>([])
-  const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [industries, setIndustries] = useState<BackendCategory[]>([])
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setSearchQuery(searchParams.get("q") || "")
   }, [searchParams])
 
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true)
-      const q = searchParams.get("q") || ""
-      
-      try {
-        const [productsRes, suppliersRes, catsRes] = await Promise.all([
-          getProducts(1, { search: q }),
-          getPublicSuppliers({ search: q }),
-          getAllPublicCategories()
-        ])
+  const [productsQuery, suppliersQuery, categoriesQuery] = useQueries({
+    queries: [
+      {
+        queryKey: queryKeys.publicSearchProducts(q),
+        queryFn: () => getProducts(1, { search: q }),
+      },
+      {
+        queryKey: queryKeys.publicSearchSuppliers(q),
+        queryFn: () => getPublicSuppliers({ search: q }),
+      },
+      {
+        queryKey: queryKeys.publicAllCategories(),
+        queryFn: () => getAllPublicCategories(),
+      },
+    ],
+  })
 
-        if (productsRes.success) {
-          setProducts(productsRes.data)
-        } else {
-          setProducts([])
-        }
-
-        if (suppliersRes && suppliersRes.success) {
-          setSuppliers(suppliersRes.data)
-        } else {
-          setSuppliers([])
-        }
-
-        if (catsRes.success) {
-          let cats = catsRes.data
-          if (q) {
-            cats = cats.filter(c => c.name.toLowerCase().includes(q.toLowerCase()))
-          }
-          setIndustries(cats)
-        } else {
-          setIndustries([])
-        }
-      } catch (err) {
-        console.error("Failed to fetch search results", err)
-      } finally {
-        setLoading(false)
-      }
+  const products = productsQuery.data?.success ? productsQuery.data.data : []
+  const suppliers = suppliersQuery.data?.success ? suppliersQuery.data.data : []
+  const industries = useMemo(() => {
+    if (!categoriesQuery.data?.success) {
+      return []
     }
-    
-    fetchData()
-  }, [searchParams])
+    let cats = categoriesQuery.data.data
+    if (q) {
+      cats = cats.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()))
+    }
+    return cats
+  }, [categoriesQuery.data, q])
+
+  const loading =
+    productsQuery.isLoading || suppliersQuery.isLoading || categoriesQuery.isLoading
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -96,17 +84,17 @@ function SearchContent() {
   const totalResults = products.length + suppliers.length + industries.length
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-background">
+      <SiteHeader />
       <main className="flex-1">
         {/* Search Header */}
-        <section className="bg-primary py-12 lg:py-16">
+        <section className="bg-primary py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
             <h1 className="text-center font-serif text-3xl font-medium text-primary-foreground sm:text-4xl">
               Search SourceNest
             </h1>
             <form onSubmit={handleSearch} className="mt-8">
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
                   <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -114,14 +102,14 @@ function SearchContent() {
                     placeholder="Search products, suppliers, industries..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-12 bg-background pl-12 text-base"
+                    className="h-12 bg-background pl-12 text-base w-full"
                   />
                 </div>
                 <Button 
                   type="submit"
                   size="lg"
                   variant="secondary" 
-                  className="bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                  className="bg-primary-foreground text-primary hover:bg-primary-foreground/90 w-full sm:w-auto"
                 >
                   Search
                 </Button>
@@ -131,7 +119,7 @@ function SearchContent() {
         </section>
 
         {/* Results */}
-        <section className="py-8 lg:py-12">
+        <section className="py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {loading ? (
               <div className="py-20 text-center text-muted-foreground">
@@ -148,7 +136,7 @@ function SearchContent() {
                 )}
 
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList>
+                  <TabsList className="w-full flex-wrap h-auto justify-start gap-1 p-1 sm:justify-center">
                     <TabsTrigger value="all">All Results</TabsTrigger>
                     <TabsTrigger value="products">Products ({products.length})</TabsTrigger>
                     <TabsTrigger value="suppliers">Suppliers ({suppliers.length})</TabsTrigger>
@@ -172,7 +160,7 @@ function SearchContent() {
                             </Link>
                           </Button>
                         </div>
-                        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
                           {products.slice(0, 3).map((product) => (
                             <Link
                               key={product.id}
@@ -321,7 +309,7 @@ function SearchContent() {
 
                   {/* Products Tab */}
                   <TabsContent value="products">
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
                       {products.map((product) => (
                         <Link
                           key={product.id}
@@ -435,7 +423,7 @@ function SearchContent() {
 
                   {/* Industries Tab */}
                   <TabsContent value="industries">
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:gap-6">
                       {industries.map((industry) => (
                         <Link
                           key={industry.id}

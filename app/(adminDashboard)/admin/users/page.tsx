@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -20,9 +21,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { AdminDialogContent } from "@/components/admin/admin-dialog-content"
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -44,6 +45,8 @@ import {
   Shield
   ,Loader2
 } from "lucide-react"
+import { AdminPagination } from "@/components/admin/admin-pagination"
+import { useTranslation } from "@/lib/i18n"
 
 type UserStatus = "active" | "pending" | "suspended" | "deactivated" | "deleted"
 type UserRole = "buyer" | "manufacturer" | "admin"
@@ -59,7 +62,7 @@ interface UserItem {
   joinedAt?: string
 }
 
-type AdminUserDetail = UserItem & {
+type AdminUserDetail = Omit<UserItem, "company"> & {
   first_name?: string
   last_name?: string
   status_label?: string
@@ -88,54 +91,112 @@ import { useToast } from "@/hooks/use-toast"
 import { getApiErrorMessage } from "@/lib/api/errors"
 import { createConversation, getConversations } from "@/lib/api/messages"
 import { useAuth } from "@/lib/auth-context"
+import { queryKeys } from "@/lib/query-keys"
 
-// Start with an empty list; the component will load data from the API.
-const initialUsers: UserItem[] = []
-
-const statusConfig: Record<UserStatus, { label: string; color: string }> = {
-  active: { label: "Active", color: "bg-emerald-100 text-emerald-700" },
-  pending: { label: "Pending", color: "bg-amber-100 text-amber-700" },
-  suspended: { label: "Suspended", color: "bg-red-100 text-red-700" },
-  deactivated: { label: "Deactivated", color: "bg-slate-100 text-slate-700" },
-  deleted: { label: "Deleted", color: "bg-rose-100 text-rose-700" },
+interface PaginationMeta {
+  current_page: number
+  last_page: number
+  from: number
+  to: number
+  total: number
 }
 
-function getStatusInfo(status?: string | UserStatus) {
-  const key = String(status ?? "active").toLowerCase() as UserStatus
-  const info = statusConfig[key]
-  if (info) return info
-
-  const label = typeof status === "string" && status.trim()
-    ? status.charAt(0).toUpperCase() + status.slice(1)
-    : "Unknown"
-
-  return { label, color: "bg-slate-100 text-slate-700" }
+interface AdminUsersListData {
+  users: UserItem[]
+  meta: PaginationMeta | null
 }
 
-const roleConfig: Record<UserRole, { label: string; icon: typeof User; color: string }> = {
-  buyer: { label: "Buyer", icon: User, color: "bg-blue-100 text-blue-700" },
-  manufacturer: { label: "Manufacturer", icon: Factory, color: "bg-purple-100 text-purple-700" },
-  admin: { label: "Admin", icon: Shield, color: "bg-red-100 text-red-700" },
+function mapApiUser(u: Record<string, unknown>): UserItem {
+  return {
+    id: String(u.id),
+    name: `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim(),
+    email: String(u.email ?? ""),
+    role: normalizeUserRole(String(u.role ?? "buyer")),
+    company: (u.company as { company_name?: string } | null)?.company_name ?? null,
+    status: String(u.status ?? "active").toLowerCase() as UserStatus,
+    country: (u.company as { country?: string } | null)?.country ?? undefined,
+    joinedAt: u.created_at ? String(u.created_at) : undefined,
+  }
+}
+
+function mapApiUserDetail(u: Record<string, unknown>): AdminUserDetail {
+  return {
+    id: String(u.id),
+    first_name: u.first_name ? String(u.first_name) : undefined,
+    last_name: u.last_name ? String(u.last_name) : undefined,
+    name: `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim(),
+    email: String(u.email ?? ""),
+    role: normalizeUserRole(String(u.role ?? "buyer")),
+    company: u.company ?? null,
+    status: String(u.status ?? "active").toLowerCase() as UserStatus,
+    status_label: u.status_label ? String(u.status_label) : undefined,
+    statuses: (u.statuses as Record<string, string>) ?? undefined,
+    agreed_to_terms: Boolean(u.agreed_to_terms),
+    two_factor_enabled: Boolean(u.two_factor_enabled),
+    deactivated_at: (u.deactivated_at as string | null) ?? null,
+    deactivated_reason: (u.deactivated_reason as string | null) ?? null,
+    created_at: u.created_at ? String(u.created_at) : undefined,
+    updated_at: u.updated_at ? String(u.updated_at) : undefined,
+    preferred_language: u.preferred_language ? String(u.preferred_language) : undefined,
+    timezone: u.timezone ? String(u.timezone) : undefined,
+    quote_notification: Number(u.quote_notification ?? 0),
+    message_notification: Number(u.message_notification ?? 0),
+    supplier_update: Number(u.supplier_update ?? 0),
+    weekly_digest: Number(u.weekly_digest ?? 0),
+    marketing_promotion: Number(u.marketing_promotion ?? 0),
+    preferred_currency: (u.preferred_currency as AdminUserDetail["preferred_currency"]) ?? null,
+    login_history: (u.login_history as AdminUserDetail["login_history"]) ?? [],
+  }
 }
 
 export default function AdminUsersPage() {
+  const { t } = useTranslation()
+  const p = t.admin.pages.users
+  const c = t.admin.common
+  const userStatus = t.admin.userStatus
+  const roles = t.admin.roles
+
+  const statusColors: Record<UserStatus, string> = {
+    active: "bg-emerald-100 text-emerald-700",
+    pending: "bg-amber-100 text-amber-700",
+    suspended: "bg-red-100 text-red-700",
+    deactivated: "bg-slate-100 text-slate-700",
+    deleted: "bg-rose-100 text-rose-700",
+  }
+
+  const getStatusInfo = (status?: string | UserStatus) => {
+    const key = String(status ?? "active").toLowerCase() as UserStatus
+    const color = statusColors[key]
+    if (color) {
+      return { label: userStatus[key], color }
+    }
+
+    const label = typeof status === "string" && status.trim()
+      ? status.charAt(0).toUpperCase() + status.slice(1)
+      : roles.unknown
+
+    return { label, color: "bg-slate-100 text-slate-700" }
+  }
+
+  const roleConfig: Record<UserRole, { label: string; icon: typeof User; color: string }> = {
+    buyer: { label: roles.buyer, icon: User, color: "bg-blue-100 text-blue-700" },
+    manufacturer: { label: roles.manufacturer, icon: Factory, color: "bg-purple-100 text-purple-700" },
+    admin: { label: roles.admin, icon: Shield, color: "bg-red-100 text-red-700" },
+  }
+
   const router = useRouter()
   const { toast } = useToast()
   const { user: currentAuthUser } = useAuth()
-  const [users, setUsers] = useState<UserItem[]>(initialUsers)
+  const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [page, setPage] = useState<number>(1)
   const [perPage, setPerPage] = useState<number>(5)
-  const [reloadKey, setReloadKey] = useState<number>(0)
-  const [meta, setMeta] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState<boolean>(false)
   const [selectedUsers, setSelectedUsers] = useState<string[]>([])
   const [showUserDialog, setShowUserDialog] = useState(false)
   const [currentUser, setCurrentUser] = useState<AdminUserDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState<boolean>(false)
-  // Action dialogs state
+  const [detailUserId, setDetailUserId] = useState<string | null>(null)
   const [deactivateOpen, setDeactivateOpen] = useState(false)
   const [deactivateTarget, setDeactivateTarget] = useState<string | null>(null)
   const [deactivateReason, setDeactivateReason] = useState("")
@@ -144,62 +205,89 @@ export default function AdminUsersPage() {
   const [deleteReason, setDeleteReason] = useState("")
   const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false)
   const [bulkDeactivateReason, setBulkDeactivateReason] = useState("")
-  const [actionLoading, setActionLoading] = useState(false)
   const [contactingUserId, setContactingUserId] = useState<string | null>(null)
 
-  useEffect(() => {
-    let mounted = true
+  const usersQueryKey = queryKeys.adminUsers(page, perPage, searchQuery, roleFilter, statusFilter)
 
-    async function fetchUsers() {
-      setIsLoading(true)
-      try {
-        const params: Record<string, any> = { per_page: perPage, page }
-        if (searchQuery) params.search = searchQuery
-        if (roleFilter !== "all") params.role = roleFilter
-        if (statusFilter !== "all") params.status = statusFilter
+  const usersQuery = useQuery({
+    queryKey: usersQueryKey,
+    queryFn: async (): Promise<AdminUsersListData> => {
+      const params: Record<string, string | number> = { per_page: perPage, page }
+      if (searchQuery) params.search = searchQuery
+      if (roleFilter !== "all") params.role = roleFilter
+      if (statusFilter !== "all") params.status = statusFilter
 
-        const res = await apiClient.get("/admin/users", { params })
-        const payload = res.data
+      const res = await apiClient.get("/admin/users", { params })
+      const payload = res.data
 
-        if (!mounted) return
-
-        const mapped: UserItem[] = (payload.data ?? []).map((u: any) => ({
-          id: String(u.id),
-          name: `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim(),
-          email: u.email ?? "",
-          role: normalizeUserRole(String(u.role ?? "buyer")),
-          company: u.company?.company_name ?? null,
-          status: (String(u.status ?? "active")).toLowerCase() as UserStatus,
-          country: u.company?.country ?? undefined,
-          joinedAt: u.created_at ?? undefined,
-        }))
-
-        setUsers(mapped)
-        setMeta(payload.meta ?? null)
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("Failed to fetch users", err)
-      } finally {
-        if (mounted) setIsLoading(false)
+      return {
+        users: (payload.data ?? []).map((u: Record<string, unknown>) => mapApiUser(u)),
+        meta: payload.meta ?? null,
       }
-    }
-
-    fetchUsers()
-
-    return () => {
-      mounted = false
-    }
-  }, [searchQuery, roleFilter, statusFilter, page, perPage, reloadKey])
-
-  const filteredUsers = users.filter(user => {
-    if (searchQuery && !user.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
-        !user.email.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false
-    }
-    if (roleFilter !== "all" && user.role !== roleFilter) return false
-    if (statusFilter !== "all" && user.status !== statusFilter) return false
-    return true
+    },
+    placeholderData: (previousData) => previousData,
   })
+
+  const userDetailQuery = useQuery({
+    queryKey: queryKeys.adminUserDetail(detailUserId ?? ""),
+    queryFn: async () => {
+      const res = await apiClient.get(`/admin/users/${detailUserId}`)
+      const u = res.data?.data
+      if (!u) {
+        throw new Error(c.userNotFound)
+      }
+      return mapApiUserDetail(u as Record<string, unknown>)
+    },
+    enabled: Boolean(detailUserId),
+  })
+
+  useEffect(() => {
+    if (userDetailQuery.data) {
+      setCurrentUser(userDetailQuery.data)
+    }
+  }, [userDetailQuery.data])
+
+  useEffect(() => {
+    if (userDetailQuery.isError) {
+      toast({
+        title: c.failedToLoadUserDetails,
+        description: getApiErrorMessage(userDetailQuery.error) || String(userDetailQuery.error),
+        variant: "destructive",
+      })
+    }
+  }, [userDetailQuery.isError, userDetailQuery.error, toast, c.failedToLoadUserDetails])
+
+  const activateMutation = useMutation({
+    mutationFn: (id: string) => apiClient.patch(`/admin/users/${id}/active`),
+  })
+
+  const deactivateMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+      apiClient.patch(`/admin/users/${id}/deactivate`, { reason: reason ?? undefined }),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+      apiClient.delete(`/admin/users/${id}`, { data: { reason: reason ?? undefined } }),
+  })
+
+  const users = usersQuery.data?.users ?? []
+  const meta = usersQuery.data?.meta ?? null
+  const isLoading = usersQuery.isLoading
+  const detailLoading = userDetailQuery.isLoading
+  const actionLoading =
+    activateMutation.isPending ||
+    deactivateMutation.isPending ||
+    deleteMutation.isPending
+
+  const patchUsersCache = (updater: (list: UserItem[]) => UserItem[]) => {
+    queryClient.setQueryData(usersQueryKey, (previous: AdminUsersListData | undefined) => {
+      if (!previous) return previous
+      return { ...previous, users: updater(previous.users) }
+    })
+  }
+
+  const filteredUsers = users
 
   const allSelected = filteredUsers.length > 0 && selectedUsers.length === filteredUsers.length
 
@@ -218,38 +306,34 @@ export default function AdminUsersPage() {
   }
 
   const updateUserStatus = async (id: string, status: UserStatus, reason?: string) => {
-    const actionText = status === 'active' ? 'Activating' : status === 'deactivated' ? 'Deactivating' : 'Updating'
-    toast({ title: `${actionText} user...` })
+    const actionText = status === 'active' ? c.activatingUserProgress : status === 'deactivated' ? c.deactivatingUserProgress : c.updatingUserProgress
+    toast({ title: actionText })
 
     try {
       if (status === 'active') {
-        await apiClient.patch(`/admin/users/${id}/active`)
-        setUsers(prev => prev.map(u => u.id === id ? { ...u, status: 'active' } : u))
-        toast({ title: 'User activated.' })
-        setReloadKey(k => k + 1)
+        await activateMutation.mutateAsync(id)
+        patchUsersCache((prev) => prev.map((u) => (u.id === id ? { ...u, status: 'active' } : u)))
+        toast({ title: p.userActivated })
         return
       }
 
       if (status === 'deactivated') {
-        await apiClient.patch(`/admin/users/${id}/deactivate`, { reason: reason ?? undefined })
-        setUsers(prev => prev.map(u => u.id === id ? { ...u, status: 'deactivated' } : u))
-        toast({ title: 'User deactivated.' })
-        setReloadKey(k => k + 1)
+        await deactivateMutation.mutateAsync({ id, reason })
+        patchUsersCache((prev) => prev.map((u) => (u.id === id ? { ...u, status: 'deactivated' } : u)))
+        toast({ title: p.userDeactivated })
         return
       }
 
       if (status === 'suspended') {
-        // No API provided for suspend — perform local update only
-        setUsers(prev => prev.map(u => u.id === id ? { ...u, status: 'suspended' } : u))
-        toast({ title: 'User suspended (local update).' })
+        patchUsersCache((prev) => prev.map((u) => (u.id === id ? { ...u, status: 'suspended' } : u)))
+        toast({ title: c.userSuspendedLocal })
         return
       }
 
-      // Fallback: local update
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, status } : u))
-      toast({ title: 'User status updated (local).' })
+      patchUsersCache((prev) => prev.map((u) => (u.id === id ? { ...u, status } : u)))
+      toast({ title: c.userStatusUpdatedLocal })
     } catch (err) {
-      toast({ title: 'Action failed', description: getApiErrorMessage(err), variant: 'destructive' })
+      toast({ title: c.actionFailed, description: getApiErrorMessage(err), variant: 'destructive' })
     }
   }
 
@@ -257,114 +341,69 @@ export default function AdminUsersPage() {
     if (selectedUsers.length === 0) return
 
     if (status === 'active') {
-      toast({ title: 'Activating users...' })
+      toast({ title: c.activatingUsers })
       try {
-        await Promise.all(selectedUsers.map((id) => apiClient.patch(`/admin/users/${id}/active`)))
-        setUsers(prev => prev.map(u => selectedUsers.includes(u.id) ? { ...u, status: 'active' } : u))
+        await Promise.all(selectedUsers.map((id) => activateMutation.mutateAsync(id)))
+        patchUsersCache((prev) =>
+          prev.map((u) => (selectedUsers.includes(u.id) ? { ...u, status: 'active' } : u))
+        )
         setSelectedUsers([])
-        toast({ title: 'Users activated.' })
-        setReloadKey(k => k + 1)
+        toast({ title: c.usersActivated })
         return
       } catch (err) {
-        toast({ title: 'Bulk activation failed', description: getApiErrorMessage(err), variant: 'destructive' })
+        toast({ title: c.bulkActivationFailed, description: getApiErrorMessage(err), variant: 'destructive' })
         return
       }
     }
 
     if (status === 'deactivated') {
-      // Open bulk deactivate dialog to collect reason
       setBulkDeactivateOpen(true)
       return
     }
 
-    // For other statuses, do local update only
-    setUsers(prev => prev.map(u => selectedUsers.includes(u.id) ? { ...u, status } : u))
+    patchUsersCache((prev) =>
+      prev.map((u) => (selectedUsers.includes(u.id) ? { ...u, status } : u))
+    )
     setSelectedUsers([])
-    toast({ title: 'Status updated (local).' })
+    toast({ title: c.statusUpdatedLocal })
   }
 
   const deleteUser = async (id: string, reason?: string) => {
-    toast({ title: 'Deleting user...' })
+    toast({ title: c.deletingUser })
     try {
-      await apiClient.delete(`/admin/users/${id}`, { data: { reason: reason ?? undefined } })
-      setUsers(prev => prev.filter(u => u.id !== id))
-      toast({ title: 'User deleted.' })
-      setReloadKey(k => k + 1)
+      await deleteMutation.mutateAsync({ id, reason })
+      patchUsersCache((prev) => prev.filter((u) => u.id !== id))
+      toast({ title: p.userDeleted })
     } catch (err) {
-      toast({ title: 'Delete failed', description: getApiErrorMessage(err), variant: 'destructive' })
+      toast({ title: c.deleteFailed, description: getApiErrorMessage(err), variant: 'destructive' })
     }
   }
 
   const performBulkDeactivate = async () => {
     if (selectedUsers.length === 0) return
-    setActionLoading(true)
-    toast({ title: 'Deactivating users...' })
+    toast({ title: c.deactivatingUsers })
     try {
-      await Promise.all(selectedUsers.map((id) => apiClient.patch(`/admin/users/${id}/deactivate`, { reason: bulkDeactivateReason ?? undefined })))
-      setUsers(prev => prev.map(u => selectedUsers.includes(u.id) ? { ...u, status: 'deactivated' } : u))
+      await Promise.all(
+        selectedUsers.map((id) =>
+          deactivateMutation.mutateAsync({ id, reason: bulkDeactivateReason ?? undefined })
+        )
+      )
+      patchUsersCache((prev) =>
+        prev.map((u) => (selectedUsers.includes(u.id) ? { ...u, status: 'deactivated' } : u))
+      )
       setSelectedUsers([])
-      toast({ title: 'Users deactivated.' })
-      setReloadKey(k => k + 1)
+      toast({ title: c.usersDeactivated })
       setBulkDeactivateOpen(false)
       setBulkDeactivateReason("")
     } catch (err) {
-      toast({ title: 'Bulk deactivate failed', description: getApiErrorMessage(err), variant: 'destructive' })
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const fetchUserDetail = async (userId: string) => {
-    setDetailLoading(true)
-    try {
-      const res = await apiClient.get(`/admin/users/${userId}`)
-      const u = res.data?.data
-      if (!u) {
-        toast({ title: "User not found", description: "The user details could not be retrieved.", variant: "destructive" })
-        return
-      }
-
-      const mapped: AdminUserDetail = {
-        id: String(u.id),
-        first_name: u.first_name ?? undefined,
-        last_name: u.last_name ?? undefined,
-        name: `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim(),
-        email: u.email ?? "",
-        role: normalizeUserRole(String(u.role ?? "buyer")),
-        company: u.company ?? null,
-        status: (String(u.status ?? "active")).toLowerCase() as UserStatus,
-        status_label: u.status_label ?? undefined,
-        statuses: u.statuses ?? undefined,
-        agreed_to_terms: u.agreed_to_terms ?? false,
-        two_factor_enabled: u.two_factor_enabled ?? false,
-        deactivated_at: u.deactivated_at ?? null,
-        deactivated_reason: u.deactivated_reason ?? null,
-        created_at: u.created_at ?? undefined,
-        updated_at: u.updated_at ?? undefined,
-        preferred_language: u.preferred_language ?? undefined,
-        timezone: u.timezone ?? undefined,
-        quote_notification: u.quote_notification ?? 0,
-        message_notification: u.message_notification ?? 0,
-        supplier_update: u.supplier_update ?? 0,
-        weekly_digest: u.weekly_digest ?? 0,
-        marketing_promotion: u.marketing_promotion ?? 0,
-        preferred_currency: u.preferred_currency ?? null,
-        login_history: u.login_history ?? [],
-      }
-
-      setCurrentUser(mapped)
-    } catch (err) {
-      toast({ title: "Failed to load user details", description: getApiErrorMessage(err) || String(err), variant: "destructive" })
-    } finally {
-      setDetailLoading(false)
+      toast({ title: c.bulkDeactivateFailed, description: getApiErrorMessage(err), variant: 'destructive' })
     }
   }
 
   const openUserDetails = (user: UserItem) => {
-    // show dialog immediately with lightweight data while fetching full details
     setCurrentUser(user as AdminUserDetail)
+    setDetailUserId(user.id)
     setShowUserDialog(true)
-    fetchUserDetail(user.id)
   }
 
   const buyerCount = users.filter(u => u.role === "buyer").length
@@ -387,7 +426,7 @@ export default function AdminUsersPage() {
       if (existingConversation) {
         // Conversation already exists, navigate to it
         setShowUserDialog(false)
-        toast({ title: "Conversation found", description: "Opening existing conversation..." })
+        toast({ title: p.conversationFound, description: c.openingConversation })
         router.push(`/messages?conversation=${existingConversation.id}`)
       } else {
         // Create a new conversation
@@ -395,17 +434,17 @@ export default function AdminUsersPage() {
         
         if (conversation) {
           setShowUserDialog(false)
-          toast({ title: "Conversation started", description: "Redirecting to messages..." })
+          toast({ title: c.conversationStarted, description: c.redirectingToMessages })
           router.push(`/messages?conversation=${conversation.id}`)
         } else {
-          toast({ title: "Failed to start conversation", description: "Could not create conversation with this user", variant: "destructive" })
+          toast({ title: c.error, description: c.failedToStartConversation, variant: "destructive" })
         }
       }
     } catch (err) {
       const errorMsg = getApiErrorMessage(err)
       // Handle the "conversation already exists" error gracefully
       if (errorMsg?.includes("already exists")) {
-        toast({ title: "Conversation exists", description: "This conversation already exists. Opening it...", variant: "default" })
+        toast({ title: c.conversationExists, description: c.conversationExistsDesc, variant: "default" })
         // Fetch conversations again and find the one that was just checked
         const existingConversations = await getConversations()
         const existingConversation = existingConversations.find(conv => 
@@ -416,7 +455,7 @@ export default function AdminUsersPage() {
           router.push(`/messages?conversation=${existingConversation.id}`)
         }
       } else {
-        toast({ title: "Error", description: errorMsg || "Failed to contact user", variant: "destructive" })
+        toast({ title: c.error, description: errorMsg || c.failedToContactUser, variant: "destructive" })
       }
     } finally {
       setContactingUserId(null)
@@ -426,12 +465,12 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-serif text-2xl font-medium text-foreground">Users</h1>
+        <h1 className="font-serif text-2xl font-medium text-foreground">{p.title}</h1>
         <p className="mt-1 text-muted-foreground">
-          Manage all platform users
+          {p.subtitle}
           <span className="ml-3">
-            <Badge variant="outline" className="mr-2">{buyerCount} Buyers</Badge>
-            <Badge variant="outline">{manufacturerCount} Manufacturers</Badge>
+            <Badge variant="outline" className="mr-2">{p.buyersBadge.replace("{count}", String(buyerCount))}</Badge>
+            <Badge variant="outline">{p.manufacturersBadge.replace("{count}", String(manufacturerCount))}</Badge>
           </span>
         </p>
       </div>
@@ -441,7 +480,7 @@ export default function AdminUsersPage() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search users..."
+            placeholder={c.searchUsers}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -450,38 +489,38 @@ export default function AdminUsersPage() {
         <div className="flex gap-3">
           <Select value={roleFilter} onValueChange={setRoleFilter}>
             <SelectTrigger className="w-32">
-              <SelectValue placeholder="Role" />
+              <SelectValue placeholder={c.role} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Roles</SelectItem>
-              <SelectItem value="buyer">Buyers</SelectItem>
-              <SelectItem value="manufacturer">Manufacturers</SelectItem>
-              <SelectItem value="admin">Admins</SelectItem>
+              <SelectItem value="all">{c.allRoles}</SelectItem>
+              <SelectItem value="buyer">{c.buyers}</SelectItem>
+              <SelectItem value="manufacturer">{c.manufacturers}</SelectItem>
+              <SelectItem value="admin">{c.admins}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-32">
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder={c.status} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="suspended">Suspended</SelectItem>
-              <SelectItem value="deactivated">Deactivated</SelectItem>
-              <SelectItem value="deleted">Deleted</SelectItem>
-              <SelectItem value="scheduled_deletion">Scheduled Deletion</SelectItem>
+              <SelectItem value="all">{c.allStatus}</SelectItem>
+              <SelectItem value="active">{userStatus.active}</SelectItem>
+              <SelectItem value="pending">{userStatus.pending}</SelectItem>
+              <SelectItem value="suspended">{userStatus.suspended}</SelectItem>
+              <SelectItem value="deactivated">{userStatus.deactivated}</SelectItem>
+              <SelectItem value="deleted">{userStatus.deleted}</SelectItem>
+              <SelectItem value="scheduled_deletion">{c.scheduledDeletion}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setPage(1); }}>
             <SelectTrigger className="w-28">
-              <SelectValue placeholder="Per page" />
+              <SelectValue placeholder={c.perPage} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="5">5 / page</SelectItem>
-              <SelectItem value="10">10 / page</SelectItem>
-              <SelectItem value="25">25 / page</SelectItem>
-              <SelectItem value="50">50 / page</SelectItem>
+              <SelectItem value="5">{c.perPageOption.replace("{count}", "5")}</SelectItem>
+              <SelectItem value="10">{c.perPageOption.replace("{count}", "10")}</SelectItem>
+              <SelectItem value="25">{c.perPageOption.replace("{count}", "25")}</SelectItem>
+              <SelectItem value="50">{c.perPageOption.replace("{count}", "50")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -490,22 +529,22 @@ export default function AdminUsersPage() {
       {/* Bulk Actions */}
       {selectedUsers.length > 0 && (
         <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3">
-          <span className="text-sm font-medium">{selectedUsers.length} selected</span>
+          <span className="text-sm font-medium">{p.selectedCount.replace("{count}", String(selectedUsers.length))}</span>
             <div className="flex gap-2">
             <Button size="sm" onClick={() => bulkUpdateStatus("active")}>
               <CheckCircle className="mr-1 h-3 w-3" />
-              Activate
+              {c.activate}
             </Button>
             {/* <Button size="sm" variant="outline" onClick={() => bulkUpdateStatus("suspended")}> 
               <Ban className="mr-1 h-3 w-3" />
               Suspend
             </Button> */}
             <Button size="sm" variant="outline" onClick={() => { setBulkDeactivateReason(""); setBulkDeactivateOpen(true); }}>
-              Deactivate
+              {c.deactivate}
             </Button>
           </div>
           <Button size="sm" variant="ghost" onClick={() => setSelectedUsers([])}>
-            Clear
+            {c.clear}
           </Button>
         </div>
       )}
@@ -513,7 +552,7 @@ export default function AdminUsersPage() {
       {isLoading && (
         <div className="text-center py-12">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="mt-4 text-muted-foreground">Loading users...</p>
+          <p className="mt-4 text-muted-foreground">{p.loadingUsers}</p>
         </div>
       )}
 
@@ -562,17 +601,17 @@ export default function AdminUsersPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openUserDetails(user)}>
                           <Eye className="mr-2 h-4 w-4" />
-                          View Details
+                          {c.viewDetails}
                         </DropdownMenuItem>
                         <DropdownMenuItem>
                           <Mail className="mr-2 h-4 w-4" />
-                          Send Email
+                          {c.sendEmail}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {user.status !== "active" && (
                           <DropdownMenuItem onClick={() => updateUserStatus(user.id, "active")}>
                             <CheckCircle className="mr-2 h-4 w-4 text-emerald-600" />
-                            Activate
+                            {c.activate}
                           </DropdownMenuItem>
                         )}
                         {/* {user.status !== "suspended" && (
@@ -583,13 +622,13 @@ export default function AdminUsersPage() {
                         )} */}
                         {user.status !== "deactivated" && (
                           <DropdownMenuItem onClick={() => { setDeactivateTarget(user.id); setDeactivateReason(""); setDeactivateOpen(true); }}>
-                            Deactivate
+                            {c.deactivate}
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive" onClick={() => { setDeleteTarget(user.id); setDeleteReason(""); setDeleteOpen(true); }}>
                           <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
+                          {c.delete}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -603,37 +642,17 @@ export default function AdminUsersPage() {
         {filteredUsers.length === 0 && (
           <div className="text-center py-12">
             <User className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <p className="mt-4 text-muted-foreground">No users found</p>
+            <p className="mt-4 text-muted-foreground">{p.noUsers}</p>
           </div>
         )}
 
-        {/* Mobile Pagination */}
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              Showing {meta?.from ?? (users.length ? 1 : 0)} - {meta?.to ?? users.length} of {meta?.total ?? users.length}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={!!meta ? meta.current_page <= 1 : page <= 1}
-              >
-                Previous
-              </Button>
-              <div className="text-sm text-muted-foreground">Page {meta?.current_page ?? page} / {meta?.last_page ?? 1}</div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setPage((p) => p + 1)}
-                disabled={!!meta ? meta.current_page >= meta.last_page : users.length < perPage}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </div>
+        <AdminPagination
+          page={page}
+          meta={meta}
+          itemCount={users.length}
+          onPageChange={setPage}
+          variant="card"
+        />
       </div>
 
       {/* Desktop: table */}
@@ -644,13 +663,13 @@ export default function AdminUsersPage() {
               <th className="px-4 py-3 text-left">
                 <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
               </th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">User</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-foreground hidden sm:table-cell">Role</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-foreground hidden md:table-cell">Company</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-foreground hidden lg:table-cell">Country</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-foreground hidden lg:table-cell">Joined</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Status</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-foreground">Actions</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">{p.tableUser}</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-foreground hidden sm:table-cell">{p.tableRole}</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-foreground hidden md:table-cell">{p.tableCompany}</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-foreground hidden lg:table-cell">{p.tableCountry}</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-foreground hidden lg:table-cell">{p.tableJoined}</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-foreground">{p.tableStatus}</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-foreground">{p.tableActions}</th>
             </tr>
           </thead>
           <tbody>
@@ -709,17 +728,17 @@ export default function AdminUsersPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openUserDetails(user)}>
                           <Eye className="mr-2 h-4 w-4" />
-                          View Details
+                          {c.viewDetails}
                         </DropdownMenuItem>
                         <DropdownMenuItem>
                           <Mail className="mr-2 h-4 w-4" />
-                          Send Email
+                          {c.sendEmail}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {user.status !== "active" && (
                           <DropdownMenuItem onClick={() => updateUserStatus(user.id, "active")}>
                             <CheckCircle className="mr-2 h-4 w-4 text-emerald-600" />
-                            Activate
+                            {c.activate}
                           </DropdownMenuItem>
                         )}
                         {/* {user.status !== "suspended" && (
@@ -730,7 +749,7 @@ export default function AdminUsersPage() {
                         )} */}
                         {user.status !== "deactivated" && (
                           <DropdownMenuItem onClick={() => { setDeactivateTarget(user.id); setDeactivateReason(""); setDeactivateOpen(true); }}>
-                            Deactivate
+                            {c.deactivate}
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
@@ -739,7 +758,7 @@ export default function AdminUsersPage() {
                           onClick={() => { setDeleteTarget(user.id); setDeleteReason(""); setDeleteOpen(true); }}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
+                          {c.delete}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -753,51 +772,32 @@ export default function AdminUsersPage() {
         {filteredUsers.length === 0 && (
           <div className="text-center py-12">
             <User className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <p className="mt-4 text-muted-foreground">No users found</p>
+            <p className="mt-4 text-muted-foreground">{p.noUsers}</p>
           </div>
         )}
-        {/* Pagination */}
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              Showing {meta?.from ?? (users.length ? 1 : 0)} - {meta?.to ?? users.length} of {meta?.total ?? users.length}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={!!meta ? meta.current_page <= 1 : page <= 1}
-              >
-                Previous
-              </Button>
-              <div className="text-sm text-muted-foreground">Page {meta?.current_page ?? page} / {meta?.last_page ?? 1}</div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setPage((p) => p + 1)}
-                disabled={!!meta ? meta.current_page >= meta.last_page : users.length < perPage}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </div>
+        <AdminPagination
+          page={page}
+          meta={meta}
+          itemCount={users.length}
+          onPageChange={setPage}
+          variant="footer"
+        />
       </div>
         </>
       )}
 
       {/* User Details Dialog */}
       <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>User Details</DialogTitle>
+        <AdminDialogContent mobile="fullscreen" size="lg" variant="structured">
+          <DialogHeader className="shrink-0 border-b border-border px-5 py-4 text-left sm:px-6">
+            <DialogTitle>{p.userDetails}</DialogTitle>
             <DialogDescription>
-              View and manage user information
+              {p.userDetailsDesc}
             </DialogDescription>
           </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
           {detailLoading && (
-            <div className="py-6 text-center text-sm text-muted-foreground">Loading user details...</div>
+            <div className="py-6 text-center text-sm text-muted-foreground">{p.loadingDetails}</div>
           )}
 
           {!detailLoading && currentUser && (
@@ -829,163 +829,160 @@ export default function AdminUsersPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-muted-foreground">Company:</span>
+                  <span className="text-muted-foreground">{p.companyLabel}</span>
                   <p className="font-medium">{typeof currentUser.company === 'string' ? currentUser.company : (currentUser.company?.company_name ?? "-")}</p>
                 </div>
 
                 <div>
-                  <span className="text-muted-foreground">Timezone:</span>
+                  <span className="text-muted-foreground">{p.timezoneLabel}</span>
                   <p className="font-medium">{currentUser.timezone ?? "-"}</p>
                 </div>
 
                 <div>
-                  <span className="text-muted-foreground">Preferred language:</span>
+                  <span className="text-muted-foreground">{p.languageLabel}</span>
                   <p className="font-medium">{currentUser.preferred_language ?? "-"}</p>
                 </div>
 
                 <div>
-                  <span className="text-muted-foreground">Preferred currency:</span>
+                  <span className="text-muted-foreground">{p.currencyLabel}</span>
                   <p className="font-medium">{currentUser.preferred_currency ? `${currentUser.preferred_currency.code} - ${currentUser.preferred_currency.symbol}` : "-"}</p>
                 </div>
 
                 <div>
-                  <span className="text-muted-foreground">Created at:</span>
+                  <span className="text-muted-foreground">{p.createdAtLabel}</span>
                   <p className="font-medium">{currentUser.created_at ?? currentUser.joinedAt ?? "-"}</p>
                 </div>
 
                 <div>
-                  <span className="text-muted-foreground">Last updated:</span>
+                  <span className="text-muted-foreground">{p.updatedAtLabel}</span>
                   <p className="font-medium">{currentUser.updated_at ?? "-"}</p>
                 </div>
 
                 <div>
-                  <span className="text-muted-foreground">Agreed to terms:</span>
-                  <p className="font-medium">{currentUser.agreed_to_terms ? "Yes" : "No"}</p>
+                  <span className="text-muted-foreground">{p.agreedTermsLabel}</span>
+                  <p className="font-medium">{currentUser.agreed_to_terms ? c.yes : c.no}</p>
                 </div>
 
                 <div>
-                  <span className="text-muted-foreground">Two factor enabled:</span>
-                  <p className="font-medium">{currentUser.two_factor_enabled ? "Yes" : "No"}</p>
+                  <span className="text-muted-foreground">{p.twoFactorLabel}</span>
+                  <p className="font-medium">{currentUser.two_factor_enabled ? c.yes : c.no}</p>
                 </div>
 
                 {currentUser.deactivated_at && (
                   <div className="md:col-span-2">
-                    <span className="text-muted-foreground">Deactivated at:</span>
+                    <span className="text-muted-foreground">{p.deactivatedAtLabel}</span>
                     <p className="font-medium">{currentUser.deactivated_at}</p>
                     {currentUser.deactivated_reason && (
-                      <p className="text-sm text-muted-foreground">Reason: {currentUser.deactivated_reason}</p>
+                      <p className="text-sm text-muted-foreground">{p.reasonLabel} {currentUser.deactivated_reason}</p>
                     )}
                   </div>
                 )}
 
                 <div className="md:col-span-2">
-                  <span className="text-muted-foreground">Notifications:</span>
+                  <span className="text-muted-foreground">{p.notificationsLabel}</span>
                   <div className="mt-1 flex flex-wrap gap-2">
-                    <Badge variant="outline">Quotes: {currentUser.quote_notification ?? 0}</Badge>
-                    <Badge variant="outline">Messages: {currentUser.message_notification ?? 0}</Badge>
-                    <Badge variant="outline">Supplier updates: {currentUser.supplier_update ?? 0}</Badge>
-                    <Badge variant="outline">Weekly digest: {currentUser.weekly_digest ?? 0}</Badge>
-                    <Badge variant="outline">Marketing: {currentUser.marketing_promotion ?? 0}</Badge>
+                    <Badge variant="outline">{p.notificationsQuotes.replace("{count}", String(currentUser.quote_notification ?? 0))}</Badge>
+                    <Badge variant="outline">{p.notificationsMessages.replace("{count}", String(currentUser.message_notification ?? 0))}</Badge>
+                    <Badge variant="outline">{p.notificationsSupplierUpdates.replace("{count}", String(currentUser.supplier_update ?? 0))}</Badge>
+                    <Badge variant="outline">{p.notificationsWeeklyDigest.replace("{count}", String(currentUser.weekly_digest ?? 0))}</Badge>
+                    <Badge variant="outline">{p.notificationsMarketing.replace("{count}", String(currentUser.marketing_promotion ?? 0))}</Badge>
                   </div>
                 </div>
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUserDialog(false)}>Close</Button>
+          </div>
+          <DialogFooter className="shrink-0 gap-2 border-t border-border px-5 py-4 sm:px-6">
+            <Button variant="outline" onClick={() => setShowUserDialog(false)}>{c.close}</Button>
             <Button onClick={contactUser} disabled={contactingUserId !== null}>
               {contactingUserId ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Contacting...
+                  {c.contacting}
                 </>
               ) : (
                 <>
                   <Mail className="mr-2 h-4 w-4" />
-                  Contact User
+                  {c.contactUser}
                 </>
               )}
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
       {/* Deactivate single user dialog */}
       <Dialog open={deactivateOpen} onOpenChange={setDeactivateOpen}>
-        <DialogContent>
+        <AdminDialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Deactivate User</DialogTitle>
-            <DialogDescription>Provide a reason for deactivating this user.</DialogDescription>
+            <DialogTitle>{p.deactivateUser}</DialogTitle>
+            <DialogDescription>{p.deactivateDesc}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Label>Reason</Label>
-            <Textarea value={deactivateReason} onChange={(e) => setDeactivateReason((e.target as HTMLTextAreaElement).value)} placeholder="Reason for deactivation" />
+            <Label>{c.reason}</Label>
+            <Textarea value={deactivateReason} onChange={(e) => setDeactivateReason((e.target as HTMLTextAreaElement).value)} placeholder={p.reasonForDeactivation} />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeactivateOpen(false)} disabled={actionLoading}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeactivateOpen(false)} disabled={actionLoading}>{c.cancel}</Button>
             <Button onClick={async () => {
               if (!deactivateTarget) return
-              setActionLoading(true)
               await updateUserStatus(deactivateTarget, 'deactivated', deactivateReason)
-              setActionLoading(false)
               setDeactivateOpen(false)
               setDeactivateTarget(null)
               setDeactivateReason("")
             }} disabled={actionLoading}>
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Deactivate
+              {c.deactivate}
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
 
       {/* Delete single user dialog */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent>
+        <AdminDialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Delete User</DialogTitle>
-            <DialogDescription>Deleting a user is permanent. Provide a reason (optional).</DialogDescription>
+            <DialogTitle>{p.deleteUser}</DialogTitle>
+            <DialogDescription>{p.deleteUserDesc}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Label>Reason</Label>
-            <Textarea value={deleteReason} onChange={(e) => setDeleteReason((e.target as HTMLTextAreaElement).value)} placeholder="Reason for deletion (optional)" />
+            <Label>{c.reason}</Label>
+            <Textarea value={deleteReason} onChange={(e) => setDeleteReason((e.target as HTMLTextAreaElement).value)} placeholder={p.reasonForDeletion} />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={actionLoading}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={actionLoading}>{c.cancel}</Button>
             <Button variant="destructive" onClick={async () => {
               if (!deleteTarget) return
-              setActionLoading(true)
               await deleteUser(deleteTarget, deleteReason)
-              setActionLoading(false)
               setDeleteOpen(false)
               setDeleteTarget(null)
               setDeleteReason("")
             }} disabled={actionLoading}>
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Delete
+              {c.delete}
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
 
       {/* Bulk deactivate dialog */}
       <Dialog open={bulkDeactivateOpen} onOpenChange={setBulkDeactivateOpen}>
-        <DialogContent>
+        <AdminDialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Deactivate Selected Users</DialogTitle>
-            <DialogDescription>Provide a reason to deactivate the selected users.</DialogDescription>
+            <DialogTitle>{p.bulkDeactivateTitle}</DialogTitle>
+            <DialogDescription>{p.bulkDeactivateDesc}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Label>Reason</Label>
-            <Textarea value={bulkDeactivateReason} onChange={(e) => setBulkDeactivateReason((e.target as HTMLTextAreaElement).value)} placeholder="Reason for bulk deactivation" />
+            <Label>{c.reason}</Label>
+            <Textarea value={bulkDeactivateReason} onChange={(e) => setBulkDeactivateReason((e.target as HTMLTextAreaElement).value)} placeholder={p.reasonForBulkDeactivation} />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkDeactivateOpen(false)} disabled={actionLoading}>Cancel</Button>
+            <Button variant="outline" onClick={() => setBulkDeactivateOpen(false)} disabled={actionLoading}>{c.cancel}</Button>
             <Button onClick={async () => { await performBulkDeactivate(); }} disabled={actionLoading}>
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Deactivate
+              {c.deactivate}
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
     </div>
   )

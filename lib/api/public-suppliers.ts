@@ -107,6 +107,7 @@ export interface SupplierProductsResponse {
 
 export interface GetSuppliersParams {
   page?: number
+  per_page?: number
   search?: string
   industry?: string
   country?: string
@@ -117,9 +118,16 @@ export interface GetSuppliersParams {
   sort?: string
 }
 
+export const SUPPLIERS_LIST_PER_PAGE = 12
+
 export async function getPublicSuppliers(params?: GetSuppliersParams): Promise<SuppliersResponse | null> {
   try {
-    const response = await publicApiClient.get<SuppliersResponse>("/suppliers", { params })
+    const response = await publicApiClient.get<SuppliersResponse>("/suppliers", {
+      params: {
+        per_page: SUPPLIERS_LIST_PER_PAGE,
+        ...params,
+      },
+    })
     return response.data
   } catch (error) {
     console.error("Failed to fetch public suppliers:", getApiErrorMessage(error))
@@ -335,9 +343,23 @@ export interface ApiSupplierMapResponse {
   }
 }
 
-export async function getSuppliersMap(): Promise<ApiSupplierMapResponse | null> {
+export interface SuppliersMapParams {
+  search?: string
+  group?: string
+  page?: number
+  per_page?: number
+}
+
+export async function getSuppliersMap(params?: SuppliersMapParams): Promise<ApiSupplierMapResponse | null> {
   try {
-    const response = await publicApiClient.get<ApiSupplierMapResponse>("/suppliers/map")
+    const response = await publicApiClient.get<ApiSupplierMapResponse>("/suppliers/map", {
+      params: {
+        ...(params?.search ? { search: params.search } : {}),
+        ...(params?.group ? { group: params.group } : {}),
+        ...(typeof params?.page === "number" ? { page: params.page } : {}),
+        ...(typeof params?.per_page === "number" ? { per_page: params.per_page } : {}),
+      },
+    })
     return response.data
   } catch (error) {
     console.error("Failed to fetch suppliers map:", getApiErrorMessage(error))

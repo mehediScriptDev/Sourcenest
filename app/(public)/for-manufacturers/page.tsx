@@ -1,5 +1,5 @@
 import { Metadata } from "next"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { ManufacturerPageContent } from "@/components/home/manufacturer-page-content"
 
@@ -10,8 +10,8 @@ export const metadata: Metadata = {
 
 export default function ForManufacturersPage() {
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden">
+      <SiteHeader />
       <ManufacturerPageContent />
       <Footer />
     </div>

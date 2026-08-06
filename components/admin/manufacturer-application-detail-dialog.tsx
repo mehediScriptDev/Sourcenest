@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { AdminDialogContent } from "@/components/admin/admin-dialog-content"
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import type { ManufacturerApplication } from "@/lib/api/admin-manufacturer-registrations"
 import { fetchManufacturerDetail } from "@/lib/api/admin-manufacturer-registrations"
 import { useToast } from "@/hooks/use-toast"
+import { useTranslation } from "@/lib/i18n"
 import {
   Building2,
   FileText,
@@ -27,17 +28,19 @@ function Field({
   label,
   children,
   className,
+  notProvidedLabel,
 }: {
   label: string
   children: React.ReactNode
   className?: string
+  notProvidedLabel: string
 }) {
   return (
     <div className={cn("min-w-0 space-y-2", className)}>
       <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
       <div className="wrap-break-word text-sm font-medium text-foreground">
         {typeof children === 'string' && children === '—' ? (
-          <span className="text-muted-foreground italic">Not provided</span>
+          <span className="text-muted-foreground italic">{notProvidedLabel}</span>
         ) : (
           children
         )}
@@ -57,11 +60,13 @@ export function ManufacturerApplicationDetailDialog({
   application: ManufacturerApplication
   manufacturerId?: number | string
 }) {
+  const { t } = useTranslation()
+  const c = t.admin.components.mfgApplicationDetail
+  const common = t.admin.common
   const { toast } = useToast()
   const [detailedData, setDetailedData] = useState<ManufacturerApplication | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // Fetch detailed data when dialog opens
   useEffect(() => {
     if (!open || !manufacturerId) {
       setDetailedData(null)
@@ -73,10 +78,10 @@ export function ManufacturerApplicationDetailDialog({
         setLoading(true)
         const response = await fetchManufacturerDetail(manufacturerId)
         setDetailedData(response.data)
-      } catch (error) {
+      } catch {
         toast({
-          title: "Error",
-          description: "Failed to load manufacturer details",
+          title: common.error,
+          description: c.loadFailed,
           variant: "destructive",
         })
       } finally {
@@ -85,18 +90,19 @@ export function ManufacturerApplicationDetailDialog({
     }
 
     loadDetail()
-  }, [open, manufacturerId, toast])
+  }, [open, manufacturerId, toast, common.error, c.loadFailed])
 
-  // Use detailed data if available, otherwise use application data
   const data = detailedData || application
   const company = data.company
   const factoryImages = data.factory_images || []
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
+      <AdminDialogContent
         showCloseButton
-        className="flex max-h-[min(92dvh,56rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+        variant="structured"
+        mobile="fullscreen"
+        size="lg"
       >
         <DialogHeader className="shrink-0 space-y-4 border-b border-border bg-linear-to-r from-secondary/5 to-transparent px-4 pb-6 pt-6 text-left sm:px-6">
           <div className="flex gap-4">
@@ -105,10 +111,10 @@ export function ManufacturerApplicationDetailDialog({
             </div>
             <div className="min-w-0 flex-1 pt-1">
               <DialogTitle className="font-serif text-2xl font-semibold leading-tight sm:text-3xl">
-                {company?.company_name?.trim() || data.company_name?.trim() || "Manufacturer"}
+                {company?.company_name?.trim() || data.company_name?.trim() || c.manufacturer}
               </DialogTitle>
               <DialogDescription className="mt-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Reference{" "}
+                {c.reference}{" "}
                 <span className="font-mono text-sm font-semibold text-foreground">
                   #{data.application_reference || data.id}
                 </span>
@@ -121,7 +127,7 @@ export function ManufacturerApplicationDetailDialog({
               variant="secondary" 
               className="capitalize font-semibold px-4 py-2 text-sm"
             >
-              {data.manufacture_status_label || data.status || "pending"}
+              {data.manufacture_status_label || data.status || common.pending}
             </Badge>
           </div>
         </DialogHeader>
@@ -133,18 +139,17 @@ export function ManufacturerApplicationDetailDialog({
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6">
             <div className="space-y-5">
-              {/* Contact Information Section */}
               <div className="rounded-xl border border-border/60 bg-linear-to-br from-background to-muted/30 p-5 shadow-sm hover:border-border/80 transition-colors">
                 <h3 className="mb-4 flex items-center gap-2.5 text-sm font-semibold text-foreground">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
                     <IdCard className="h-4 w-4 text-blue-600" />
                   </div>
-                  Contact Information
+                  {c.contactInfo}
                 </h3>
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="First name">{data.first_name || "—"}</Field>
-                  <Field label="Last name">{data.last_name || "—"}</Field>
-                  <Field label="Email" className="sm:col-span-2">
+                  <Field label={c.firstName} notProvidedLabel={common.notProvided}>{data.first_name || "—"}</Field>
+                  <Field label={c.lastName} notProvidedLabel={common.notProvided}>{data.last_name || "—"}</Field>
+                  <Field label={common.email} className="sm:col-span-2" notProvidedLabel={common.notProvided}>
                     {data.email ? (
                       <a href={`mailto:${data.email}`} className="text-blue-600 hover:text-blue-700 font-semibold transition-colors break-all">
                         {data.email}
@@ -153,36 +158,35 @@ export function ManufacturerApplicationDetailDialog({
                       "—"
                     )}
                   </Field>
-                  <Field label="Terms accepted" className="sm:col-span-2">
+                  <Field label={c.termsAccepted} className="sm:col-span-2" notProvidedLabel={common.notProvided}>
                     {data.agreed_to_terms || data.terms_accepted ? (
                       <span className="inline-flex items-center gap-2 rounded-lg bg-green-500/10 px-3 py-1.5 text-sm font-semibold text-green-700">
                         <ShieldCheck className="h-4 w-4" />
-                        Accepted
+                        {c.accepted}
                       </span>
                     ) : (
-                      <span className="text-red-600 font-semibold">Not Accepted</span>
+                      <span className="text-red-600 font-semibold">{c.notAccepted}</span>
                     )}
                   </Field>
                 </div>
               </div>
 
-              {/* Company Information Section */}
               <div className="rounded-xl border border-border/60 bg-linear-to-br from-background to-muted/30 p-5 shadow-sm hover:border-border/80 transition-colors">
                 <h3 className="mb-4 flex items-center gap-2.5 text-sm font-semibold text-foreground">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
                     <Building2 className="h-4 w-4 text-purple-600" />
                   </div>
-                  Company Information
+                  {c.companyInfo}
                 </h3>
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Company name" className="sm:col-span-2">
+                  <Field label={c.companyName} className="sm:col-span-2" notProvidedLabel={common.notProvided}>
                     <span className="font-semibold text-base">
                       {company?.company_name || data.company_name || "—"}
                     </span>
                   </Field>
-                  <Field label="Country">{company?.country || data.country || "—"}</Field>
-                  <Field label="City">{company?.city || data.city || "—"}</Field>
-                  <Field label="Website" className="sm:col-span-2">
+                  <Field label={common.country} notProvidedLabel={common.notProvided}>{company?.country || data.country || "—"}</Field>
+                  <Field label={common.city} notProvidedLabel={common.notProvided}>{company?.city || data.city || "—"}</Field>
+                  <Field label={c.website} className="sm:col-span-2" notProvidedLabel={common.notProvided}>
                     {(company?.company_website || data.company_website)?.trim() ? (
                       <a
                         href={company?.company_website || data.company_website}
@@ -200,15 +204,14 @@ export function ManufacturerApplicationDetailDialog({
                 </div>
               </div>
 
-              {/* Verification Documents Section */}
               <div className="rounded-xl border border-border/60 bg-linear-to-br from-background to-muted/30 p-5 shadow-sm hover:border-border/80 transition-colors">
                 <h3 className="mb-4 flex items-center gap-2.5 text-sm font-semibold text-foreground">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10">
                     <FileText className="h-4 w-4 text-amber-600" />
                   </div>
-                  Verification Documents
+                  {c.verificationDocs}
                 </h3>
-                <Field label="Business license">
+                <Field label={c.businessLicense} notProvidedLabel={common.notProvided}>
                   {company?.bussiness_license_url ? (
                     <a
                       href={company.bussiness_license_url}
@@ -217,22 +220,21 @@ export function ManufacturerApplicationDetailDialog({
                       className="inline-flex items-center gap-2 rounded-lg bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-500/20 transition-colors"
                     >
                       <FileText className="h-4 w-4 shrink-0" />
-                      View License
+                      {c.viewLicense}
                     </a>
                   ) : (
-                    <span className="text-muted-foreground italic">Not provided</span>
+                    <span className="text-muted-foreground italic">{common.notProvided}</span>
                   )}
                 </Field>
               </div>
 
-              {/* Factory Photos Section */}
               {factoryImages && factoryImages.length > 0 && (
                 <div className="rounded-xl border border-border/60 bg-linear-to-br from-background to-muted/30 p-5 shadow-sm hover:border-border/80 transition-colors">
                   <h3 className="mb-4 flex items-center gap-2.5 text-sm font-semibold text-foreground">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-pink-500/10">
                       <ImageIcon className="h-4 w-4 text-pink-600" />
                     </div>
-                    Factory Photos <Badge variant="outline" className="ml-auto font-semibold">{factoryImages.length}</Badge>
+                    {c.factoryPhotos} <Badge variant="outline" className="ml-auto font-semibold">{factoryImages.length}</Badge>
                   </h3>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {factoryImages.map((img, i) => (
@@ -245,7 +247,7 @@ export function ManufacturerApplicationDetailDialog({
                       >
                         <img
                           src={img.url}
-                          alt={`Factory ${i + 1}`}
+                          alt={common.factoryPhoto.replace("{n}", String(i + 1))}
                           className="h-full w-full object-cover transition-transform group-hover:scale-105"
                           loading="lazy"
                         />
@@ -258,7 +260,7 @@ export function ManufacturerApplicationDetailDialog({
             </div>
           </div>
         )}
-      </DialogContent>
+      </AdminDialogContent>
     </Dialog>
   )
 }

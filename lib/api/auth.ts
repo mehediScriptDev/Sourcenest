@@ -1,6 +1,6 @@
 import axios from "axios";
 import { apiClient, publicApiClient } from "./client";
-import { AuthTokenPayload, LoginInput, LoginResponse } from "@/lib/types";
+import { AuthTokenPayload, EmailVerificationResendResponse, EmailVerificationVerifyResponse, LoginInput, LoginResponse } from "@/lib/types";
 
 export type LoginTwoFactorChallengeData = {
   two_factor?: boolean
@@ -268,4 +268,57 @@ export async function resetPassword(input: ResetPasswordInput): Promise<Password
     password_confirmation: input.passwordConfirmation,
   })
   return response.data
+}
+
+export type VerifyEmailInput = {
+  verificationToken: string
+  otp: string
+  deviceName?: string
+}
+
+export async function verifyEmail(input: VerifyEmailInput): Promise<EmailVerificationVerifyResponse> {
+  try {
+    const response = await publicApiClient.post<EmailVerificationVerifyResponse>("/email/verify", {
+      verification_token: input.verificationToken,
+      otp: input.otp,
+      ...(input.deviceName ? { device_name: input.deviceName } : {}),
+    })
+
+    const userId = response.data?.data?.user?.id
+    if (userId && response.data?.data?.access_token) {
+      try {
+        await apiClient.post("/conversations", {
+          participant_ids: [1, userId],
+        })
+      } catch (err) {
+        console.error("Auto-creating admin conversation failed", err)
+      }
+    }
+
+    return response.data
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data && typeof error.response.data === "object") {
+      return error.response.data as EmailVerificationVerifyResponse
+    }
+    throw error
+  }
+}
+
+export async function resendEmailVerification(
+  verificationToken: string
+): Promise<EmailVerificationResendResponse> {
+  try {
+    const response = await publicApiClient.post<EmailVerificationResendResponse>(
+      "/email/verification/resend",
+      {
+        verification_token: verificationToken,
+      }
+    )
+    return response.data
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data && typeof error.response.data === "object") {
+      return error.response.data as EmailVerificationResendResponse
+    }
+    throw error
+  }
 }

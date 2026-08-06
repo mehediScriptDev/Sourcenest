@@ -3,41 +3,51 @@
 import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Header } from "@/components/layout/header"
+import { useQuery } from "@tanstack/react-query"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Badge } from "@/components/ui/badge"
 import { ArrowRight, Calendar, User, Clock, Globe, BookOpen, ChevronRight } from "lucide-react"
 import {
-  STATIC_ARTICLES,
-  ARTICLE_CATEGORIES,
+  fetchPublicArticles,
   formatPublishedDate,
-} from "@/lib/static-articles"
+  getBlogCategories,
+} from "@/lib/api/articles"
+import { queryKeys } from "@/lib/query-keys"
 
 export default function BlogPage() {
   const [selectedCategory, setSelectedCategory] = useState("All")
 
+  const articlesQuery = useQuery({
+    queryKey: queryKeys.publicBlogArticles(),
+    queryFn: () => fetchPublicArticles(),
+  })
+
+  const articles = articlesQuery.data ?? []
+  const loading = articlesQuery.isLoading
+  const error =
+    articlesQuery.isError
+      ? articlesQuery.error instanceof Error
+        ? articlesQuery.error.message
+        : "Failed to load articles"
+      : null
+
   const filteredArticles =
     selectedCategory === "All"
-      ? STATIC_ARTICLES
-      : STATIC_ARTICLES.filter((a) => a.category === selectedCategory)
+      ? articles
+      : articles.filter((a) => a.category === selectedCategory)
 
   const featuredArticle = filteredArticles.find((a) => a.isFeatured)
   const regularArticles = filteredArticles.filter((a) => !a.isFeatured)
-
-  // Only show categories that have at least one article
-  const activeCategories = ARTICLE_CATEGORIES.filter((cat) => {
-    if (cat === "All") return true
-    return STATIC_ARTICLES.some((a) => a.category === cat)
-  })
+  const activeCategories = getBlogCategories(articles)
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-background">
+      <SiteHeader />
       <main className="flex-1">
 
-        {/* ─── Hero ─── */}
-        <section className="relative overflow-hidden bg-primary py-20 lg:py-28">
-          {/* Background grid pattern */}
+        {/* ????????? Hero ????????? */}
+        <section className="relative overflow-hidden bg-primary py-8 sm:py-12 lg:py-16">
           <div
             className="absolute inset-0 opacity-[0.06]"
             style={{
@@ -46,7 +56,6 @@ export default function BlogPage() {
               backgroundSize: "40px 40px",
             }}
           />
-          {/* Decorative orbs */}
           <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-primary-foreground/5 blur-3xl" />
           <div className="absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-secondary/20 blur-3xl" />
 
@@ -56,14 +65,14 @@ export default function BlogPage() {
                 <Globe className="h-3.5 w-3.5" />
                 SourceNest Knowledge Center
               </div>
-              <h1 className="text-4xl font-bold tracking-tight text-primary-foreground sm:text-5xl lg:text-6xl">
+              <h1 className="font-serif text-3xl font-medium tracking-tight text-primary-foreground min-[400px]:text-4xl sm:text-5xl lg:text-6xl">
                 Insights &amp; Resources
               </h1>
               <p className="mt-5 text-lg text-primary-foreground/75 leading-relaxed max-w-2xl mx-auto">
-                Professional knowledge on global sourcing, RFQs, manufacturer reviews, supplier comparison, import/export, and international trade — built for serious B2B buyers and manufacturers.
+                Professional knowledge on global sourcing, RFQs, manufacturer reviews, supplier comparison, import/export, and international trade ??? built for serious B2B buyers and manufacturers.
               </p>
               <div className="mt-8 flex items-center justify-center gap-6 text-sm text-primary-foreground/60">
-                <span className="flex items-center gap-1.5"><BookOpen className="h-4 w-4" />{STATIC_ARTICLES.length} Articles</span>
+                <span className="flex items-center gap-1.5"><BookOpen className="h-4 w-4" />{articles.length} Articles</span>
                 <span className="h-1 w-1 rounded-full bg-primary-foreground/30" />
                 <span className="flex items-center gap-1.5"><User className="h-4 w-4" />SourceNest Editorial Team</span>
               </div>
@@ -71,7 +80,7 @@ export default function BlogPage() {
           </div>
         </section>
 
-        {/* ─── Category Filter ─── */}
+        {/* ????????? Category Filter ????????? */}
         <section className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur-sm">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex gap-2 overflow-x-auto py-3 scrollbar-none">
@@ -92,7 +101,19 @@ export default function BlogPage() {
           </div>
         </section>
 
-        {filteredArticles.length === 0 ? (
+        {loading ? (
+          <section className="py-24">
+            <div className="mx-auto max-w-7xl px-4 text-center text-muted-foreground">
+              Loading articles...
+            </div>
+          </section>
+        ) : error ? (
+          <section className="py-24">
+            <div className="mx-auto max-w-7xl px-4 text-center text-destructive">
+              {error}
+            </div>
+          </section>
+        ) : filteredArticles.length === 0 ? (
           <section className="py-24">
             <div className="mx-auto max-w-7xl px-4 text-center">
               <p className="text-muted-foreground">No articles found in this category.</p>
@@ -100,9 +121,8 @@ export default function BlogPage() {
           </section>
         ) : (
           <>
-            {/* ─── Featured Article ─── */}
             {featuredArticle && (
-              <section className="py-12 lg:py-16">
+              <section className="py-8 sm:py-12 lg:py-16">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                   <div className="mb-6 flex items-center gap-2">
                     <div className="h-px flex-1 bg-border" />
@@ -114,7 +134,6 @@ export default function BlogPage() {
                     className="group block overflow-hidden rounded-2xl border border-border bg-card transition-all duration-300 hover:shadow-xl hover:border-primary/30"
                   >
                     <div className="grid lg:grid-cols-5">
-                      {/* Image */}
                       <div className="relative lg:col-span-3 h-64 sm:h-80 lg:h-full min-h-[320px] overflow-hidden bg-muted">
                         <Image
                           src={featuredArticle.imageUrl}
@@ -126,7 +145,6 @@ export default function BlogPage() {
                         />
                         <div className="absolute inset-0 bg-linear-to-r from-transparent to-card/20" />
                       </div>
-                      {/* Content */}
                       <div className="lg:col-span-2 flex flex-col justify-center p-8 lg:p-12">
                         <Badge className="w-fit bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
                           {featuredArticle.category}
@@ -162,7 +180,6 @@ export default function BlogPage() {
               </section>
             )}
 
-            {/* ─── Articles Grid ─── */}
             <section className="pb-20 lg:pb-28">
               <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 {regularArticles.length > 0 && (
@@ -176,14 +193,13 @@ export default function BlogPage() {
                       </span>
                     </div>
 
-                    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:gap-6">
                       {regularArticles.map((article) => (
                         <Link
                           key={article.id}
                           href={`/blog/${article.slug}`}
                           className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-all duration-300 hover:shadow-lg hover:border-primary/30 hover:-translate-y-1"
                         >
-                          {/* Card Image */}
                           <div className="relative h-52 overflow-hidden bg-muted">
                             <Image
                               src={article.imageUrl}
@@ -195,7 +211,6 @@ export default function BlogPage() {
                             <div className="absolute inset-0 bg-linear-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                           </div>
 
-                          {/* Card Content */}
                           <div className="flex flex-1 flex-col p-6">
                             <Badge
                               variant="outline"
@@ -233,7 +248,6 @@ export default function BlogPage() {
           </>
         )}
 
-        {/* ─── CTA Banner ─── */}
         <section className="border-t border-border bg-muted/30 py-16">
           <div className="mx-auto max-w-4xl px-4 text-center">
             <h2 className="text-2xl font-bold text-foreground sm:text-3xl">

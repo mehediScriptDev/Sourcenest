@@ -1,6 +1,6 @@
 import { Metadata } from "next"
 import Link from "next/link"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { 
@@ -91,7 +91,7 @@ const badges = [
 export default function VerificationPage() {
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <SiteHeader />
       <main className="flex-1">
         {/* Hero */}
         <section className="bg-primary py-20 lg:py-28">

@@ -49,7 +49,7 @@ export default function ManufacturerStatCard({
                 children
               ) : (
                 <>
-                  <p className="text-2xl font-bold text-foreground truncate">{value}</p>
+                  <p className="text-xl font-bold text-foreground truncate sm:text-2xl">{value}</p>
                   <p className="text-sm text-muted-foreground truncate">{title}</p>
                 </>
               )}
@@ -62,7 +62,7 @@ export default function ManufacturerStatCard({
 
   return (
     <Card className={cn("w-full overflow-hidden", className)}>
-      <CardContent className="p-6 py-0">
+      <CardContent className="p-4 py-0 sm:p-5 lg:p-6">
         <div className="flex items-center justify-between gap-2 min-w-0">
           {Icon && (
             <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", iconWrapperClassName)}>
@@ -88,7 +88,7 @@ export default function ManufacturerStatCard({
             children
           ) : (
             <>
-              <p className="text-2xl font-bold text-foreground">{value}</p>
+              <p className="text-xl font-bold text-foreground sm:text-2xl">{value}</p>
               <p className="text-sm text-muted-foreground">{title}</p>
             </>
           )}

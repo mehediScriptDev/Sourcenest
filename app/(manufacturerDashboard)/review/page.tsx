@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useCallback, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
@@ -10,9 +10,15 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import AdditionalInformationSubmit from "@/components/manufacturers/additional-information-submit"
 import {
+  getActionableAdditionalInfoRequests,
+  isAdditionalInfoPending,
   resolveAdditionalInfoRequest,
+  storeAdditionalInfoRequest,
 } from "@/lib/additional-information-storage"
 import type { AdditionalInformationRequest } from "@/lib/api/manufacturer-additional-information"
+import { fetchAdditionalInformationByToken } from "@/lib/api/manufacturer-additional-information"
+import { fetchManufacturerReviewCenter } from "@/lib/api/manufacturer-review-center"
+import { Loader2 } from "lucide-react"
 import { 
   CheckCircle2, 
   Clock, 
@@ -32,12 +38,49 @@ function ManufacturerAccountReviewContent() {
   const searchParams = useSearchParams()
   const [additionalInfoRequest, setAdditionalInfoRequest] =
     useState<AdditionalInformationRequest | null>(null)
+  const [loadingRequest, setLoadingRequest] = useState(true)
+
+  const loadAdditionalInfoRequest = useCallback(async () => {
+    try {
+      setLoadingRequest(true)
+      const urlToken = searchParams.get("token")
+
+      if (urlToken) {
+        const byToken = await fetchAdditionalInformationByToken(urlToken)
+        if (byToken && isAdditionalInfoPending(byToken.status)) {
+          storeAdditionalInfoRequest(byToken)
+          setAdditionalInfoRequest(byToken)
+          return
+        }
+      }
+
+      if (user) {
+        const response = await fetchManufacturerReviewCenter()
+        const apiRequests = response.data.additional_information_requests || []
+        const actionable = getActionableAdditionalInfoRequests(apiRequests)
+
+        if (actionable.length > 0) {
+          const resolved = urlToken
+            ? actionable.find((item) => item.token === urlToken) ?? actionable[0]
+            : actionable[0]
+          storeAdditionalInfoRequest(resolved)
+          setAdditionalInfoRequest(resolved)
+          return
+        }
+      }
+
+      const fallback = resolveAdditionalInfoRequest(urlToken)
+      setAdditionalInfoRequest(
+        fallback && isAdditionalInfoPending(fallback.status) ? fallback : null
+      )
+    } finally {
+      setLoadingRequest(false)
+    }
+  }, [searchParams, user])
 
   useEffect(() => {
-    const urlToken = searchParams.get("token")
-    const resolved = resolveAdditionalInfoRequest(urlToken)
-    setAdditionalInfoRequest(resolved?.status === "pending" ? resolved : null)
-  }, [searchParams])
+    void loadAdditionalInfoRequest()
+  }, [loadAdditionalInfoRequest])
 
   const handleSignOut = () => {
     logout()
@@ -125,7 +168,11 @@ function ManufacturerAccountReviewContent() {
           </div>
         </div>
 
-        {additionalInfoRequest && (
+        {loadingRequest ? (
+          <div className="mb-8 flex items-center justify-center rounded-lg border bg-card py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : additionalInfoRequest ? (
           <div className="mb-8">
             {!user ? (
               <Card className="border-amber-200 shadow-md">
@@ -154,7 +201,7 @@ function ManufacturerAccountReviewContent() {
               />
             )}
           </div>
-        )}
+        ) : null}
 
         <div className="grid gap-6 md:grid-cols-3">
           {/* Left Column: Requirements & Messages */}
@@ -235,7 +282,7 @@ function ManufacturerAccountReviewContent() {
                   <div className="rounded-lg border border-red-200/50 bg-red-50/50 p-4 dark:border-red-900/50 dark:bg-red-950/20 text-sm text-red-900 dark:text-red-200">
                     <p className="font-semibold">Need Help?</p>
                     <p className="mt-1 text-xs opacity-90">
-                      If you believe this is in error or you want to request another review, please send a message to support or contact admin@sourcenest.com.
+                      If you believe this is in error or you want to request another review, please send a message to support or contact info@sourcenest.tesh.
                     </p>
                   </div>
                 </CardContent>

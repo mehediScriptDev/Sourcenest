@@ -58,9 +58,19 @@ export interface BuyerDashboardData {
     type: string
     title: string
     description: string
+    link?: string | null
     time: string
     time_at: string
   }>
+}
+
+export interface BuyerActivityData {
+  activities: BuyerDashboardData["recent_activity"]
+  summary: {
+    suppliers_contacted: number
+    rfqs_submitted: number
+    suppliers_saved: number
+  }
 }
 
 export interface GetBuyerDashboardResponse {
@@ -100,6 +110,32 @@ export async function getBuyerDashboard(): Promise<GetBuyerDashboardResponse> {
     return {
       success: false,
       message: getApiErrorMessage(error, "Failed to fetch buyer dashboard."),
+      data: null,
+    }
+  }
+}
+
+export interface GetBuyerActivityResponse {
+  success: boolean
+  message: string
+  data: BuyerActivityData | null
+}
+
+export async function getBuyerActivity(limit = 50): Promise<GetBuyerActivityResponse> {
+  try {
+    const response = await apiClient.get<GetBuyerActivityResponse>("/buyer/dashboard/activity", {
+      params: { limit },
+    })
+
+    return {
+      success: response.data?.success ?? true,
+      message: response.data?.message || "Success",
+      data: response.data?.data || null,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      message: getApiErrorMessage(error, "Failed to fetch buyer activity."),
       data: null,
     }
   }

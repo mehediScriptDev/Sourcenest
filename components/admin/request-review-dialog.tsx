@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
+import { AdminDialogContent } from "@/components/admin/admin-dialog-content"
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -26,14 +26,62 @@ import {
   MapPin,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useTranslation } from "@/lib/i18n"
 import type { ManufacturerApplication } from "@/lib/api/admin-manufacturer-registrations"
 import {
-  createReviewRequest,
   generateReviewCode,
   DEFAULT_FACTORY_AREAS,
-  REVIEW_TYPE_LABELS,
   type ReviewType,
 } from "@/lib/api/admin-reviews"
+import { createManufacturerAdditionalInformationRequest } from "@/lib/api/admin-manufacturer-additional-information"
+import type { AdditionalInformationResponseType } from "@/lib/api/manufacturer-additional-information"
+import { getApiErrorMessage } from "@/lib/api/errors"
+
+const FACTORY_AREA_KEY_MAP: Record<string, "factoryEntrance" | "warehouse" | "machinery" | "productionLine" | "qualityControl" | "packagingArea" | "loadingDock"> = {
+  "Factory Entrance": "factoryEntrance",
+  "Warehouse": "warehouse",
+  "Machinery": "machinery",
+  "Production Line": "productionLine",
+  "Quality Control Area": "qualityControl",
+  "Packaging Area": "packagingArea",
+  "Loading Dock": "loadingDock",
+}
+
+function reviewTypeToAllowedTypes(reviewType: ReviewType): AdditionalInformationResponseType[] {
+  if (reviewType === "additional_document_review") {
+    return ["document", "text"]
+  }
+
+  return ["image", "video"]
+}
+
+function buildReviewMessage(params: {
+  reviewTypeLabel: string
+  reviewCode: string
+  requestedAreas: string[]
+  instructions?: string
+}): string {
+  const lines = [
+    `Review Type: ${params.reviewTypeLabel}`,
+    `Verification Code: ${params.reviewCode}`,
+  ]
+
+  if (params.requestedAreas.length > 0) {
+    lines.push(`Requested Areas: ${params.requestedAreas.join(", ")}`)
+  }
+
+  if (params.instructions?.trim()) {
+    lines.push("", "Additional Instructions:", params.instructions.trim())
+  }
+
+  lines.push(
+    "",
+    "Please use the live camera only. Gallery uploads are blocked.",
+    `Overlay verification code ${params.reviewCode} during captures.`
+  )
+
+  return lines.join("\n")
+}
 
 interface RequestReviewDialogProps {
   open: boolean
@@ -41,47 +89,51 @@ interface RequestReviewDialogProps {
   manufacturer: ManufacturerApplication
 }
 
-const REVIEW_TYPE_OPTIONS: {
-  value: ReviewType
-  label: string
-  description: string
-  icon: React.ElementType
-}[] = [
-  {
-    value: "live_factory_capture",
-    label: "Live Factory Capture",
-    description: "Request live camera captures of specific factory areas",
-    icon: Camera,
-  },
-  {
-    value: "additional_document_review",
-    label: "Additional Document Review",
-    description: "Request additional documents for verification",
-    icon: FileSearch,
-  },
-  {
-    value: "specific_area_capture",
-    label: "Specific Area Capture",
-    description: "Request captures of specific custom areas",
-    icon: ScanEye,
-  },
-]
-
 export default function RequestReviewDialog({
   open,
   onOpenChange,
   manufacturer,
 }: RequestReviewDialogProps) {
+  const { t } = useTranslation()
+  const c = t.admin.components.requestReview
+  const rt = t.admin.reviewType
+  const fa = t.admin.factoryAreas
+  const common = t.admin.common
   const { toast } = useToast()
   const [submitting, setSubmitting] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
 
-  // Form state
+  const reviewTypeOptions = useMemo(() => [
+    {
+      value: "live_factory_capture" as ReviewType,
+      label: rt.live_factory_capture,
+      description: rt.live_factory_capture_desc,
+      icon: Camera,
+    },
+    {
+      value: "additional_document_review" as ReviewType,
+      label: rt.additional_document_review,
+      description: rt.additional_document_review_desc,
+      icon: FileSearch,
+    },
+    {
+      value: "specific_area_capture" as ReviewType,
+      label: rt.specific_area_capture,
+      description: rt.specific_area_capture_desc,
+      icon: ScanEye,
+    },
+  ], [rt])
+
   const [reviewType, setReviewType] = useState<ReviewType>("live_factory_capture")
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])
   const [customArea, setCustomArea] = useState("")
   const [instructions, setInstructions] = useState("")
   const [reviewCode] = useState(() => generateReviewCode())
+
+  const getAreaLabel = (area: string) => {
+    const key = FACTORY_AREA_KEY_MAP[area]
+    return key ? fa[key] : area
+  }
 
   const showAreasSelection =
     reviewType === "live_factory_capture" || reviewType === "specific_area_capture"
@@ -113,8 +165,8 @@ export default function RequestReviewDialog({
   const handleSubmit = async () => {
     if (showAreasSelection && selectedAreas.length === 0) {
       toast({
-        title: "Select areas",
-        description: "Please select at least one area to review.",
+        title: c.selectAreas,
+        description: c.selectAreasDesc,
         variant: "destructive",
       })
       return
@@ -122,28 +174,28 @@ export default function RequestReviewDialog({
 
     try {
       setSubmitting(true)
-      await createReviewRequest(manufacturer.id, {
-        review_type: reviewType,
-        requested_areas: selectedAreas,
-        additional_instructions: instructions || undefined,
-        review_code: reviewCode,
-        // Pass manufacturer metadata for mock data
-        _manufacturer_name: [manufacturer.first_name, manufacturer.last_name].filter(Boolean).join(" ") || undefined,
-        _manufacturer_email: manufacturer.email,
-        _company_name: manufacturer.company_name || undefined,
+      const selectedType = reviewTypeOptions.find((option) => option.value === reviewType)
+      const response = await createManufacturerAdditionalInformationRequest(manufacturer.id, {
+        message: buildReviewMessage({
+          reviewTypeLabel: selectedType?.label ?? reviewType,
+          reviewCode,
+          requestedAreas: selectedAreas,
+          instructions: instructions || undefined,
+        }),
+        allowed_types: reviewTypeToAllowedTypes(reviewType),
       })
 
+      const name = manufacturer.company_name || manufacturer.email
       toast({
-        title: "Review requested",
-        description: `Review request ${reviewCode} has been sent to ${manufacturer.company_name || manufacturer.email}.`,
+        title: c.reviewRequested,
+        description: response.message || c.reviewRequestedDesc.replace("{code}", reviewCode).replace("{name}", name),
       })
 
       onOpenChange(false)
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "Failed to create review request"
       toast({
-        title: "Error",
-        description: msg,
+        title: common.error,
+        description: getApiErrorMessage(error, c.createFailed),
         variant: "destructive",
       })
     } finally {
@@ -158,11 +210,12 @@ export default function RequestReviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
+      <AdminDialogContent
         showCloseButton
-        className="flex max-h-[min(92dvh,52rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
+        variant="structured"
+        mobile="fullscreen"
+        size="md"
       >
-        {/* Header */}
         <DialogHeader className="shrink-0 space-y-3 border-b border-border bg-linear-to-r from-secondary/5 to-transparent px-5 pb-5 pt-5 text-left sm:px-6">
           <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-secondary/20 to-secondary/10 shadow-sm">
@@ -170,21 +223,19 @@ export default function RequestReviewDialog({
             </div>
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-lg font-semibold leading-tight">
-                Request Review
+                {c.title}
               </DialogTitle>
               <DialogDescription className="mt-1 text-sm text-muted-foreground">
-                Create an official review task for{" "}
-                <span className="font-medium text-foreground">{companyName}</span>
+                {c.subtitle.replace("{name}", companyName)}
               </DialogDescription>
             </div>
           </div>
 
-          {/* Review Code */}
           <div className="flex items-center gap-3 rounded-lg border border-secondary/20 bg-secondary/5 px-4 py-3">
             <Shield className="h-5 w-5 shrink-0 text-secondary" />
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium uppercase tracking-wider text-secondary/80">
-                Review Verification Code
+                {c.reviewCode}
               </p>
               <p className="mt-0.5 font-mono text-xl font-bold tracking-widest text-secondary">
                 {reviewCode}
@@ -205,14 +256,12 @@ export default function RequestReviewDialog({
           </div>
         </DialogHeader>
 
-        {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
           <div className="space-y-6">
-            {/* Review Type Selection */}
             <div className="space-y-3">
-              <Label className="text-sm font-semibold">Review Type</Label>
+              <Label className="text-sm font-semibold">{c.reviewType}</Label>
               <div className="grid gap-2.5">
-                {REVIEW_TYPE_OPTIONS.map((option) => {
+                {reviewTypeOptions.map((option) => {
                   const selected = reviewType === option.value
                   return (
                     <button
@@ -272,12 +321,11 @@ export default function RequestReviewDialog({
               </div>
             </div>
 
-            {/* Area Selection */}
             {showAreasSelection && (
               <div className="space-y-3">
                 <Label className="text-sm font-semibold">
                   <MapPin className="mb-0.5 mr-1.5 inline h-4 w-4 text-muted-foreground" />
-                  Requested Areas
+                  {c.requestedAreas}
                 </Label>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {DEFAULT_FACTORY_AREAS.map((area) => (
@@ -295,16 +343,15 @@ export default function RequestReviewDialog({
                         onCheckedChange={() => toggleArea(area)}
                         className="data-[state=checked]:border-secondary data-[state=checked]:bg-secondary"
                       />
-                      <span className="text-sm">{area}</span>
+                      <span className="text-sm">{getAreaLabel(area)}</span>
                     </label>
                   ))}
                 </div>
 
-                {/* Custom area */}
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Add custom area..."
+                    placeholder={c.addCustomArea}
                     value={customArea}
                     onChange={(e) => setCustomArea(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomArea())}
@@ -317,11 +364,10 @@ export default function RequestReviewDialog({
                     onClick={addCustomArea}
                     disabled={!customArea.trim()}
                   >
-                    Add
+                    {c.add}
                   </Button>
                 </div>
 
-                {/* Selected custom areas (non-default) */}
                 {selectedAreas
                   .filter((a) => !(DEFAULT_FACTORY_AREAS as readonly string[]).includes(a))
                   .map((area) => (
@@ -343,49 +389,45 @@ export default function RequestReviewDialog({
 
                 {selectedAreas.length > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    {selectedAreas.length} area{selectedAreas.length !== 1 && "s"} selected
+                    {selectedAreas.length === 1
+                      ? common.areasSelectedSingular
+                      : common.areasSelectedPlural.replace("{count}", String(selectedAreas.length))}
                   </p>
                 )}
               </div>
             )}
 
-            {/* Additional Instructions */}
             <div className="space-y-2">
               <Label className="text-sm font-semibold">
-                Additional Instructions{" "}
-                <span className="font-normal text-muted-foreground">(optional)</span>
+                {c.additionalInstructions}{" "}
+                <span className="font-normal text-muted-foreground">{common.optional}</span>
               </Label>
               <Textarea
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                placeholder="Provide any specific instructions or notes for the manufacturer..."
+                placeholder={c.instructionsPlaceholder}
                 className="min-h-20 resize-none"
               />
             </div>
 
-            {/* Info Notice */}
             <div className="rounded-lg border border-amber-200/60 bg-amber-50/50 px-4 py-3 text-xs text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
-              <p className="font-semibold">How this works:</p>
+              <p className="font-semibold">{c.howItWorks}</p>
               <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-amber-700 dark:text-amber-400">
-                <li>The manufacturer will see this in their <strong>Review Center</strong> (not in messages)</li>
-                <li>Camera captures are live only — gallery uploads are blocked</li>
-                <li>
-                  The verification code <strong className="font-mono">{reviewCode}</strong> will be
-                  overlaid during captures
-                </li>
+                <li>{c.howItWorks1}</li>
+                <li>{c.howItWorks2}</li>
+                <li>{c.howItWorks3.replace("{code}", reviewCode)}</li>
               </ul>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
         <DialogFooter className="shrink-0 gap-2 border-t border-border px-5 py-4 sm:px-6">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={submitting}
           >
-            Cancel
+            {common.cancel}
           </Button>
           <Button
             onClick={handleSubmit}
@@ -395,17 +437,17 @@ export default function RequestReviewDialog({
             {submitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending...
+                {common.sending}
               </>
             ) : (
               <>
                 <ScanEye className="mr-2 h-4 w-4" />
-                Send Review Request
+                {c.sendReviewRequest}
               </>
             )}
           </Button>
         </DialogFooter>
-      </DialogContent>
+      </AdminDialogContent>
     </Dialog>
   )
 }

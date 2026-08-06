@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { AdminPagination } from "@/components/admin/admin-pagination"
 import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Card, CardContent } from "@/components/ui/card"
 
@@ -70,6 +72,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
+import { useTranslation } from "@/lib/i18n"
 import {
   CertificateType,
   createAdminCertificateType,
@@ -82,39 +85,12 @@ import {
   deleteAdminCertification,
   getAdminCertifications,
 } from "@/lib/api/admin-certifications"
+import { queryKeys } from "@/lib/query-keys"
 
-const typeStatusConfig = {
-  active: { label: "Active", color: "bg-emerald-100 text-emerald-700" },
-  inactive: { label: "Inactive", color: "bg-gray-100 text-gray-700" },
-}
+const CERTIFICATIONS_PER_PAGE = 12
+const TYPES_PER_PAGE = 12
 
 type CertificateVisualStatus = "valid" | "expiring" | "expired" | "unknown"
-
-const certificateStatusConfig: Record<
-  CertificateVisualStatus,
-  { label: string; color: string; icon: typeof CheckCircle }
-> = {
-  valid: {
-    label: "Valid",
-    color: "bg-emerald-100 text-emerald-700",
-    icon: CheckCircle,
-  },
-  expiring: {
-    label: "Expiring Soon",
-    color: "bg-amber-100 text-amber-700",
-    icon: AlertTriangle,
-  },
-  expired: {
-    label: "Expired",
-    color: "bg-red-100 text-red-700",
-    icon: AlertTriangle,
-  },
-  unknown: {
-    label: "No Expiry",
-    color: "bg-gray-100 text-gray-700",
-    icon: AlertTriangle,
-  },
-}
 
 interface GroupedCertificationStats {
   valid: number
@@ -164,27 +140,15 @@ function calculateCertificationStatus(expiryDate: string): CertificateVisualStat
   return "valid"
 }
 
-function formatDisplayDate(rawDate: string): string {
-  if (!rawDate) {
-    return "N/A"
-  }
-
-  const date = new Date(rawDate)
-  if (Number.isNaN(date.getTime())) {
-    return "N/A"
-  }
-
-  return date.toLocaleDateString()
-}
-
 function groupCertificationsByManufacturer(
-  certifications: AdminCertification[]
+  certifications: AdminCertification[],
+  unknownManufacturerLabel: string
 ): GroupedCertification[] {
   const groupMap = new Map<string, GroupedCertification>()
 
   for (const cert of certifications) {
     const email = cert.manufacturer_email || "unknown"
-    const name = cert.manufacturer_name || "Unknown Manufacturer"
+    const name = cert.manufacturer_name || unknownManufacturerLabel
 
     if (!groupMap.has(email)) {
       groupMap.set(email, {
@@ -221,34 +185,151 @@ function groupCertificationsByManufacturer(
 }
 
 export default function AdminCertificateTypePage() {
+  const { t } = useTranslation()
+  const p = t.admin.pages.certificatetype
+  const c = t.admin.common
   const { toast } = useToast()
+  const queryClient = useQueryClient()
+
+  const typeStatusConfig = useMemo(
+    () => ({
+      active: { label: c.active, color: "bg-emerald-100 text-emerald-700" },
+      inactive: { label: c.inactive, color: "bg-gray-100 text-gray-700" },
+    }),
+    [c.active, c.inactive]
+  )
+
+  const certificateStatusConfig = useMemo<
+    Record<
+      CertificateVisualStatus,
+      { label: string; color: string; icon: typeof CheckCircle }
+    >
+  >(
+    () => ({
+      valid: {
+        label: p.valid,
+        color: "bg-emerald-100 text-emerald-700",
+        icon: CheckCircle,
+      },
+      expiring: {
+        label: p.expiringSoon,
+        color: "bg-amber-100 text-amber-700",
+        icon: AlertTriangle,
+      },
+      expired: {
+        label: p.expired,
+        color: "bg-red-100 text-red-700",
+        icon: AlertTriangle,
+      },
+      unknown: {
+        label: c.noExpiry,
+        color: "bg-gray-100 text-gray-700",
+        icon: AlertTriangle,
+      },
+    }),
+    [p.valid, p.expiringSoon, p.expired, c.noExpiry]
+  )
+
+  const formatDisplayDate = (rawDate: string): string => {
+    if (!rawDate) {
+      return c.na
+    }
+
+    const date = new Date(rawDate)
+    if (Number.isNaN(date.getTime())) {
+      return c.na
+    }
+
+    return date.toLocaleDateString()
+  }
 
   const [activeTab, setActiveTab] = useState("certificates")
 
-  const [groupedCertifications, setGroupedCertifications] = useState<GroupedCertification[]>([])
-  const [certificationsLoading, setCertificationsLoading] = useState(true)
   const [certificationsSearch, setCertificationsSearch] = useState("")
   const [certificationsPage, setCertificationsPage] = useState(1)
-  const [certificationsPerPage] = useState(12)
-  const [certificationsTotalPages, setCertificationsTotalPages] = useState(1)
-  const [certificationsTotalItems, setCertificationsTotalItems] = useState(0)
   const [deletingCertificationId, setDeletingCertificationId] = useState<
     string | number | null
   >(null)
-  const [isDeletingCertification, setIsDeletingCertification] = useState(false)
 
-  const [types, setTypes] = useState<CertificateType[]>([])
-  const [typesLoading, setTypesLoading] = useState(true)
+  const certificationsQueryKey = queryKeys.adminCertifications(
+    certificationsPage,
+    CERTIFICATIONS_PER_PAGE
+  )
+
+  const certificationsQuery = useQuery({
+    queryKey: certificationsQueryKey,
+    queryFn: () => getAdminCertifications("", certificationsPage, CERTIFICATIONS_PER_PAGE),
+    placeholderData: (previousData) => previousData,
+  })
+
+  const groupedCertifications = useMemo(() => {
+    if (!certificationsQuery.data?.success) {
+      return []
+    }
+    return groupCertificationsByManufacturer(
+      certificationsQuery.data.data,
+      c.unknownManufacturer
+    )
+  }, [certificationsQuery.data, c.unknownManufacturer])
+
+  const certificationsTotalPages =
+    certificationsQuery.data?.pagination?.last_page ?? 1
+  const certificationsTotalItems =
+    certificationsQuery.data?.pagination?.total ??
+    certificationsQuery.data?.data?.length ??
+    0
+  const certificationsLoading =
+    certificationsQuery.isLoading && !certificationsQuery.data
+
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [editingType, setEditingType] = useState<CertificateType | null>(null)
   const [deletingTypeId, setDeletingTypeId] = useState<string | number | null>(null)
   const [typeSearchQuery, setTypeSearchQuery] = useState("")
-  const [isTypeSubmitting, setIsTypeSubmitting] = useState(false)
   const [typeCurrentPage, setTypeCurrentPage] = useState(1)
-  const [typesPerPage] = useState(12)
-  const [typeTotalPages, setTypeTotalPages] = useState(1)
-  const [typeTotalItems, setTypeTotalItems] = useState(0)
+
+  const typesQueryKey = queryKeys.adminCertificateTypes(
+    typeCurrentPage,
+    TYPES_PER_PAGE,
+    typeSearchQuery
+  )
+
+  const typesQuery = useQuery({
+    queryKey: typesQueryKey,
+    queryFn: () => getAdminCertificateTypes(typeSearchQuery, typeCurrentPage, TYPES_PER_PAGE),
+    placeholderData: (previousData) => previousData,
+  })
+
+  const types = typesQuery.data?.success ? typesQuery.data.data : []
+  const typeTotalPages = typesQuery.data?.pagination?.last_page ?? 1
+  const typeTotalItems =
+    typesQuery.data?.pagination?.total ?? typesQuery.data?.data?.length ?? 0
+  const typesLoading = typesQuery.isLoading && !typesQuery.data
+
+  const createTypeMutation = useMutation({
+    mutationFn: createAdminCertificateType,
+  })
+  const updateTypeMutation = useMutation({
+    mutationFn: ({
+      typeId,
+      input,
+    }: {
+      typeId: string | number
+      input: { name: string; slug: string; status: "active" | "inactive" }
+    }) => updateAdminCertificateType(typeId, input),
+  })
+  const deleteTypeMutation = useMutation({
+    mutationFn: deleteAdminCertificateType,
+  })
+  const deleteCertMutation = useMutation({
+    mutationFn: deleteAdminCertification,
+  })
+
+  const isTypeSubmitting =
+    createTypeMutation.isPending ||
+    updateTypeMutation.isPending ||
+    deleteTypeMutation.isPending
+  const isDeletingCertification = deleteCertMutation.isPending
 
   const [newType, setNewType] = useState({
     name: "",
@@ -262,101 +343,40 @@ export default function AdminCertificateTypePage() {
   })
 
   useEffect(() => {
-    void loadAdminCertificates()
-  }, [certificationsPage])
+    const response = certificationsQuery.data
+    if (response && !response.success) {
+      toast({
+        title: c.error,
+        description: response.message || c.failedToLoadCerts,
+        variant: "destructive",
+      })
+    }
+  }, [certificationsQuery.data, c.error, c.failedToLoadCerts, toast])
 
   useEffect(() => {
-    void loadCertificateTypes()
-  }, [typeCurrentPage, typeSearchQuery])
-
-  const loadAdminCertificates = async (
-    page: number = certificationsPage,
-    search: string = certificationsSearch
-  ) => {
-    setCertificationsLoading(true)
-    try {
-      // Don't pass search to API - let backend return all results for this page
-      // Client-side filtering will handle manufacturer search
-      const response = await getAdminCertifications("", page, certificationsPerPage)
-      if (response.success) {
-        const grouped = groupCertificationsByManufacturer(response.data)
-        setGroupedCertifications(grouped)
-        if (response.pagination) {
-          setCertificationsTotalPages(response.pagination.last_page)
-          setCertificationsTotalItems(response.pagination.total)
-        } else {
-          setCertificationsTotalPages(1)
-          setCertificationsTotalItems(response.data.length)
-        }
-      } else {
-        setGroupedCertifications([])
-        toast({
-          title: "Error",
-          description: response.message || "Failed to load certifications",
-          variant: "destructive",
-        })
-      }
-    } catch (_error) {
-      setGroupedCertifications([])
+    const response = typesQuery.data
+    if (response && !response.success) {
       toast({
-        title: "Error",
-        description: "An unexpected error occurred while loading certifications",
+        title: c.error,
+        description: response.message || c.failedToLoadCertTypes,
         variant: "destructive",
       })
-    } finally {
-      setCertificationsLoading(false)
     }
-  }
-
-  const loadCertificateTypes = async (
-    page: number = typeCurrentPage,
-    search: string = typeSearchQuery
-  ) => {
-    setTypesLoading(true)
-    try {
-      const response = await getAdminCertificateTypes(search, page, typesPerPage)
-      if (response.success) {
-        setTypes(response.data)
-        if (response.pagination) {
-          setTypeTotalPages(response.pagination.last_page)
-          setTypeTotalItems(response.pagination.total)
-        } else {
-          setTypeTotalPages(1)
-          setTypeTotalItems(response.data.length)
-        }
-      } else {
-        toast({
-          title: "Error",
-          description: response.message || "Failed to load certificate types",
-          variant: "destructive",
-        })
-      }
-    } catch (_error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      })
-    } finally {
-      setTypesLoading(false)
-    }
-  }
+  }, [typesQuery.data, c.error, c.failedToLoadCertTypes, toast])
 
   const handleDeleteCertification = async () => {
     if (!deletingCertificationId) {
       return
     }
 
-    setIsDeletingCertification(true)
     try {
-      const response = await deleteAdminCertification(deletingCertificationId)
+      const response = await deleteCertMutation.mutateAsync(deletingCertificationId)
       if (response.success) {
         toast({
-          title: "Success",
-          description: response.message || "Certification deleted successfully",
+          title: c.success,
+          description: response.message || p.certDeletedSuccess,
         })
 
-        // Check if we need to go to previous page
         const totalCertsInGroups = groupedCertifications.reduce(
           (acc, group) => acc + group.certifications.length,
           0
@@ -366,52 +386,49 @@ export default function AdminCertificateTypePage() {
         if (shouldGoToPreviousPage) {
           setCertificationsPage((prev) => Math.max(1, prev - 1))
         } else {
-          await loadAdminCertificates(certificationsPage, certificationsSearch)
+          await queryClient.invalidateQueries({ queryKey: certificationsQueryKey })
         }
       } else {
         toast({
-          title: "Error",
-          description: response.message || "Failed to delete certification",
+          title: c.error,
+          description: response.message || p.certDeleteFailed,
           variant: "destructive",
         })
       }
     } catch (_error) {
       toast({
-        title: "Error",
-        description: "An unexpected error occurred while deleting certification",
+        title: c.error,
+        description: c.unexpectedErrorDeletingCert,
         variant: "destructive",
       })
     } finally {
-      setIsDeletingCertification(false)
       setDeletingCertificationId(null)
     }
   }
 
   const deleteType = async (id: string | number) => {
-    setIsTypeSubmitting(true)
     try {
-      const response = await deleteAdminCertificateType(id)
+      const response = await deleteTypeMutation.mutateAsync(id)
       if (response.success) {
         toast({
-          title: "Success",
-          description: response.message || "Certificate type deleted successfully",
+          title: c.success,
+          description: response.message || c.certTypeDeleted,
         })
-        await loadCertificateTypes(typeCurrentPage, typeSearchQuery)
+        await queryClient.invalidateQueries({ queryKey: typesQueryKey })
       } else {
         toast({
-          title: "Error",
-          description: response.message || "Failed to delete certificate type",
+          title: c.error,
+          description: response.message || c.failedToDeleteCertType,
           variant: "destructive",
         })
       }
     } catch (_error) {
       toast({
-        title: "Error",
-        description: "An unexpected error occurred",
+        title: c.error,
+        description: c.unexpectedError,
         variant: "destructive",
       })
     } finally {
-      setIsTypeSubmitting(false)
       setDeletingTypeId(null)
     }
   }
@@ -419,8 +436,8 @@ export default function AdminCertificateTypePage() {
   const addType = async () => {
     if (!newType.name.trim() || !newType.slug.trim()) {
       toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
+        title: c.validationError,
+        description: c.fillRequiredFields,
         variant: "destructive",
       })
       return
@@ -431,9 +448,8 @@ export default function AdminCertificateTypePage() {
         ? newType.status
         : "active"
 
-    setIsTypeSubmitting(true)
     try {
-      const response = await createAdminCertificateType({
+      const response = await createTypeMutation.mutateAsync({
         name: newType.name,
         slug: newType.slug,
         status,
@@ -444,25 +460,25 @@ export default function AdminCertificateTypePage() {
         setShowAddDialog(false)
         setTypeCurrentPage(1)
         toast({
-          title: "Success",
-          description: response.message || "Certificate type created successfully",
+          title: c.success,
+          description: response.message || c.certTypeCreated,
         })
-        await loadCertificateTypes(1, typeSearchQuery)
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.adminCertificateTypes(1, TYPES_PER_PAGE, typeSearchQuery),
+        })
       } else {
         toast({
-          title: "Error",
-          description: response.message || "Failed to create certificate type",
+          title: c.error,
+          description: response.message || c.failedToCreateCertType,
           variant: "destructive",
         })
       }
     } catch (_error) {
       toast({
-        title: "Error",
-        description: "An unexpected error occurred",
+        title: c.error,
+        description: c.unexpectedError,
         variant: "destructive",
       })
-    } finally {
-      setIsTypeSubmitting(false)
     }
   }
 
@@ -479,8 +495,8 @@ export default function AdminCertificateTypePage() {
   const saveEditType = async () => {
     if (!editingType || !editType.name.trim() || !editType.slug.trim()) {
       toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
+        title: c.validationError,
+        description: c.fillRequiredFields,
         variant: "destructive",
       })
       return
@@ -491,37 +507,37 @@ export default function AdminCertificateTypePage() {
         ? editType.status
         : "active"
 
-    setIsTypeSubmitting(true)
     try {
-      const response = await updateAdminCertificateType(editingType.id, {
-        name: editType.name,
-        slug: editType.slug,
-        status,
+      const response = await updateTypeMutation.mutateAsync({
+        typeId: editingType.id,
+        input: {
+          name: editType.name,
+          slug: editType.slug,
+          status,
+        },
       })
 
       if (response.success) {
         setShowEditDialog(false)
         setEditingType(null)
         toast({
-          title: "Success",
-          description: response.message || "Certificate type updated successfully",
+          title: c.success,
+          description: response.message || c.certTypeUpdated,
         })
-        await loadCertificateTypes(typeCurrentPage, typeSearchQuery)
+        await queryClient.invalidateQueries({ queryKey: typesQueryKey })
       } else {
         toast({
-          title: "Error",
-          description: response.message || "Failed to update certificate type",
+          title: c.error,
+          description: response.message || c.failedToUpdateCertType,
           variant: "destructive",
         })
       }
     } catch (_error) {
       toast({
-        title: "Error",
-        description: "An unexpected error occurred",
+        title: c.error,
+        description: c.unexpectedError,
         variant: "destructive",
       })
-    } finally {
-      setIsTypeSubmitting(false)
     }
   }
 
@@ -574,10 +590,10 @@ export default function AdminCertificateTypePage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-serif text-2xl font-medium text-foreground">
-          Certifications Management
+          {p.title}
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Review manufacturer certificates and manage certificate types
+          {p.subtitle}
         </p>
       </div>
 
@@ -585,11 +601,11 @@ export default function AdminCertificateTypePage() {
         <TabsList className="grid w-full max-w-xl grid-cols-2">
           <TabsTrigger value="certificates" className="gap-2">
             <ShieldCheck className="h-4 w-4" />
-            All Certificates
+            {c.allCertificates}
           </TabsTrigger>
           <TabsTrigger value="types" className="gap-2">
             <Award className="h-4 w-4" />
-            Certificate Types
+            {p.certificateTypesTab}
           </TabsTrigger>
         </TabsList>
 
@@ -598,7 +614,7 @@ export default function AdminCertificateTypePage() {
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search by certificate, issuer, or manufacturer..."
+                placeholder={c.searchCertificatesPlaceholder}
                 value={certificationsSearch}
                 onChange={(e) => {
                   setCertificationsSearch(e.target.value)
@@ -610,11 +626,11 @@ export default function AdminCertificateTypePage() {
             </div>
             <Button
               variant="outline"
-              onClick={() => void loadAdminCertificates(certificationsPage, certificationsSearch)}
+              onClick={() => void certificationsQuery.refetch()}
               disabled={certificationsLoading}
             >
               <RefreshCw className="mr-2 h-4 w-4" />
-              Refresh
+              {c.refresh}
             </Button>
           </div>
 
@@ -622,14 +638,14 @@ export default function AdminCertificateTypePage() {
             <Card>
               <CardContent className="py-12 text-center">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="mt-4 text-muted-foreground">Loading submitted certificates...</p>
+                <p className="mt-4 text-muted-foreground">{c.loadingCertificates}</p>
               </CardContent>
             </Card>
           ) : (
             <>
               <div className="grid gap-4 sm:grid-cols-3">
                 <AdminStatCard
-                  title="Valid"
+                  title={p.valid}
                   value={validCount}
                   icon={CheckCircle}
                   iconClassName="text-emerald-700"
@@ -638,7 +654,7 @@ export default function AdminCertificateTypePage() {
                   contentClassName="p-4 sm:p-5"
                 />
                 <AdminStatCard
-                  title="Expiring Soon"
+                  title={p.expiringSoon}
                   value={expiringCount}
                   icon={AlertTriangle}
                   iconClassName="text-amber-700"
@@ -647,7 +663,7 @@ export default function AdminCertificateTypePage() {
                   contentClassName="p-4 sm:p-5"
                 />
                 <AdminStatCard
-                  title="Expired"
+                  title={p.expired}
                   value={expiredCount}
                   icon={AlertTriangle}
                   iconClassName="text-red-700"
@@ -672,24 +688,24 @@ export default function AdminCertificateTypePage() {
                               {group.stats.valid > 0 && (
                                 <Badge className="bg-emerald-100 text-emerald-700">
                                   <CheckCircle className="mr-1 h-3 w-3" />
-                                  {group.stats.valid} Valid
+                                  {p.validCount.replace("{count}", String(group.stats.valid))}
                                 </Badge>
                               )}
                               {group.stats.expiring > 0 && (
                                 <Badge className="bg-amber-100 text-amber-700">
                                   <AlertTriangle className="mr-1 h-3 w-3" />
-                                  {group.stats.expiring} Expiring
+                                  {p.expiringCount.replace("{count}", String(group.stats.expiring))}
                                 </Badge>
                               )}
                               {group.stats.expired > 0 && (
                                 <Badge className="bg-red-100 text-red-700">
                                   <AlertTriangle className="mr-1 h-3 w-3" />
-                                  {group.stats.expired} Expired
+                                  {p.expiredCount.replace("{count}", String(group.stats.expired))}
                                 </Badge>
                               )}
                               {group.stats.lastUpdated && (
                                 <span className="text-xs text-muted-foreground">
-                                  Last updated: {formatDisplayDate(group.stats.lastUpdated)}
+                                  {c.lastUpdatedLabel} {formatDisplayDate(group.stats.lastUpdated)}
                                 </span>
                               )}
                             </div>
@@ -713,14 +729,22 @@ export default function AdminCertificateTypePage() {
                                         <div className="min-w-0 space-y-1">
                                           <h4 className="font-semibold text-foreground truncate text-sm">
                                             {certification.certificate_type_name ||
-                                              `Certificate #${certification.certificate_type_id}`}
+                                              c.certificateFallback.replace(
+                                                "{id}",
+                                                String(certification.certificate_type_id)
+                                              )}
                                           </h4>
                                           <p className="text-xs text-muted-foreground truncate">
-                                            Issued by {certification.issuing_body || "N/A"} • {certification.certificate_number || "N/A"}
+                                            {c.issuedBy} {certification.issuing_body || c.na} •{" "}
+                                            {certification.certificate_number || c.na}
                                           </p>
                                           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-                                            <span>Issued: {formatDisplayDate(certification.issue_date)}</span>
-                                            <span>Expires: {formatDisplayDate(certification.expiry_date)}</span>
+                                            <span>
+                                              {c.issued} {formatDisplayDate(certification.issue_date)}
+                                            </span>
+                                            <span>
+                                              {c.expires} {formatDisplayDate(certification.expiry_date)}
+                                            </span>
                                           </div>
                                         </div>
                                       </div>
@@ -746,7 +770,7 @@ export default function AdminCertificateTypePage() {
                                                   className="cursor-pointer"
                                                 >
                                                   <Eye className="mr-2 h-4 w-4" />
-                                                  View Document
+                                                  {c.viewDocument}
                                                 </a>
                                               </DropdownMenuItem>
                                             )}
@@ -755,7 +779,7 @@ export default function AdminCertificateTypePage() {
                                               onClick={() => setDeletingCertificationId(certification.id)}
                                             >
                                               <Trash2 className="mr-2 h-4 w-4" />
-                                              Delete
+                                              {c.delete}
                                             </DropdownMenuItem>
                                           </DropdownMenuContent>
                                         </DropdownMenu>
@@ -776,45 +800,32 @@ export default function AdminCertificateTypePage() {
                       <FileText className="mx-auto h-12 w-12 text-muted-foreground/50" />
                       <p className="mt-4 text-muted-foreground">
                         {certificationsSearch
-                          ? "No certificates found matching your search"
-                          : "No submitted certificates found"}
+                          ? c.noCertificatesMatch
+                          : c.noSubmittedCertificates}
                       </p>
                     </CardContent>
                   </Card>
                 )}
               </div>
 
-              {certificationsTotalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 py-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCertificationsPage((prev) => Math.max(1, prev - 1))
-                    }
-                    disabled={certificationsPage === 1 || certificationsLoading}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Page {certificationsPage} of {certificationsTotalPages} ({certificationsTotalItems} total)
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCertificationsPage((prev) =>
-                        Math.min(certificationsTotalPages, prev + 1)
-                      )
-                    }
-                    disabled={
-                      certificationsPage === certificationsTotalPages || certificationsLoading
-                    }
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
+              <AdminPagination
+                page={certificationsPage}
+                meta={{
+                  current_page: certificationsPage,
+                  last_page: certificationsTotalPages,
+                  total: certificationsTotalItems,
+                }}
+                onPageChange={setCertificationsPage}
+                loading={certificationsLoading}
+                hideWhenSinglePage
+                showSummary={false}
+                align="center"
+                pageLabel={p.pageTotal
+                  .replace("{page}", String(certificationsPage))
+                  .replace("{lastPage}", String(certificationsTotalPages))
+                  .replace("{total}", String(certificationsTotalItems))}
+                className="py-4"
+              />
             </>
           )}
         </TabsContent>
@@ -822,9 +833,9 @@ export default function AdminCertificateTypePage() {
         <TabsContent value="types" className="space-y-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-foreground">Certificate Type Library</h2>
+              <h2 className="text-xl font-semibold text-foreground">{c.certificateTypeLibrary}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Add and maintain certificate types available in manufacturer forms
+                {c.certificateTypeLibraryDesc}
               </p>
             </div>
             <Button
@@ -833,7 +844,7 @@ export default function AdminCertificateTypePage() {
               disabled={typesLoading}
             >
               <Plus className="h-4 w-4" />
-              Add Certificate Type
+              {c.addCertificateType}
             </Button>
           </div>
 
@@ -841,7 +852,7 @@ export default function AdminCertificateTypePage() {
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search certificate types..."
+                placeholder={c.searchCertTypesPlaceholder}
                 value={typeSearchQuery}
                 onChange={(e) => {
                   setTypeSearchQuery(e.target.value)
@@ -853,11 +864,11 @@ export default function AdminCertificateTypePage() {
             </div>
             <Button
               variant="outline"
-              onClick={() => void loadCertificateTypes(typeCurrentPage, typeSearchQuery)}
+              onClick={() => void typesQuery.refetch()}
               disabled={typesLoading}
             >
               <RefreshCw className="mr-2 h-4 w-4" />
-              Refresh
+              {c.refresh}
             </Button>
           </div>
 
@@ -865,7 +876,7 @@ export default function AdminCertificateTypePage() {
             <Card>
               <CardContent className="py-12 text-center">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="mt-4 text-muted-foreground">Loading certificate types...</p>
+                <p className="mt-4 text-muted-foreground">{c.loadingCertTypes}</p>
               </CardContent>
             </Card>
           )}
@@ -875,12 +886,10 @@ export default function AdminCertificateTypePage() {
               <CardContent className="py-12 text-center">
                 <Award className="mx-auto h-12 w-12 text-muted-foreground/50" />
                 <p className="mt-4 text-muted-foreground">
-                  {typeSearchQuery
-                    ? "No certificate types found matching your search"
-                    : "No certificate types available"}
+                  {typeSearchQuery ? p.noCertTypesMatch : p.noCertTypesAvailable}
                 </p>
                 <Button onClick={() => setShowAddDialog(true)} className="mt-4">
-                  Add Your First Certificate Type
+                  {c.addFirstCertType}
                 </Button>
               </CardContent>
             </Card>
@@ -906,7 +915,7 @@ export default function AdminCertificateTypePage() {
                           <h3 className="line-clamp-2 font-semibold text-foreground">{type.name}</h3>
                           <div className="space-y-1 text-sm">
                             <p className="text-muted-foreground">
-                              <span className="font-semibold">Slug:</span>
+                              <span className="font-semibold">{c.slugLabel2}</span>
                             </p>
                             <div className="flex items-center gap-2">
                               <code className="flex-1 truncate rounded bg-muted px-2 py-1 text-xs font-mono text-muted-foreground">
@@ -921,8 +930,8 @@ export default function AdminCertificateTypePage() {
                                     void navigator.clipboard.writeText(type.slug)
                                   }
                                   toast({
-                                    title: "Copied",
-                                    description: "Slug copied to clipboard",
+                                    title: c.copied,
+                                    description: p.slugCopied,
                                   })
                                 }}
                               >
@@ -941,7 +950,7 @@ export default function AdminCertificateTypePage() {
                             disabled={isTypeSubmitting}
                           >
                             <Edit className="h-3 w-3" />
-                            <span className="hidden sm:inline">Edit</span>
+                            <span className="hidden sm:inline">{c.edit}</span>
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -957,14 +966,14 @@ export default function AdminCertificateTypePage() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => openEditDialog(type)}>
                                 <Edit className="mr-2 h-4 w-4" />
-                                Edit
+                                {c.edit}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive"
                                 onClick={() => setDeletingTypeId(type.id)}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
+                                {c.delete}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -975,31 +984,24 @@ export default function AdminCertificateTypePage() {
                 ))}
               </div>
 
-              {typeTotalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 py-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setTypeCurrentPage((prev) => Math.max(1, prev - 1))}
-                    disabled={typeCurrentPage === 1 || typesLoading}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Page {typeCurrentPage} of {typeTotalPages} ({typeTotalItems} total)
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setTypeCurrentPage((prev) => Math.min(typeTotalPages, prev + 1))
-                    }
-                    disabled={typeCurrentPage === typeTotalPages || typesLoading}
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
+              <AdminPagination
+                page={typeCurrentPage}
+                meta={{
+                  current_page: typeCurrentPage,
+                  last_page: typeTotalPages,
+                  total: typeTotalItems,
+                }}
+                onPageChange={setTypeCurrentPage}
+                loading={typesLoading}
+                hideWhenSinglePage
+                showSummary={false}
+                align="center"
+                pageLabel={p.pageTotal
+                  .replace("{page}", String(typeCurrentPage))
+                  .replace("{lastPage}", String(typeTotalPages))
+                  .replace("{total}", String(typeTotalItems))}
+                className="py-4"
+              />
             </>
           )}
         </TabsContent>
@@ -1016,16 +1018,14 @@ export default function AdminCertificateTypePage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Certificate Type</DialogTitle>
-            <DialogDescription>
-              Create a new certificate type for manufacturers
-            </DialogDescription>
+            <DialogTitle>{c.addCertificateType}</DialogTitle>
+            <DialogDescription>{c.createCertTypeDesc}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Certificate Name *</Label>
+              <Label>{c.certificateName} *</Label>
               <Input
-                placeholder="e.g., ISO 9001:2015"
+                placeholder={c.certNamePlaceholder}
                 value={newType.name}
                 onChange={(e) => {
                   const name = e.target.value
@@ -1036,20 +1036,20 @@ export default function AdminCertificateTypePage() {
               />
             </div>
             <div>
-              <Label>Slug *</Label>
+              <Label>{c.slugField} *</Label>
               <Input
-                placeholder="e.g., iso_9001_2015"
+                placeholder={c.slugPlaceholder}
                 value={newType.slug}
                 onChange={(e) => setNewType({ ...newType, slug: e.target.value })}
                 className="mt-2"
                 disabled={isTypeSubmitting}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Auto-generated from certificate name. You can edit when needed.
+                {p.autoGeneratedSlugEditHelp}
               </p>
             </div>
             <div>
-              <Label>Status</Label>
+              <Label>{c.status}</Label>
               <Select
                 value={newType.status}
                 onValueChange={(value) =>
@@ -1058,11 +1058,11 @@ export default function AdminCertificateTypePage() {
                 disabled={isTypeSubmitting}
               >
                 <SelectTrigger className="mt-2">
-                  <SelectValue placeholder="Select status" />
+                  <SelectValue placeholder={c.selectStatus} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="active">{c.active}</SelectItem>
+                  <SelectItem value="inactive">{c.inactive}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1073,16 +1073,16 @@ export default function AdminCertificateTypePage() {
               onClick={() => setShowAddDialog(false)}
               disabled={isTypeSubmitting}
             >
-              Cancel
+              {c.cancel}
             </Button>
             <Button onClick={addType} disabled={isTypeSubmitting}>
               {isTypeSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adding...
+                  {c.adding}
                 </>
               ) : (
-                "Add Type"
+                c.addType
               )}
             </Button>
           </DialogFooter>
@@ -1101,14 +1101,14 @@ export default function AdminCertificateTypePage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Certificate Type</DialogTitle>
-            <DialogDescription>Update certificate type details</DialogDescription>
+            <DialogTitle>{p.editCertificateType}</DialogTitle>
+            <DialogDescription>{c.editCertTypeDesc}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Certificate Name *</Label>
+              <Label>{c.certificateName} *</Label>
               <Input
-                placeholder="e.g., ISO 9001:2015"
+                placeholder={c.certNamePlaceholder}
                 value={editType.name}
                 onChange={(e) => setEditType({ ...editType, name: e.target.value })}
                 className="mt-2"
@@ -1116,9 +1116,9 @@ export default function AdminCertificateTypePage() {
               />
             </div>
             <div>
-              <Label>Slug *</Label>
+              <Label>{c.slugField} *</Label>
               <Input
-                placeholder="e.g., iso_9001_2015"
+                placeholder={c.slugPlaceholder}
                 value={editType.slug}
                 onChange={(e) => setEditType({ ...editType, slug: e.target.value })}
                 className="mt-2"
@@ -1126,7 +1126,7 @@ export default function AdminCertificateTypePage() {
               />
             </div>
             <div>
-              <Label>Status</Label>
+              <Label>{c.status}</Label>
               <Select
                 value={editType.status}
                 onValueChange={(value) =>
@@ -1135,11 +1135,11 @@ export default function AdminCertificateTypePage() {
                 disabled={isTypeSubmitting}
               >
                 <SelectTrigger className="mt-2">
-                  <SelectValue placeholder="Select status" />
+                  <SelectValue placeholder={c.selectStatus} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="active">{c.active}</SelectItem>
+                  <SelectItem value="inactive">{c.inactive}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1150,16 +1150,16 @@ export default function AdminCertificateTypePage() {
               onClick={() => setShowEditDialog(false)}
               disabled={isTypeSubmitting}
             >
-              Cancel
+              {c.cancel}
             </Button>
             <Button onClick={saveEditType} disabled={isTypeSubmitting}>
               {isTypeSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
+                  {c.saving}
                 </>
               ) : (
-                "Save Changes"
+                c.saveChanges
               )}
             </Button>
           </DialogFooter>
@@ -1169,13 +1169,11 @@ export default function AdminCertificateTypePage() {
       <AlertDialog open={deletingCertificationId !== null} onOpenChange={() => setDeletingCertificationId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Certification?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. The selected certification document will be permanently removed.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{c.deleteCertConfirm}</AlertDialogTitle>
+            <AlertDialogDescription>{p.deleteCertDocDesc}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeletingCertification}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeletingCertification}>{c.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void handleDeleteCertification()}
               disabled={isDeletingCertification}
@@ -1184,10 +1182,10 @@ export default function AdminCertificateTypePage() {
               {isDeletingCertification ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
+                  {c.deleting}
                 </>
               ) : (
-                "Delete"
+                c.delete
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1197,13 +1195,11 @@ export default function AdminCertificateTypePage() {
       <AlertDialog open={!!deletingTypeId} onOpenChange={() => setDeletingTypeId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Certificate Type?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete this certificate type.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{c.deleteCertTypeConfirm}</AlertDialogTitle>
+            <AlertDialogDescription>{p.deleteCertTypeShortDesc}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isTypeSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isTypeSubmitting}>{c.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deletingTypeId && void deleteType(deletingTypeId)}
               disabled={isTypeSubmitting}
@@ -1212,10 +1208,10 @@ export default function AdminCertificateTypePage() {
               {isTypeSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
+                  {c.deleting}
                 </>
               ) : (
-                "Delete"
+                c.delete
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

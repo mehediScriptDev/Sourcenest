@@ -359,10 +359,31 @@ export async function updateAdminCustomerSupportTicket(
     })
 
     const payload = toRecord(response.data)
+    const success = typeof payload.success === "boolean" ? payload.success : true
+    const message = typeof payload.message === "string" ? payload.message : undefined
+
+    if (!success) {
+      return {
+        success: false,
+        message,
+        data: null,
+      }
+    }
+
+    // PATCH often returns a partial ticket (no messages/user). Refetch full detail
+    // so callers don't wipe conversation state when updating status or priority.
+    const detail = await getAdminCustomerSupportTicketById(ticketId)
+    if (detail.success && detail.data) {
+      return {
+        success: true,
+        message: message ?? detail.message,
+        data: detail.data,
+      }
+    }
 
     return {
-      success: typeof payload.success === "boolean" ? payload.success : true,
-      message: typeof payload.message === "string" ? payload.message : undefined,
+      success: true,
+      message,
       data: payload.data ? normalizeTicketDetail(payload.data) : null,
     }
   } catch (error: unknown) {

@@ -1,15 +1,11 @@
 import type { Metadata, Viewport } from 'next'
 import { DM_Sans, DM_Serif_Display } from 'next/font/google'
-import Script from "next/script"
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/auth-context'
 import { I18nProvider } from '@/lib/i18n'
-import { Toaster } from '@/components/ui/toaster'
+import { AppQueryProvider } from '@/lib/query-provider'
+import { DeferredToaster } from '@/components/deferred-toaster'
 import { FavoritesProvider } from '@/lib/favorites-context'
-import { SubscriptionProvider } from '@/lib/subscription-context'
-import { OrdersProvider } from '@/lib/orders-context'
-import { MessagesProvider } from '@/lib/messages-context'
-import { RfqsProvider } from '@/lib/rfqs-context'
 import './globals.css'
 
 const dmSans = DM_Sans({ 
@@ -23,6 +19,7 @@ const dmSerif = DM_Serif_Display({
   weight: "400",
   variable: '--font-dm-serif',
   display: 'swap',
+  adjustFontFallback: true,
 });
 
 export const metadata: Metadata = {
@@ -54,23 +51,16 @@ export default function RootLayout({
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning className={`${dmSans.variable} ${dmSerif.variable}`}>
       <body className="font-sans antialiased">
-        <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
         <I18nProvider>
-          <AuthProvider>
-            <SubscriptionProvider>
+          <AppQueryProvider>
+            <AuthProvider>
               <FavoritesProvider>
-                <RfqsProvider>
-                  <OrdersProvider>
-                    <MessagesProvider>
-                      {children}
-                    </MessagesProvider>
-                  </OrdersProvider>
-                </RfqsProvider>
+                {children}
               </FavoritesProvider>
-            </SubscriptionProvider>
-          </AuthProvider>
+            </AuthProvider>
+          </AppQueryProvider>
         </I18nProvider>
-        <Toaster />
+        <DeferredToaster />
         <Analytics />
       </body>
     </html>

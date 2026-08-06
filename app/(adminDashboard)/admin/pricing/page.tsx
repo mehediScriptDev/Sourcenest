@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useMemo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -43,6 +44,8 @@ import {
   Search
 } from "lucide-react"
 import { fetchPlans, createPlan, updatePlan, deletePlan as deleteApiPlan, fetchPlanFeatures, togglePopularPlan, updatePlanFeature, type PricingPlan as BackendPricingPlan, type PlanFeature } from "@/lib/api/admin-pricing"
+import { queryKeys } from "@/lib/query-keys"
+import { useTranslation } from "@/lib/i18n"
 
 interface PricingFeature {
   rowId: string
@@ -116,7 +119,18 @@ function EditableFeatureRow(props: {
   onChange: (feature: PricingFeature) => void
   disabled?: boolean
 }) {
+  const { t } = useTranslation()
+  const c = t.admin.common
+  const p = t.admin.pages.pricing
   const [isOpen, setIsOpen] = useState(false)
+
+  const valueDetail = props.feature.inputType === "boolean"
+    ? p.booleanValueDetail
+        .replace("{id}", String(props.feature.id))
+        .replace("{value}", props.feature.value === "1" ? "1" : "0")
+    : props.feature.value
+      ? p.textValueDetail.replace("{value}", props.feature.value)
+      : c.textValueEmpty
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -128,15 +142,13 @@ function EditableFeatureRow(props: {
             </Button>
           </CollapsibleTrigger>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{props.feature.label || `Feature ${props.feature.id}`}</p>
+            <p className="truncate text-sm font-medium">{props.feature.label || c.featureId.replace("{id}", String(props.feature.id))}</p>
             <p className="text-xs text-muted-foreground">
-              ID {props.feature.id} · {props.feature.inputType === "boolean"
-                ? `Boolean value: ${props.feature.value === "1" ? "1" : "0"}`
-                : `Text value: ${props.feature.value || "empty"}`}
+              {valueDetail}
             </p>
           </div>
           <Badge variant="secondary" className="shrink-0">
-            {props.feature.inputType === "boolean" ? (props.feature.value === "1" ? "Yes" : "No") : "Text"}
+            {props.feature.inputType === "boolean" ? (props.feature.value === "1" ? c.yes : c.no) : c.textLabel}
           </Badge>
           <Button
             variant="ghost"
@@ -151,7 +163,7 @@ function EditableFeatureRow(props: {
 
         <CollapsibleContent className="px-2 pb-3 space-y-3">
           <div className="space-y-2">
-            <Label>Custom Display Label</Label>
+            <Label>{c.customDisplayLabel}</Label>
             <Input
               type="text"
               value={props.feature.label || ""}
@@ -161,14 +173,14 @@ function EditableFeatureRow(props: {
                   label: event.target.value,
                 })
               }
-              placeholder="e.g. Custom feature text or limit description"
+              placeholder={p.customFeaturePlaceholder}
               disabled={props.disabled}
             />
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Type</Label>
+              <Label>{c.typeLabel}</Label>
               <Select
                 value={props.feature.inputType}
                 onValueChange={(value) =>
@@ -184,18 +196,18 @@ function EditableFeatureRow(props: {
                 disabled={props.disabled}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
+                  <SelectValue placeholder={c.selectType} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="boolean">Boolean</SelectItem>
-                  <SelectItem value="text">Text</SelectItem>
+                  <SelectItem value="boolean">{c.booleanType}</SelectItem>
+                  <SelectItem value="text">{c.textType}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {props.feature.inputType === "boolean" ? (
               <div className="space-y-2">
-                <Label>Value</Label>
+                <Label>{c.valueLabel2}</Label>
                 <Select
                   value={props.feature.value === "1" ? "yes" : "no"}
                   onValueChange={(value) =>
@@ -207,17 +219,17 @@ function EditableFeatureRow(props: {
                   disabled={props.disabled}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose yes or no" />
+                    <SelectValue placeholder={c.chooseYesNo} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="yes">Yes</SelectItem>
-                    <SelectItem value="no">No</SelectItem>
+                    <SelectItem value="yes">{c.yes}</SelectItem>
+                    <SelectItem value="no">{c.no}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             ) : (
               <div className="space-y-2 md:col-span-2">
-                <Label>Text Value</Label>
+                <Label>{c.textValueLabel}</Label>
                 <Input
                   type="number"
                   min="0"
@@ -228,7 +240,7 @@ function EditableFeatureRow(props: {
                       value: event.target.value.replace(/[^0-9]/g, ""),
                     })
                   }
-                  placeholder="Enter numeric value"
+                  placeholder={c.enterNumericValue}
                   disabled={props.disabled}
                 />
               </div>
@@ -241,8 +253,34 @@ function EditableFeatureRow(props: {
 }
 
 export default function AdminPricingPage() {
-  const [plans, setPlans] = useState<PricingPlan[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const { t } = useTranslation()
+  const p = t.admin.pages.pricing
+  const c = t.admin.common
+  const queryClient = useQueryClient()
+
+  const plansQuery = useQuery({
+    queryKey: queryKeys.adminPricingPlans(),
+    queryFn: fetchPlans,
+  })
+
+  const featuresQuery = useQuery({
+    queryKey: queryKeys.adminPlanFeatures(),
+    queryFn: fetchPlanFeatures,
+  })
+
+  const availableFeatures = featuresQuery.data ?? []
+  const plans = useMemo(() => {
+    const backendPlans = plansQuery.data ?? []
+    const features = featuresQuery.data ?? []
+    return backendPlans.map((plan) => transformBackendPlan(plan, features))
+  }, [plansQuery.data, featuresQuery.data])
+
+  const isLoading = plansQuery.isLoading || featuresQuery.isLoading
+
+  const refreshPricingPlans = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.adminPricingPlans() })
+  }
+
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
@@ -252,7 +290,6 @@ export default function AdminPricingPage() {
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
-  const [availableFeatures, setAvailableFeatures] = useState<PlanFeature[]>([])
   const [featureCatalogFilter, setFeatureCatalogFilter] = useState("")
   const [featureSearchFilter, setFeatureSearchFilter] = useState("")
   const [showFeatureSelector, setShowFeatureSelector] = useState<"add" | "edit" | null>(null)
@@ -264,27 +301,6 @@ export default function AdminPricingPage() {
   const [togglingPopularPlanId, setTogglingPopularPlanId] = useState<string | null>(null)
   const [isFeatureCatalogOpen, setIsFeatureCatalogOpen] = useState(false)
 
-  useEffect(() => {
-    const loadPlans = async () => {
-      setIsLoading(true)
-      try {
-        const [backendPlans, features] = await Promise.all([
-          fetchPlans(),
-          fetchPlanFeatures()
-        ])
-        const transformedPlans = backendPlans.map((plan) => transformBackendPlan(plan, features))
-        setPlans(transformedPlans)
-        setAvailableFeatures(features)
-      } catch (error) {
-        console.error("Error loading plans:", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadPlans()
-  }, [])
-  
   const [editForm, setEditForm] = useState({
     name: "",
     description: "",
@@ -333,7 +349,7 @@ export default function AdminPricingPage() {
     const trimmedName = featureForm.name.trim()
 
     if (!trimmedName) {
-      setFeatureUpdateError("Feature name is required")
+      setFeatureUpdateError(c.featureNameRequired)
       return
     }
 
@@ -346,19 +362,22 @@ export default function AdminPricingPage() {
       })
 
       if (result.success) {
-        setAvailableFeatures(prev => prev.map(feature => (
-          feature.id === editingFeature.id
-            ? result.feature || { ...feature, name: trimmedName }
-            : feature
-        )))
+        queryClient.setQueryData(queryKeys.adminPlanFeatures(), (previous: PlanFeature[] | undefined) => {
+          if (!previous) return previous
+          return previous.map((feature) =>
+            feature.id === editingFeature.id
+              ? result.feature || { ...feature, name: trimmedName }
+              : feature
+          )
+        })
         setShowFeatureEditDialog(false)
         setEditingFeature(null)
       } else {
-        setFeatureUpdateError(result.message || "Failed to update feature")
+        setFeatureUpdateError(result.message || p.failedToUpdateFeature)
       }
     } catch (error) {
       console.error("Error updating feature:", error)
-      setFeatureUpdateError("An unexpected error occurred")
+      setFeatureUpdateError(c.unexpectedError)
     } finally {
       setIsFeatureUpdating(false)
     }
@@ -375,7 +394,7 @@ export default function AdminPricingPage() {
 
       const hasEmptyTextFeature = editForm.features.some(feature => feature.inputType === "text" && !feature.value.trim())
       if (hasEmptyTextFeature) {
-        setUpdateError("Text features need a text value before saving.")
+        setUpdateError(c.textFeatureValueRequired)
         setIsUpdating(false)
         return
       }
@@ -396,28 +415,15 @@ export default function AdminPricingPage() {
       const result = await updatePlan(editingPlan.id, payload)
 
       if (result.success) {
-        // Update local state
-        setPlans(prev => {
-          const updatedPlans = prev.map(p => 
-            p.id === editingPlan.id 
-              ? { ...p, ...editForm }
-              : p
-          )
-          if (editForm.highlighted) {
-            return updatedPlans.map(p => 
-              p.id === editingPlan.id ? p : { ...p, highlighted: false }
-            )
-          }
-          return updatedPlans
-        })
+        await refreshPricingPlans()
         setShowEditDialog(false)
         setEditingPlan(null)
       } else {
-        setUpdateError(result.message || "Failed to update plan")
+        setUpdateError(result.message || c.failedToUpdatePlan)
       }
     } catch (error) {
       console.error("Error updating plan:", error)
-      setUpdateError("An unexpected error occurred")
+      setUpdateError(c.unexpectedError)
     } finally {
       setIsUpdating(false)
     }
@@ -448,10 +454,7 @@ export default function AdminPricingPage() {
       const result = await updatePlan(planId, payload)
 
       if (result.success) {
-        // Update local state
-        setPlans(prev => prev.map(p => 
-          p.id === planId ? { ...p, active: newActiveStatus } : p
-        ))
+        await refreshPricingPlans()
       } else {
         console.error("Failed to toggle plan status:", result.message)
       }
@@ -468,12 +471,7 @@ export default function AdminPricingPage() {
       const result = await togglePopularPlan(planId)
       
       if (result.success) {
-        // Update local state - ensure only one plan is highlighted
-        const plan = plans.find(p => p.id === planId)
-        setPlans(prev => prev.map(p => ({
-          ...p,
-          highlighted: p.id === planId ? !plan?.highlighted : false
-        })))
+        await refreshPricingPlans()
       } else {
         console.error("Failed to toggle plan popular status:", result.message)
       }
@@ -519,7 +517,7 @@ export default function AdminPricingPage() {
 
   const addNewPlan = async () => {
     if (!editForm.name.trim()) {
-      setCreateError("Plan name is required")
+      setCreateError(c.planNameRequired)
       return
     }
 
@@ -529,7 +527,7 @@ export default function AdminPricingPage() {
     try {
       const hasEmptyTextFeature = editForm.features.some(feature => feature.inputType === "text" && !feature.value.trim())
       if (hasEmptyTextFeature) {
-        setCreateError("Text features need a text value before creating the plan.")
+        setCreateError(p.textFeaturesCreateError)
         setIsCreating(false)
         return
       }
@@ -539,8 +537,8 @@ export default function AdminPricingPage() {
       // Prepare the payload
       const payload = {
         name: editForm.name,
-        description: editForm.description || "Plan description",
-        button_text: editForm.buttonText || "Get Started",
+        description: editForm.description || c.planDescriptionDefault,
+        button_text: editForm.buttonText || c.getStarted,
         monthly_price: editForm.monthlyPrice,
         yearly_price: editForm.yearlyPrice,
         currency_code: "USD",
@@ -551,24 +549,7 @@ export default function AdminPricingPage() {
       const result = await createPlan(payload)
 
       if (result.success) {
-        // If API returns the created plan, use it; otherwise create locally
-        if (result.plan) {
-          const newPlan = transformBackendPlan(result.plan)
-          setPlans(prev => [...prev, newPlan])
-        } else {
-          const newPlan: PricingPlan = {
-            id: `plan-${Date.now()}`,
-            name: editForm.name,
-            description: editForm.description,
-            monthlyPrice: editForm.monthlyPrice,
-            yearlyPrice: editForm.yearlyPrice,
-            features: editForm.features,
-            highlighted: false,
-            buttonText: editForm.buttonText,
-            active: true
-          }
-          setPlans(prev => [...prev, newPlan])
-        }
+        await refreshPricingPlans()
 
         // Reset form
         setShowAddDialog(false)
@@ -583,11 +564,11 @@ export default function AdminPricingPage() {
           features: []
         })
       } else {
-        setCreateError(result.message || "Failed to create plan")
+        setCreateError(result.message || c.failedToCreatePlan)
       }
     } catch (error) {
       console.error("Error creating plan:", error)
-      setCreateError("An unexpected error occurred")
+      setCreateError(c.unexpectedError)
     } finally {
       setIsCreating(false)
     }
@@ -598,7 +579,7 @@ export default function AdminPricingPage() {
     try {
       const result = await deleteApiPlan(planId)
       if (result.success) {
-        setPlans(prev => prev.filter(p => p.id !== planId))
+        await refreshPricingPlans()
       }
     } catch (error) {
       console.error("Error deleting plan:", error)
@@ -611,15 +592,15 @@ export default function AdminPricingPage() {
     <div className="space-y-6">
       {isLoading && (
         <div className="flex items-center justify-center py-12">
-          <div className="text-muted-foreground">Loading pricing plans...</div>
+          <div className="text-muted-foreground">{c.loadingPricingPlans}</div>
         </div>
       )}
       {!isLoading && (
         <>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Pricing Management</h1>
-          <p className="text-muted-foreground">Manage subscription plans and pricing</p>
+          <h1 className="text-2xl font-bold text-foreground">{p.title}</h1>
+          <p className="text-muted-foreground">{p.subtitle}</p>
         </div>
         <div className="flex gap-3">
           <Button onClick={() => {
@@ -628,7 +609,7 @@ export default function AdminPricingPage() {
               description: "",
               monthlyPrice: 0,
               yearlyPrice: 0,
-              buttonText: "Get Started",
+              buttonText: c.getStarted,
               highlighted: false,
               active: true,
               features: []
@@ -636,7 +617,7 @@ export default function AdminPricingPage() {
             setShowAddDialog(true)
           }}>
             <Plus className="mr-2 h-4 w-4" />
-            Add Plan
+            {c.addPlan}
           </Button>
         </div>
       </div>
@@ -644,26 +625,26 @@ export default function AdminPricingPage() {
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-4">
         <AdminStatCard
-          title="Total Plans"
+          title={p.totalPlans}
           value={plans.length}
           layout="vertical"
           contentClassName="pt-6 pb-6 px-6"
         />
         <AdminStatCard
-          title="Active Plans"
+          title={p.activePlans}
           value={plans.filter(p => p.active).length}
           valueClassName="text-emerald-600"
           layout="vertical"
           contentClassName="pt-6 pb-6 px-6"
         />
         <AdminStatCard
-          title="Highest Monthly"
+          title={p.highestMonthly}
           value={`$${Math.max(...plans.map(p => p.monthlyPrice), 0)}`}
           layout="vertical"
           contentClassName="pt-6 pb-6 px-6"
         />
         <AdminStatCard
-          title="Highest Yearly"
+          title={p.highestYearly}
           value={`$${Math.max(...plans.map(p => p.yearlyPrice), 0)}`}
           layout="vertical"
           contentClassName="pt-6 pb-6 px-6"
@@ -679,16 +660,16 @@ export default function AdminPricingPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Package className="h-5 w-5" />
-                    Feature Catalog
+                    {c.featureCatalog}
                   </CardTitle>
                   <CardDescription>
-                    Manage the feature records used across pricing plans and selectors.
+                    {p.featureCatalogDescAlt}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{availableFeatures.length} features</Badge>
+                  <Badge variant="secondary">{c.featuresCount.replace("{count}", String(availableFeatures.length))}</Badge>
                   <span className="text-xs text-muted-foreground">
-                    {isFeatureCatalogOpen ? "Hide" : "Show"}
+                    {isFeatureCatalogOpen ? c.hideLabel : c.showLabel}
                   </span>
                 </div>
               </button>
@@ -699,7 +680,7 @@ export default function AdminPricingPage() {
               <div className="relative max-w-md">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search features by name or key..."
+                  placeholder={c.searchFeaturesPlaceholder}
                   value={featureCatalogFilter}
                   onChange={(e) => setFeatureCatalogFilter(e.target.value)}
                   className="pl-9"
@@ -738,7 +719,7 @@ export default function AdminPricingPage() {
                   return feature.name.toLowerCase().includes(query) || feature.key.toLowerCase().includes(query)
                 }).length === 0 && (
                   <div className="col-span-full rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                    {featureCatalogFilter ? "No features match your search." : "No features loaded from the backend."}
+                    {featureCatalogFilter ? c.noFeaturesMatch : c.noFeaturesLoaded}
                   </div>
                 )}
               </div>
@@ -756,7 +737,7 @@ export default function AdminPricingPage() {
           >
             {plan.highlighted && (
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="bg-primary">Most Popular</Badge>
+                <Badge className="bg-primary">{p.mostPopular}</Badge>
               </div>
             )}
             <CardHeader>
@@ -764,7 +745,7 @@ export default function AdminPricingPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     {plan.name}
-                    {!plan.active && <Badge variant="secondary">Inactive</Badge>}
+                    {!plan.active && <Badge variant="secondary">{c.inactive}</Badge>}
                   </CardTitle>
                   <CardDescription>{plan.description}</CardDescription>
                 </div>
@@ -797,10 +778,12 @@ export default function AdminPricingPage() {
               <div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-3xl font-bold">${plan.monthlyPrice}</span>
-                  <span className="text-muted-foreground">/month</span>
+                  <span className="text-muted-foreground">{c.perMonth}</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  or ${plan.yearlyPrice}/year (save {plan.monthlyPrice > 0 ? Math.round((1 - plan.yearlyPrice / (plan.monthlyPrice * 12)) * 100) : 0}%)
+                  {c.orYearlySave
+                    .replace("{price}", String(plan.yearlyPrice))
+                    .replace("{percent}", String(plan.monthlyPrice > 0 ? Math.round((1 - plan.yearlyPrice / (plan.monthlyPrice * 12)) * 100) : 0))}
                 </p>
               </div>
 
@@ -813,13 +796,13 @@ export default function AdminPricingPage() {
                       <X className="h-4 w-4 text-muted-foreground" />
                     )}
                     <span className={!isFeatureEnabled(feature) ? "text-muted-foreground" : ""}>
-                      {feature.label || (feature.inputType === "boolean" ? (feature.value === "1" ? "Yes" : "No") : feature.value)}
+                      {feature.label || (feature.inputType === "boolean" ? (feature.value === "1" ? c.yes : c.no) : feature.value)}
                     </span>
                   </div>
                 ))}
                 {plan.features.length > 5 && (
                   <p className="text-sm text-muted-foreground">
-                    +{plan.features.length - 5} more features
+                    {c.moreFeatures.replace("{count}", String(plan.features.length - 5))}
                   </p>
                 )}
               </div>
@@ -832,7 +815,7 @@ export default function AdminPricingPage() {
                     disabled={togglingPlanId === plan.id || isDeleting === plan.id}
                   />
                   <span className="text-sm">
-                    {togglingPlanId === plan.id ? "Updating..." : "Active"}
+                    {togglingPlanId === plan.id ? c.updating : c.active}
                   </span>
                 </div>
                 <Button 
@@ -844,9 +827,9 @@ export default function AdminPricingPage() {
                   {togglingPopularPlanId === plan.id ? (
                     <>
                       <div className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      Updating...
+                      {c.updating}
                     </>
-                  ) : plan.highlighted ? "Remove Highlight" : "Set as Popular"}
+                  ) : plan.highlighted ? c.removeHighlight : c.setAsPopular}
                 </Button>
               </div>
             </CardContent>
@@ -856,22 +839,24 @@ export default function AdminPricingPage() {
 
       {/* Edit Plan Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Plan: {editingPlan?.name}</DialogTitle>
-            <DialogDescription>
-              Update plan details and pricing
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6">
+        <DialogContent className="max-w-2xl flex flex-col max-h-[95dvh] gap-0 p-0 overflow-hidden">
+          <div className="p-6 pb-4">
+            <DialogHeader>
+              <DialogTitle>{p.editPlanTitle.replace("{name}", editingPlan?.name ?? "")}</DialogTitle>
+              <DialogDescription>
+                {p.updatePlanDesc}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="flex-1 overflow-y-auto px-6 py-2 space-y-6">
             {updateError && (
               <div className="rounded-md bg-red-50 p-4 text-sm text-red-700 border border-red-200">
                 {updateError}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label>Plan Name</Label>
+                <Label>{c.planName}</Label>
                 <Input 
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
@@ -880,7 +865,7 @@ export default function AdminPricingPage() {
                 />
               </div>
               <div>
-                <Label>Button Text</Label>
+                <Label>{c.buttonTextLabel}</Label>
                 <Input 
                   value={editForm.buttonText}
                   onChange={(e) => setEditForm({ ...editForm, buttonText: e.target.value })}
@@ -891,7 +876,7 @@ export default function AdminPricingPage() {
             </div>
 
             <div>
-              <Label>Description</Label>
+              <Label>{c.description}</Label>
               <Textarea 
                 value={editForm.description}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
@@ -901,9 +886,9 @@ export default function AdminPricingPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label>Monthly Price ($)</Label>
+                <Label>{c.monthlyPrice}</Label>
                 <Input 
                   type="number"
                   min="0"
@@ -914,7 +899,7 @@ export default function AdminPricingPage() {
                 />
               </div>
               <div>
-                <Label>Yearly Price ($)</Label>
+                <Label>{c.yearlyPrice}</Label>
                 <Input 
                   type="number"
                   min="0"
@@ -927,10 +912,10 @@ export default function AdminPricingPage() {
             </div>
 
             <div>
-              <Label>Features</Label>
+              <Label>{c.featuresLabel}</Label>
               <div className="mt-2 space-y-2 max-h-64 overflow-y-auto border border-border rounded-lg p-2">
                 {editForm.features.length === 0 ? (
-                  <p className="text-sm text-muted-foreground p-2">No features selected. Click "Add Feature" to add.</p>
+                  <p className="text-sm text-muted-foreground p-2">{p.noFeaturesSelected}</p>
                 ) : (
                   editForm.features.map((feature) => (
                     <EditableFeatureRow
@@ -950,7 +935,7 @@ export default function AdminPricingPage() {
                 variant="outline"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Feature
+                {p.addFeature}
               </Button>
             </div>
 
@@ -962,7 +947,7 @@ export default function AdminPricingPage() {
                   onCheckedChange={(checked) => setEditForm({ ...editForm, active: checked })}
                   disabled={isUpdating}
                 />
-                <Label htmlFor="edit-plan-active" className="cursor-pointer">Active Plan Status</Label>
+                <Label htmlFor="edit-plan-active" className="cursor-pointer">{c.activePlanStatus}</Label>
               </div>
               <div className="flex items-center gap-2">
                 <Switch 
@@ -971,11 +956,12 @@ export default function AdminPricingPage() {
                   onCheckedChange={(checked) => setEditForm({ ...editForm, highlighted: checked })}
                   disabled={isUpdating}
                 />
-                <Label htmlFor="edit-plan-popular" className="cursor-pointer">Mark as Most Popular</Label>
+                <Label htmlFor="edit-plan-popular" className="cursor-pointer">{c.markMostPopular}</Label>
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <div className="p-6 pt-4 mt-auto border-t bg-card">
+            <DialogFooter>
             <Button 
               variant="outline" 
               onClick={() => {
@@ -984,78 +970,81 @@ export default function AdminPricingPage() {
               }}
               disabled={isUpdating}
             >
-              Cancel
+              {c.cancel}
             </Button>
             <Button onClick={savePlan} disabled={isUpdating}>
               {isUpdating ? (
                 <>
                   <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
-                  Saving...
+                  {c.saving}
                 </>
               ) : (
                 <>
                   <Save className="mr-2 h-4 w-4" />
-                  Save Changes
+                  {c.saveChanges}
                 </>
               )}
             </Button>
-          </DialogFooter>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Add Plan Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add New Plan</DialogTitle>
-            <DialogDescription>
-              Create a new subscription plan
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6">
+        <DialogContent className="max-w-2xl flex flex-col max-h-[95dvh] gap-0 p-0 overflow-hidden">
+          <div className="p-6 pb-4">
+            <DialogHeader>
+              <DialogTitle>{c.addNewPlan}</DialogTitle>
+              <DialogDescription>
+                {c.createPlanDesc}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="flex-1 overflow-y-auto px-6 py-2 space-y-6">
             {createError && (
               <div className="rounded-md bg-red-50 p-4 text-sm text-red-700 border border-red-200">
                 {createError}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label>Plan Name</Label>
+                <Label>{c.planName}</Label>
                 <Input 
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                   className="mt-2"
-                  placeholder="e.g., Business"
+                  placeholder={p.planNamePlaceholder}
                   disabled={isCreating}
                 />
               </div>
               <div>
-                <Label>Button Text</Label>
+                <Label>{c.buttonTextLabel}</Label>
                 <Input 
                   value={editForm.buttonText}
                   onChange={(e) => setEditForm({ ...editForm, buttonText: e.target.value })}
                   className="mt-2"
-                  placeholder="e.g., Get Started"
+                  placeholder={p.buttonTextPlaceholder}
                   disabled={isCreating}
                 />
               </div>
             </div>
 
             <div>
-              <Label>Description</Label>
+              <Label>{c.description}</Label>
               <Textarea 
                 value={editForm.description}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                 className="mt-2"
                 rows={2}
-                placeholder="Brief description of this plan"
+                placeholder={p.descriptionPlaceholder}
                 disabled={isCreating}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label>Monthly Price ($)</Label>
+                <Label>{c.monthlyPrice}</Label>
                 <Input 
                   type="number"
                   min="0"
@@ -1066,7 +1055,7 @@ export default function AdminPricingPage() {
                 />
               </div>
               <div>
-                <Label>Yearly Price ($)</Label>
+                <Label>{c.yearlyPrice}</Label>
                 <Input 
                   type="number"
                   min="0"
@@ -1079,10 +1068,10 @@ export default function AdminPricingPage() {
             </div>
 
             <div>
-              <Label>Features</Label>
+              <Label>{c.featuresLabel}</Label>
               <div className="mt-2 space-y-2 max-h-64 overflow-y-auto border border-border rounded-lg p-2">
                 {editForm.features.length === 0 ? (
-                  <p className="text-sm text-muted-foreground p-2">No features selected. Click "Add Feature" to add.</p>
+                  <p className="text-sm text-muted-foreground p-2">{p.noFeaturesSelected}</p>
                 ) : (
                   editForm.features.map((feature) => (
                     <EditableFeatureRow
@@ -1102,11 +1091,12 @@ export default function AdminPricingPage() {
                 variant="outline"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Feature
+                {p.addFeature}
               </Button>
             </div>
           </div>
-          <DialogFooter>
+          <div className="p-6 pt-4 mt-auto border-t bg-card">
+            <DialogFooter>
             <Button 
               variant="outline" 
               onClick={() => {
@@ -1115,22 +1105,23 @@ export default function AdminPricingPage() {
               }}
               disabled={isCreating}
             >
-              Cancel
+              {c.cancel}
             </Button>
             <Button onClick={addNewPlan} disabled={isCreating}>
               {isCreating ? (
                 <>
                   <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
-                  Creating...
+                  {c.creating}
                 </>
               ) : (
                 <>
                   <Plus className="mr-2 h-4 w-4" />
-                  Create Plan
+                  {c.createPlan}
                 </>
               )}
             </Button>
-          </DialogFooter>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1138,9 +1129,9 @@ export default function AdminPricingPage() {
       <Dialog open={showFeatureEditDialog} onOpenChange={setShowFeatureEditDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit Feature</DialogTitle>
+            <DialogTitle>{p.editFeatureDialog}</DialogTitle>
             <DialogDescription>
-              Update the feature label used by plan selectors.
+              {p.updateFeatureLabelDesc}
             </DialogDescription>
           </DialogHeader>
 
@@ -1152,7 +1143,7 @@ export default function AdminPricingPage() {
             )}
 
             <div>
-              <Label>Feature Name</Label>
+              <Label>{p.featureName}</Label>
               <Input
                 value={featureForm.name}
                 onChange={(e) => setFeatureForm((prev) => ({ ...prev, name: e.target.value }))}
@@ -1162,7 +1153,7 @@ export default function AdminPricingPage() {
             </div>
 
             <div>
-              <Label>Feature Key</Label>
+              <Label>{p.featureKey}</Label>
               <Input
                 value={editingFeature?.key || ""}
                 className="mt-2"
@@ -1181,18 +1172,18 @@ export default function AdminPricingPage() {
               }}
               disabled={isFeatureUpdating}
             >
-              Cancel
+              {c.cancel}
             </Button>
             <Button onClick={saveFeature} disabled={isFeatureUpdating}>
               {isFeatureUpdating ? (
                 <>
                   <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
-                  Saving...
+                  {c.saving}
                 </>
               ) : (
                 <>
                   <Save className="mr-2 h-4 w-4" />
-                  Save Feature
+                  {c.saveFeature}
                 </>
               )}
             </Button>
@@ -1204,16 +1195,16 @@ export default function AdminPricingPage() {
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Pricing Page Preview</DialogTitle>
+            <DialogTitle>{p.pricingPreview}</DialogTitle>
             <DialogDescription>
-              How the pricing page will appear to users
+              {c.previewPricingDesc}
             </DialogDescription>
           </DialogHeader>
           <div className="py-8">
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold">Simple, Transparent Pricing</h2>
+              <h2 className="text-3xl font-bold">{p.previewTitle}</h2>
               <p className="text-muted-foreground mt-2">
-                Choose the plan that fits your business needs
+                {c.choosePlanDesc}
               </p>
             </div>
             <div className="grid gap-6 md:grid-cols-3">
@@ -1223,13 +1214,13 @@ export default function AdminPricingPage() {
                   className={`rounded-xl border p-6 ${plan.highlighted ? 'border-primary ring-2 ring-primary' : 'border-border'}`}
                 >
                   {plan.highlighted && (
-                    <Badge className="mb-4 bg-primary">Most Popular</Badge>
+                    <Badge className="mb-4 bg-primary">{p.mostPopular}</Badge>
                   )}
                   <h3 className="text-xl font-semibold">{plan.name}</h3>
                   <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
                   <div className="mt-4">
                     <span className="text-4xl font-bold">${plan.monthlyPrice}</span>
-                    <span className="text-muted-foreground">/month</span>
+                    <span className="text-muted-foreground">{c.perMonth}</span>
                   </div>
                   <Button className={`w-full mt-6 ${plan.highlighted ? '' : 'variant-outline'}`}>
                     {plan.buttonText}
@@ -1243,7 +1234,7 @@ export default function AdminPricingPage() {
                           <X className="h-4 w-4 text-muted-foreground" />
                         )}
                         <span className={!isFeatureEnabled(feature) ? "text-muted-foreground" : ""}>
-                          {feature.label || (feature.inputType === "boolean" ? (feature.value === "1" ? "Yes" : "No") : feature.value)}
+                          {feature.label || (feature.inputType === "boolean" ? (feature.value === "1" ? c.yes : c.no) : feature.value)}
                         </span>
                       </div>
                     ))}
@@ -1259,16 +1250,16 @@ export default function AdminPricingPage() {
       <Dialog open={showFeatureSelector !== null} onOpenChange={(open) => !open && setShowFeatureSelector(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Select Features</DialogTitle>
+            <DialogTitle>{c.selectFeaturesTitle}</DialogTitle>
             <DialogDescription>
-              Choose from available features ({availableFeatures.length} total)
+              {c.selectFeaturesDesc.replace("{count}", String(availableFeatures.length))}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input 
-                placeholder="Search features..."
+                placeholder={c.searchFeaturesShort}
                 value={featureSearchFilter}
                 onChange={(e) => setFeatureSearchFilter(e.target.value)}
                 className="pl-9"
@@ -1299,7 +1290,7 @@ export default function AdminPricingPage() {
                 f.name.toLowerCase().includes(featureSearchFilter.toLowerCase())
               ).length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  {featureSearchFilter ? "No features match your search" : "All features are already added"}
+                  {featureSearchFilter ? p.noFeaturesMatchSearch : c.allFeaturesAdded}
                 </p>
               )}
             </div>
@@ -1312,7 +1303,7 @@ export default function AdminPricingPage() {
                 setFeatureSearchFilter("")
               }}
             >
-              Done
+              {p.done}
             </Button>
           </DialogFooter>
         </DialogContent>

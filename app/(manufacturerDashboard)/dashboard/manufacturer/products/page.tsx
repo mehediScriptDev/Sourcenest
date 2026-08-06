@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Image from "next/image"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -39,6 +40,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useTranslation } from "@/lib/i18n"
 import {
   Dialog,
   DialogContent,
@@ -68,6 +70,7 @@ import {
   duplicateManufacturerProductToDraft,
   buildManufacturerProductUpdateFormData,
 } from "@/lib/api/manufacturer-products"
+import { queryKeys } from "@/lib/query-keys"
 import type {
   ManufacturerProductListItem,
   ManufacturerProductDetail,
@@ -110,26 +113,101 @@ function listItemFromDetail(d: ManufacturerProductDetail): ManufacturerProductLi
 }
 
 export default function ManufacturerProductsPage() {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const getStatusLabel = (status: ManufacturerProductStatus) => {
+    switch (status) {
+      case "active":
+        return t.mfg.subscription.active
+      case "draft":
+        return t.mfg.products.draft || "Draft"
+      case "inactive":
+        return t.mfg.products.inactive || "Inactive"
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1)
+    }
+  }
   const [searchInput, setSearchInput] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | ManufacturerProductStatus>("all")
   const [page, setPage] = useState(1)
 
-  const [productsList, setProductsList] = useState<ManufacturerProductListItem[]>([])
-  const [meta, setMeta] = useState<ManufacturerProductMeta | null>(null)
-  const [stats, setStats] = useState<ManufacturerProductStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const productsQueryKey = queryKeys.manufacturerProducts(page, debouncedSearch, statusFilter)
+
+  const productsQuery = useQuery({
+    queryKey: productsQueryKey,
+    queryFn: () =>
+      getManufacturerProducts({
+        page,
+        per_page: 10,
+        search: debouncedSearch || undefined,
+        status: statusFilter,
+      }),
+    placeholderData: (previousData) => previousData,
+  })
+
+  const statsQuery = useQuery({
+    queryKey: queryKeys.manufacturerProductStats(),
+    queryFn: getManufacturerProductStats,
+  })
+
+  const productsList = productsQuery.data?.success ? productsQuery.data.data : []
+  const meta = productsQuery.data?.success ? productsQuery.data.meta : null
+  const stats = statsQuery.data?.success ? statsQuery.data.data : null
+  const loading = productsQuery.isLoading && !productsQuery.data
+  const error =
+    productsQuery.data?.success === false
+      ? productsQuery.data.message ?? "Failed to load products."
+      : null
 
   const [editingRow, setEditingRow] = useState<ManufacturerProductListItem | null>(null)
-  const [editDetail, setEditDetail] = useState<ManufacturerProductDetail | null>(null)
-  const [editDetailLoading, setEditDetailLoading] = useState(false)
+  const [editDetailOverride, setEditDetailOverride] = useState<ManufacturerProductDetail | null>(null)
   const [showEditDialog, setShowEditDialog] = useState(false)
-  const [savingEdit, setSavingEdit] = useState(false)
 
-  const [viewDetail, setViewDetail] = useState<ManufacturerProductDetail | null>(null)
-  const [viewLoading, setViewLoading] = useState(false)
+  const editDetailQuery = useQuery({
+    queryKey: queryKeys.manufacturerProductDetail(editingRow?.slug ?? ""),
+    queryFn: () => getManufacturerProductBySlug(editingRow!.slug),
+    enabled: showEditDialog && Boolean(editingRow?.slug) && editDetailOverride === null,
+  })
+
+  const editDetail =
+    editDetailOverride ??
+    (editDetailQuery.data?.success ? editDetailQuery.data.data : null)
+  const editDetailLoading = editDetailOverride === null && editDetailQuery.isLoading
+
+  const [viewProduct, setViewProduct] = useState<ManufacturerProductListItem | null>(null)
   const [showViewDialog, setShowViewDialog] = useState(false)
+
+  const viewQuery = useQuery({
+    queryKey: queryKeys.manufacturerProductDetail(viewProduct?.slug ?? ""),
+    queryFn: () => getManufacturerProductBySlug(viewProduct!.slug),
+    enabled: showViewDialog && Boolean(viewProduct?.slug),
+  })
+
+  const viewDetail = viewQuery.data?.success ? viewQuery.data.data : null
+  const viewLoading = viewQuery.isLoading
+
+  const updateProductMutation = useMutation({
+    mutationFn: ({ id, formData }: { id: number; formData: FormData }) =>
+      updateManufacturerProduct(id, formData),
+  })
+  const deleteProductMutation = useMutation({
+    mutationFn: (id: number) => deleteManufacturerProduct(id),
+  })
+  const statusProductMutation = useMutation({
+    mutationFn: ({
+      id,
+      status,
+    }: {
+      id: number
+      status: ManufacturerProductStatus
+    }) => changeManufacturerProductStatus(id, status),
+  })
+  const duplicateProductMutation = useMutation({
+    mutationFn: (id: number) => duplicateManufacturerProductToDraft(id),
+  })
+
+  const savingEdit = updateProductMutation.isPending
 
   const [deletingProductId, setDeletingProductId] = useState<number | null>(null)
   const [rowActionIds, setRowActionIds] = useState<Set<number>>(new Set())
@@ -154,38 +232,55 @@ export default function ManufacturerProductsPage() {
     setPage(1)
   }, [debouncedSearch, statusFilter])
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    const [listRes, statsRes] = await Promise.all([
-      getManufacturerProducts({
-        page,
-        per_page: 10,
-        search: debouncedSearch || undefined,
-        status: statusFilter,
-      }),
-      getManufacturerProductStats(),
-    ])
-
-    if (!listRes.success) {
-      setError(listRes.message ?? "Failed to load products.")
-      setProductsList([])
-      setMeta(null)
-    } else {
-      setError(null)
-      setProductsList(listRes.data)
-      setMeta(listRes.meta)
-    }
-
-    if (statsRes.success) {
-      setStats(statsRes.data)
-    }
-    setLoading(false)
-  }, [page, debouncedSearch, statusFilter])
+  const invalidateProducts = () => {
+    void queryClient.invalidateQueries({ queryKey: productsQueryKey })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.manufacturerProductStats() })
+  }
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    if (!showEditDialog || !editingRow || editDetailOverride || editDetailQuery.isLoading) {
+      return
+    }
+    if (editDetailQuery.data && !editDetailQuery.data.success) {
+      toast.error(editDetailQuery.data.message ?? "Could not load product for editing.")
+      setShowEditDialog(false)
+      setEditingRow(null)
+      setEditDetailOverride(null)
+    }
+  }, [
+    showEditDialog,
+    editingRow,
+    editDetailOverride,
+    editDetailQuery.isLoading,
+    editDetailQuery.data,
+  ])
+
+  useEffect(() => {
+    if (!showViewDialog || viewQuery.isLoading) {
+      return
+    }
+    if (viewQuery.data && !viewQuery.data.success) {
+      toast.error(viewQuery.data.message ?? "Could not load product.")
+      setShowViewDialog(false)
+      setViewProduct(null)
+    }
+  }, [showViewDialog, viewQuery.isLoading, viewQuery.data])
+
+  useEffect(() => {
+    if (!editDetail || !showEditDialog) {
+      return
+    }
+    setEditFormData({
+      name: editDetail.name,
+      description: editDetail.description,
+      minPrice: editDetail.minPrice,
+      maxPrice: editDetail.maxPrice,
+      minimumOrderQuantity: editDetail.minimumOrderQuantity,
+      unit: editDetail.unit,
+      leadTime: editDetail.leadTime,
+      status: editDetail.status,
+    })
+  }, [editDetail?.id, showEditDialog])
 
   const markRowBusy = (id: number, busy: boolean) => {
     setRowActionIds((prev) => {
@@ -199,15 +294,14 @@ export default function ManufacturerProductsPage() {
     })
   }
 
-  const openEditDialog = async (
+  const openEditDialog = (
     product: ManufacturerProductListItem,
     prefetched?: ManufacturerProductDetail | null
   ) => {
     setEditingRow(product)
+    setEditDetailOverride(prefetched ?? null)
     setShowEditDialog(true)
     if (prefetched) {
-      setEditDetail(prefetched)
-      setEditDetailLoading(false)
       setEditFormData({
         name: prefetched.name,
         description: prefetched.description,
@@ -218,37 +312,13 @@ export default function ManufacturerProductsPage() {
         leadTime: prefetched.leadTime,
         status: prefetched.status,
       })
-      return
     }
-    setEditDetail(null)
-    setEditDetailLoading(true)
-    const res = await getManufacturerProductBySlug(product.slug)
-    setEditDetailLoading(false)
-    if (!res.success || !res.data) {
-      toast.error(res.message ?? "Could not load product for editing.")
-      setShowEditDialog(false)
-      setEditingRow(null)
-      return
-    }
-    const d = res.data
-    setEditDetail(d)
-    setEditFormData({
-      name: d.name,
-      description: d.description,
-      minPrice: d.minPrice,
-      maxPrice: d.maxPrice,
-      minimumOrderQuantity: d.minimumOrderQuantity,
-      unit: d.unit,
-      leadTime: d.leadTime,
-      status: d.status,
-    })
   }
 
   const saveProductChanges = async () => {
     if (!editingRow || !editDetail) {
       return
     }
-    setSavingEdit(true)
     const fd = buildManufacturerProductUpdateFormData({
       name: editFormData.name,
       description: editFormData.description,
@@ -282,8 +352,7 @@ export default function ManufacturerProductsPage() {
       imageFiles: [],
       brochureFile: null,
     })
-    const res = await updateManufacturerProduct(editingRow.id, fd)
-    setSavingEdit(false)
+    const res = await updateProductMutation.mutateAsync({ id: editingRow.id, formData: fd })
     if (!res.success) {
       toast.error(res.message ?? "Update failed.")
       return
@@ -291,32 +360,32 @@ export default function ManufacturerProductsPage() {
     toast.success(res.message ?? "Product updated.")
     setShowEditDialog(false)
     setEditingRow(null)
-    setEditDetail(null)
-    void refresh()
+    setEditDetailOverride(null)
+    invalidateProducts()
   }
 
   const duplicateProduct = async (product: ManufacturerProductListItem) => {
     markRowBusy(product.id, true)
-    const res = await duplicateManufacturerProductToDraft(product.id)
+    const res = await duplicateProductMutation.mutateAsync(product.id)
     markRowBusy(product.id, false)
     if (!res.success) {
       toast.error(res.message ?? "Duplicate failed.")
       return
     }
     toast.success(res.message ?? "Product duplicated as draft.")
-    void refresh()
+    invalidateProducts()
   }
 
   const setProductStatus = async (productId: number, status: ManufacturerProductStatus) => {
     markRowBusy(productId, true)
-    const res = await changeManufacturerProductStatus(productId, status)
+    const res = await statusProductMutation.mutateAsync({ id: productId, status })
     markRowBusy(productId, false)
     if (!res.success) {
       toast.error(res.message ?? "Status change failed.")
       return
     }
     toast.success(res.message ?? "Status updated.")
-    void refresh()
+    invalidateProducts()
   }
 
   const confirmDeleteProduct = async () => {
@@ -325,7 +394,7 @@ export default function ManufacturerProductsPage() {
     }
     const id = deletingProductId
     markRowBusy(id, true)
-    const res = await deleteManufacturerProduct(id)
+    const res = await deleteProductMutation.mutateAsync(id)
     markRowBusy(id, false)
     setDeletingProductId(null)
     if (!res.success) {
@@ -333,56 +402,47 @@ export default function ManufacturerProductsPage() {
       return
     }
     toast.success(res.message ?? "Product deleted.")
-    void refresh()
+    invalidateProducts()
   }
 
-  const openViewDialog = async (product: ManufacturerProductListItem) => {
+  const openViewDialog = (product: ManufacturerProductListItem) => {
+    setViewProduct(product)
     setShowViewDialog(true)
-    setViewDetail(null)
-    setViewLoading(true)
-    const res = await getManufacturerProductBySlug(product.slug)
-    setViewLoading(false)
-    if (!res.success || !res.data) {
-      toast.error(res.message ?? "Could not load product.")
-      setShowViewDialog(false)
-      return
-    }
-    setViewDetail(res.data)
   }
 
   const lastPage = meta?.lastPage ?? 1
   const total = meta?.total ?? productsList.length
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-serif text-2xl font-medium text-foreground">Products</h1>
-          <p className="mt-1 text-muted-foreground">Manage your product catalog</p>
+          <h1 className="font-serif text-2xl font-medium text-foreground">{t.mfg.products.title}</h1>
+          <p className="mt-1 text-muted-foreground">{t.mfg.products.subtitle}</p>
         </div>
         <Button className="gap-2" asChild>
           <Link href="/dashboard/manufacturer/products/new">
             <Plus className="h-4 w-4" />
-            Add Product
+            {t.mfg.products.addNewProduct}
           </Link>
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <ManufacturerStatCard
-          title="Total Products"
+          title={t.mfg.products.title}
           value={loading && !stats ? "—" : stats?.total ?? total}
         />
         <ManufacturerStatCard
-          title="Active"
+          title={t.mfg.subscription.active}
           value={<span className={loading && !stats ? "text-foreground" : "text-emerald-600"}>{loading && !stats ? "—" : stats?.active ?? "—"}</span>}
         />
         <ManufacturerStatCard
-          title="Total Views"
+          title={t.mfg.analytics.profileViews}
           value={loading && !stats ? "—" : stats?.totalViews?.toLocaleString() ?? "—"}
         />
         <ManufacturerStatCard
-          title="Total Inquiries"
+          title={t.mfg.analytics.inquiriesReceived}
           value={loading && !stats ? "—" : stats?.totalInquiries ?? "—"}
         />
       </div>
@@ -392,7 +452,7 @@ export default function ManufacturerProductsPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search products…"
+            placeholder={t.mfg.products.searchProducts}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="pl-9"
@@ -403,13 +463,13 @@ export default function ManufacturerProductsPage() {
           onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
         >
           <SelectTrigger className="w-full sm:w-44">
-            <SelectValue placeholder="All status" />
+            <SelectValue placeholder={t.mfg.inquiries.allStatus} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="all">{t.mfg.inquiries.allStatus}</SelectItem>
+            <SelectItem value="active">{t.mfg.subscription.active}</SelectItem>
+            <SelectItem value="draft">{t.mfg.products.draft || "Draft"}</SelectItem>
+            <SelectItem value="inactive">{t.mfg.products.inactive || "Inactive"}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -422,9 +482,9 @@ export default function ManufacturerProductsPage() {
 
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         {loading && productsList.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground sm:py-16">
             <Loader2 className="h-5 w-5 animate-spin" />
-            Loading products…
+            {t.common.loading}
           </div>
         ) : (
           <>
@@ -432,13 +492,13 @@ export default function ManufacturerProductsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border bg-muted/50 text-left text-sm">
-                    <th className="px-5 py-3 font-medium text-muted-foreground">Product</th>
-                    <th className="px-5 py-3 font-medium text-muted-foreground">Price</th>
-                    <th className="px-5 py-3 font-medium text-muted-foreground">MOQ</th>
-                    <th className="px-5 py-3 font-medium text-muted-foreground">Views</th>
-                    <th className="px-5 py-3 font-medium text-muted-foreground">Inquiries</th>
-                    <th className="px-5 py-3 font-medium text-muted-foreground">Status</th>
-                    <th className="px-5 py-3 font-medium text-muted-foreground">Actions</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t.mfg.products.title}</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t.mfg.orderDetails.price}</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t.mfg.productForm.minOrderQty}</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t.mfg.analytics.profileViews}</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t.mfg.inquiries.title}</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t.mfg.orders.status}</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t.mfg.products.actions || "Actions"}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -494,7 +554,7 @@ export default function ManufacturerProductsPage() {
                             variant={product.status === "active" ? "default" : "secondary"}
                             className={badgeClass(product.status)}
                           >
-                            {statusLabel(product.status)}
+                            {getStatusLabel(product.status)}
                           </Badge>
                         </td>
                         <td className="px-5 py-4">
@@ -528,11 +588,11 @@ export default function ManufacturerProductsPage() {
                                     </DropdownMenuItem> */}
                                     <DropdownMenuItem onClick={() => void openViewDialog(product)}>
                                       <ExternalLink className="mr-2 h-4 w-4" />
-                                      View details
+                                      {t.mfg.inquiries.viewDetails}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => void duplicateProduct(product)}>
                                       <Copy className="mr-2 h-4 w-4" />
-                                      Duplicate to draft
+                                      {t.mfg.products.duplicateToDraft || "Duplicate to draft"}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     {product.status !== "draft" && (
@@ -540,7 +600,7 @@ export default function ManufacturerProductsPage() {
                                         onClick={() => void setProductStatus(product.id, "draft")}
                                       >
                                         <Power className="mr-2 h-4 w-4" />
-                                        Set draft
+                                        {t.mfg.products.setDraft || "Set draft"}
                                       </DropdownMenuItem>
                                     )}
                                     {product.status !== "active" && (
@@ -548,7 +608,7 @@ export default function ManufacturerProductsPage() {
                                         onClick={() => void setProductStatus(product.id, "active")}
                                       >
                                         <Power className="mr-2 h-4 w-4" />
-                                        Set active
+                                        {t.mfg.products.setActive || "Set active"}
                                       </DropdownMenuItem>
                                     )}
                                     {product.status !== "inactive" && (
@@ -556,7 +616,7 @@ export default function ManufacturerProductsPage() {
                                         onClick={() => void setProductStatus(product.id, "inactive")}
                                       >
                                         <Power className="mr-2 h-4 w-4" />
-                                        Set inactive
+                                        {t.mfg.products.setInactive || "Set inactive"}
                                       </DropdownMenuItem>
                                     )}
                                     <DropdownMenuSeparator />
@@ -565,7 +625,7 @@ export default function ManufacturerProductsPage() {
                                       onClick={() => setDeletingProductId(product.id)}
                                     >
                                       <Trash2 className="mr-2 h-4 w-4" />
-                                      Delete
+                                      {t.mfg.products.delete}
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
@@ -631,7 +691,7 @@ export default function ManufacturerProductsPage() {
                             variant={product.status === "active" ? "default" : "secondary"}
                             className={badgeClass(product.status)}
                           >
-                            {statusLabel(product.status)}
+                            {getStatusLabel(product.status)}
                           </Badge>
                           <div className="flex items-center gap-2">
                             {busy ? (
@@ -642,7 +702,7 @@ export default function ManufacturerProductsPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8"
-                                  onClick={() => void openEditDialog(product)}
+                                  onClick={() => openEditDialog(product)}
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>
@@ -654,17 +714,17 @@ export default function ManufacturerProductsPage() {
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={() => void openViewDialog(product)}>
-                                      View details
+                                      {t.mfg.inquiries.viewDetails}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => void duplicateProduct(product)}>
-                                      Duplicate to draft
+                                      {t.mfg.products.duplicateToDraft || "Duplicate to draft"}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                       className="text-destructive"
                                       onClick={() => setDeletingProductId(product.id)}
                                     >
-                                      Delete
+                                      {t.mfg.products.delete}
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
@@ -682,17 +742,17 @@ export default function ManufacturerProductsPage() {
             {productsList.length === 0 && !loading && (
               <div className="py-12 text-center">
                 <Package className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                <h3 className="mt-4 font-semibold text-foreground">No products found</h3>
+                <h3 className="mt-4 font-semibold text-foreground">{t.mfg.products.noProducts}</h3>
                 <p className="mt-2 text-muted-foreground">
                   {debouncedSearch || statusFilter !== "all"
-                    ? "Try adjusting filters or search."
-                    : "Add your first product to get started."}
+                    ? (t.mfg.products.adjustFilters || "Try adjusting filters or search.")
+                    : t.mfg.products.createProductCTA}
                 </p>
                 {!debouncedSearch && statusFilter === "all" && (
                   <Button className="mt-4 gap-2" asChild>
                     <Link href="/dashboard/manufacturer/products/new">
                       <Plus className="h-4 w-4" />
-                      Add Product
+                      {t.mfg.products.addNewProduct}
                     </Link>
                   </Button>
                 )}
@@ -702,8 +762,8 @@ export default function ManufacturerProductsPage() {
             {meta && meta.total > 0 && (
               <div className="flex flex-col items-center justify-between gap-3 border-t border-border px-4 py-3 sm:flex-row">
                 <p className="text-sm text-muted-foreground">
-                  Page {meta.currentPage} of {lastPage}
-                  {meta.total ? ` · ${meta.total} total` : ""}
+                  {t.mfg.products.page || "Page"} {meta.currentPage} {t.mfg.products.of || "of"} {lastPage}
+                  {meta.total ? ` · ${meta.total} ${t.mfg.products.totalLabel || "total"}` : ""}
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -713,7 +773,7 @@ export default function ManufacturerProductsPage() {
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    Previous
+                    {t.common.previous || "Previous"}
                   </Button>
                   <Button
                     variant="outline"
@@ -721,7 +781,7 @@ export default function ManufacturerProductsPage() {
                     disabled={page >= lastPage || loading}
                     onClick={() => setPage((p) => p + 1)}
                   >
-                    Next
+                    {t.common.next || "Next"}
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
@@ -737,14 +797,14 @@ export default function ManufacturerProductsPage() {
           setShowEditDialog(open)
           if (!open) {
             setEditingRow(null)
-            setEditDetail(null)
+            setEditDetailOverride(null)
           }
         }}
       >
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit product</DialogTitle>
-            <DialogDescription>Changes are saved to your live listing.</DialogDescription>
+            <DialogTitle>{t.mfg.productForm.editTitle}</DialogTitle>
+            <DialogDescription>{t.mfg.products.editDialogDesc || "Changes are saved to your live listing."}</DialogDescription>
           </DialogHeader>
           {editDetailLoading ? (
             <div className="flex justify-center py-8">
@@ -753,7 +813,7 @@ export default function ManufacturerProductsPage() {
           ) : editDetail ? (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="edit-name">Name</Label>
+                <Label htmlFor="edit-name">{t.mfg.productForm.productName}</Label>
                 <Input
                   id="edit-name"
                   value={editFormData.name}
@@ -762,7 +822,7 @@ export default function ManufacturerProductsPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="edit-description">Description</Label>
+                <Label htmlFor="edit-description">{t.mfg.productForm.description}</Label>
                 <Textarea
                   id="edit-description"
                   value={editFormData.description}
@@ -773,7 +833,7 @@ export default function ManufacturerProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="edit-min">Min price</Label>
+                  <Label htmlFor="edit-min">{t.mfg.products.minPrice || "Min price"}</Label>
                   <Input
                     id="edit-min"
                     value={editFormData.minPrice}
@@ -782,7 +842,7 @@ export default function ManufacturerProductsPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-max">Max price</Label>
+                  <Label htmlFor="edit-max">{t.mfg.products.maxPrice || "Max price"}</Label>
                   <Input
                     id="edit-max"
                     value={editFormData.maxPrice}
@@ -793,7 +853,7 @@ export default function ManufacturerProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="edit-moq">MOQ</Label>
+                  <Label htmlFor="edit-moq">{t.mfg.products.moq || "MOQ"}</Label>
                   <Input
                     id="edit-moq"
                     value={editFormData.minimumOrderQuantity}
@@ -804,7 +864,7 @@ export default function ManufacturerProductsPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-unit">Unit</Label>
+                  <Label htmlFor="edit-unit">{t.mfg.productForm.unit}</Label>
                   <Input
                     id="edit-unit"
                     value={editFormData.unit}
@@ -814,7 +874,7 @@ export default function ManufacturerProductsPage() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="edit-lead">Lead time</Label>
+                <Label htmlFor="edit-lead">{t.mfg.products.leadTime || "Lead time"}</Label>
                 <Input
                   id="edit-lead"
                   value={editFormData.leadTime}
@@ -824,7 +884,7 @@ export default function ManufacturerProductsPage() {
                 />
               </div>
               <div>
-                <Label>Status</Label>
+                <Label>{t.mfg.orders.status}</Label>
                 <Select
                   value={editFormData.status}
                   onValueChange={(v) =>
@@ -835,30 +895,29 @@ export default function ManufacturerProductsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="draft">{t.mfg.products.draft || "Draft"}</SelectItem>
+                    <SelectItem value="active">{t.mfg.subscription.active}</SelectItem>
+                    <SelectItem value="inactive">{t.mfg.products.inactive || "Inactive"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <p className="text-xs text-muted-foreground">
-                Category: {editDetail.categoryLabel}. To change category, use the full product editor
-                when available.
+                {t.mfg.products.categoryLabelPrefix || "Category:"} {editDetail.categoryLabel}. {t.mfg.products.categoryChangeDesc || "To change category, use the full product editor when available."}
               </p>
             </div>
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button onClick={() => void saveProductChanges()} disabled={savingEdit || !editDetail}>
               {savingEdit ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving…
+                  {t.mfg.productForm.saving}
                 </>
               ) : (
-                "Save"
+                t.mfg.products.save || "Save"
               )}
             </Button>
           </DialogFooter>
@@ -875,18 +934,18 @@ export default function ManufacturerProductsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete product?</AlertDialogTitle>
+            <AlertDialogTitle>{t.mfg.products.deleteConfirmTitle || "Delete product?"}</AlertDialogTitle>
             <AlertDialogDescription>
-              This cannot be undone. The product will be removed from your catalog.
+              {t.mfg.products.confirmDelete}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void confirmDeleteProduct()}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t.mfg.products.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -897,14 +956,14 @@ export default function ManufacturerProductsPage() {
         onOpenChange={(open) => {
           setShowViewDialog(open)
           if (!open) {
-            setViewDetail(null)
+            setViewProduct(null)
           }
         }}
       >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Product details</DialogTitle>
-            <DialogDescription>Information from your listing.</DialogDescription>
+            <DialogTitle>{t.mfg.products.viewDetailsTitle || "Product details"}</DialogTitle>
+            <DialogDescription>{t.mfg.products.viewDetailsDesc || "Information from your listing."}</DialogDescription>
           </DialogHeader>
           {viewLoading ? (
             <div className="flex justify-center py-12">
@@ -941,7 +1000,7 @@ export default function ManufacturerProductsPage() {
                       variant={viewDetail.status === "active" ? "default" : "secondary"}
                       className={badgeClass(viewDetail.status)}
                     >
-                      {statusLabel(viewDetail.status)}
+                      {getStatusLabel(viewDetail.status)}
                     </Badge>
                   </div>
                   <p className="text-muted-foreground">{viewDetail.categoryLabel}</p>
@@ -950,26 +1009,26 @@ export default function ManufacturerProductsPage() {
 
               <div className="grid grid-cols-2 gap-4 rounded-lg bg-muted p-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">Price</p>
+                  <p className="text-sm text-muted-foreground">{t.mfg.orderDetails.price}</p>
                   <p className="font-semibold">{viewDetail.priceDisplay}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">MOQ</p>
+                  <p className="text-sm text-muted-foreground">{t.mfg.products.moq || "MOQ"}</p>
                   <p className="font-semibold">{viewDetail.moqDisplay}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Views</p>
+                  <p className="text-sm text-muted-foreground">{t.mfg.products.views || "Views"}</p>
                   <p className="font-semibold">{viewDetail.viewCount.toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Inquiries</p>
+                  <p className="text-sm text-muted-foreground">{t.mfg.inquiries.title}</p>
                   <p className="font-semibold">{viewDetail.inquiryCount}</p>
                 </div>
               </div>
 
               {viewDetail.description ? (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Description</p>
+                  <p className="text-sm text-muted-foreground mb-1">{t.mfg.productForm.description}</p>
                   <p className="text-foreground whitespace-pre-wrap">{viewDetail.description}</p>
                 </div>
               ) : null}
@@ -977,7 +1036,7 @@ export default function ManufacturerProductsPage() {
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowViewDialog(false)}>
-              Close
+              {t.common.close}
             </Button>
             <Button
               onClick={() => {
@@ -992,7 +1051,7 @@ export default function ManufacturerProductsPage() {
               }}
               disabled={!viewDetail}
             >
-              Edit
+              {t.common.edit}
             </Button>
           </DialogFooter>
         </DialogContent>

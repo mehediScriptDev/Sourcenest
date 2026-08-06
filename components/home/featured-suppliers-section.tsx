@@ -1,36 +1,30 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowRight, MapPin, Clock, CheckCircle, Building2 } from "lucide-react"
-import { getPublicSuppliers, type Supplier } from "@/lib/api/public-suppliers"
+import { ArrowRight, MapPin, CheckCircle, Building2 } from "lucide-react"
+import { getPublicSuppliers } from "@/lib/api/public-suppliers"
+import { queryKeys } from "@/lib/query-keys"
 import { useTranslation } from "@/lib/i18n"
 
 export function FeaturedSuppliersSection() {
   const { t } = useTranslation()
-  const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function fetchSuppliers() {
-      try {
-        const res = await getPublicSuppliers()
-        if (res?.success && res.data) {
-          setSuppliers(res.data.slice(0, 4))
-        }
-      } catch (error) {
-        console.error("Failed to load featured suppliers", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchSuppliers()
-  }, [])
+  const suppliersQuery = useQuery({
+    queryKey: queryKeys.publicHomeFeaturedSuppliers(),
+    queryFn: () => getPublicSuppliers(),
+  })
+
+  const suppliers =
+    suppliersQuery.data?.success && suppliersQuery.data.data
+      ? suppliersQuery.data.data.slice(0, 4)
+      : []
+  const loading = suppliersQuery.isLoading
 
   return (
-    <section className="bg-muted/50 py-8 sm:py-12 lg:py-24">
+    <section className="bg-muted/50 py-8 sm:py-12 lg:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
           <div className="space-y-1">
@@ -55,58 +49,52 @@ export function FeaturedSuppliersSection() {
             <span>Loading suppliers...</span>
           </div>
         ) : (
-          <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="mt-8 grid grid-cols-1 gap-3 sm:mt-10 sm:grid-cols-2 sm:gap-5 lg:gap-6">
             {suppliers.map((supplier) => (
               <Link
                 key={supplier.id}
                 href={`/suppliers/${supplier.slug}`}
-                className="group w-full min-w-0 overflow-hidden flex flex-col justify-between rounded-2xl border border-border bg-card p-4 sm:p-6 transition-all duration-300 hover:border-secondary/50 hover:shadow-xl"
+                className="group flex min-w-0 flex-col justify-between overflow-hidden rounded-xl border border-border bg-card p-3 transition-all duration-300 hover:border-secondary/50 hover:shadow-lg sm:rounded-2xl sm:p-5 sm:hover:shadow-xl"
               >
                 <div>
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start justify-between">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl overflow-hidden bg-primary/10 sm:h-14 sm:w-14">
-                        {supplier.logo ? (
-                          <img src={supplier.logo} alt={supplier.name} className="h-full w-full object-cover" />
-                        ) : (
-                          <Building2 className="h-6 w-6 text-primary sm:h-7 sm:w-7" />
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/10 sm:h-12 sm:w-12 sm:rounded-xl">
+                      {supplier.logo ? (
+                        <img src={supplier.logo} alt={supplier.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <Building2 className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="truncate text-sm font-semibold text-foreground group-hover:text-secondary sm:text-base">
+                          {supplier.name}
+                        </h3>
+                        {supplier.reviewed && (
+                          <CheckCircle className="h-3.5 w-3.5 shrink-0 text-secondary sm:h-4 sm:w-4" />
                         )}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="text-base sm:text-lg font-semibold text-foreground group-hover:text-secondary truncate">
-                            {supplier.name}
-                          </h3>
-                          {supplier.reviewed && (
-                            <CheckCircle className="h-4 w-4 shrink-0 text-secondary" />
-                          )}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate">{supplier.location?.city || "Unknown"}, {supplier.location?.country || "Unknown"}</span>
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5 shrink-0" />
-                            {supplier.response_time || "N/A"}
-                          </span>
-                        </div>
+                      <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground sm:mt-1 sm:text-sm">
+                        <MapPin className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
+                        <span className="truncate">
+                          {supplier.location?.city || "Unknown"}, {supplier.location?.country || "Unknown"}
+                        </span>
                       </div>
+                      {supplier.industry && (
+                        <Badge variant="secondary" className="mt-1.5 max-w-full truncate px-1.5 py-0 text-[10px] font-medium sm:mt-2 sm:px-2.5 sm:text-xs">
+                          {supplier.industry}
+                        </Badge>
+                      )}
                     </div>
-                    {supplier.industry && (
-                      <Badge variant="secondary" className="w-fit shrink-0 font-medium">
-                        {supplier.industry}
-                      </Badge>
-                    )}
                   </div>
-                  <p className="mt-4 sm:mt-5 text-sm text-muted-foreground leading-relaxed line-clamp-2">
+                  <p className="mt-2 hidden text-sm leading-relaxed text-muted-foreground line-clamp-2 sm:mt-3 sm:block">
                     {supplier.short_description || "No description available."}
                   </p>
                 </div>
                 
-                <div className="mt-4 sm:mt-5 flex flex-wrap gap-2 pt-2 max-w-full overflow-hidden">
+                <div className="mt-2 hidden flex-wrap gap-1.5 pt-1 sm:mt-3 sm:flex sm:gap-2 sm:pt-2">
                   {supplier.main_products?.slice(0, 3).map((product) => (
-                    <Badge key={product} variant="outline" className="bg-background/50 font-normal truncate max-w-full">
+                    <Badge key={product} variant="outline" className="max-w-full truncate bg-background/50 px-1.5 py-0 text-[10px] font-normal sm:px-2.5 sm:text-xs">
                       {product}
                     </Badge>
                   ))}

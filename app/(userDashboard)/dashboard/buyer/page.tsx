@@ -1,11 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
-import { getBuyerDashboard, BuyerDashboardData } from "@/lib/api/buyer-dashboard"
+import { useTranslation } from "@/lib/i18n"
+import { getBuyerDashboard } from "@/lib/api/buyer-dashboard"
+import { queryKeys } from "@/lib/query-keys"
+import { BuyerActivityList } from "@/components/buyer/buyer-activity-list"
 import { 
   MessageSquare, 
   FileText, 
@@ -22,22 +25,21 @@ import {
 
 export default function BuyerDashboardPage() {
   const { user } = useAuth()
-  const [data, setData] = useState<BuyerDashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { t } = useTranslation()
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      setLoading(true)
-      const res = await getBuyerDashboard()
-      if (res.success && res.data) {
-        setData(res.data)
-      }
-      setLoading(false)
-    }
-    fetchDashboard()
-  }, [])
+  const dashboardQuery = useQuery({
+    queryKey: queryKeys.buyerDashboard(),
+    queryFn: getBuyerDashboard,
+  })
+
+  const data = dashboardQuery.data?.success ? dashboardQuery.data.data : null
+  const loading = dashboardQuery.isLoading
   
-  const userDisplayName = data?.welcome?.first_name || data?.welcome?.name || user?.firstName || user?.name || "Buyer"
+  const userDisplayName = data?.welcome?.first_name || data?.welcome?.name || user?.firstName || user?.name || t.buyer.layout.buyer
+
+  const getActivityLabel = (type: string) => {
+    return t.buyer.activity.labels[type as keyof typeof t.buyer.activity.labels] || type
+  }
   
   if (loading) {
     return (
@@ -50,7 +52,7 @@ export default function BuyerDashboardPage() {
   if (!data) {
     return (
       <div className="flex h-[400px] flex-col items-center justify-center">
-        <p className="text-muted-foreground">Failed to load dashboard data.</p>
+        <p className="text-muted-foreground">{t.buyer.dashboard.failedToLoad}</p>
       </div>
     )
   }
@@ -60,10 +62,10 @@ export default function BuyerDashboardPage() {
       {/* Welcome Header */}
       <div>
         <h1 className="font-serif text-2xl font-medium text-foreground sm:text-3xl">
-          Welcome back, {userDisplayName}
+          {t.buyer.dashboard.welcome.replace("{name}", userDisplayName)}
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Here's what's happening with your sourcing activities.
+          {t.buyer.dashboard.subtitle}
         </p>
       </div>
 
@@ -80,7 +82,7 @@ export default function BuyerDashboardPage() {
           </div>
           <div className="mt-4">
             <div className="text-2xl font-bold text-foreground">{data.stats.active_conversations.value}</div>
-            <p className="text-sm text-muted-foreground">Active Conversations</p>
+            <p className="text-sm text-muted-foreground">{t.buyer.dashboard.stats.activeConversations}</p>
           </div>
         </div>
 
@@ -95,7 +97,7 @@ export default function BuyerDashboardPage() {
           </div>
           <div className="mt-4">
             <div className="text-2xl font-bold text-foreground">{data.stats.rfqs_submitted.value}</div>
-            <p className="text-sm text-muted-foreground">RFQs Submitted</p>
+            <p className="text-sm text-muted-foreground">{t.buyer.dashboard.stats.rfqsSubmitted}</p>
           </div>
         </div>
 
@@ -110,7 +112,7 @@ export default function BuyerDashboardPage() {
           </div>
           <div className="mt-4">
             <div className="text-2xl font-bold text-foreground">{data.stats.saved_suppliers.value}</div>
-            <p className="text-sm text-muted-foreground">Saved Suppliers</p>
+            <p className="text-sm text-muted-foreground">{t.buyer.dashboard.stats.savedSuppliers}</p>
           </div>
         </div>
 
@@ -125,7 +127,7 @@ export default function BuyerDashboardPage() {
           </div>
           <div className="mt-4">
             <div className="text-2xl font-bold text-foreground">{data.stats.products_viewed.value}</div>
-            <p className="text-sm text-muted-foreground">Products Viewed</p>
+            <p className="text-sm text-muted-foreground">{t.buyer.dashboard.stats.productsViewed}</p>
           </div>
         </div>
       </div>
@@ -135,11 +137,11 @@ export default function BuyerDashboardPage() {
         {/* Recent Messages */}
         <div className="lg:col-span-2 rounded-xl border border-border bg-card min-w-0">
           <div className="flex items-center justify-between border-b border-border p-4 sm:p-5">
-            <h2 className="font-semibold text-foreground">Recent Messages</h2>
+            <h2 className="font-semibold text-foreground">{t.buyer.dashboard.recentMessages.title}</h2>
             <Button variant="ghost" size="sm" className="gap-1 text-secondary" asChild>
               <Link href="/dashboard/buyer/messages">
-                View all
-                <ArrowRight className="h-4 w-4" />
+                {t.buyer.dashboard.recentMessages.viewAll}
+                <ArrowRight className="h-4 w-4 rtl:rotate-180" />
               </Link>
             </Button>
           </div>
@@ -170,7 +172,7 @@ export default function BuyerDashboardPage() {
               ))
             ) : (
               <div className="p-8 text-center text-muted-foreground">
-                <p>No recent messages.</p>
+                <p>{t.buyer.dashboard.recentMessages.noMessages}</p>
               </div>
             )}
           </div>
@@ -178,38 +180,56 @@ export default function BuyerDashboardPage() {
 
         {/* Quick Actions */}
         <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-          <h2 className="font-semibold text-foreground">Quick Actions</h2>
+          <h2 className="font-semibold text-foreground">{t.buyer.dashboard.quickActions.title}</h2>
           <div className="mt-4 space-y-3">
             <Button className="w-full justify-start gap-2" variant="outline" asChild>
               <Link href="/suppliers">
                 <Factory className="h-4 w-4" />
-                Find Suppliers
+                {t.buyer.dashboard.quickActions.findSuppliers}
               </Link>
             </Button>
             <Button className="w-full justify-start gap-2" variant="outline" asChild>
               <Link href="/products">
                 <Package className="h-4 w-4" />
-                Browse Products
+                {t.buyer.dashboard.quickActions.browseProducts}
               </Link>
             </Button>
             <Button className="w-full justify-start gap-2" variant="outline" asChild>
               <Link href="/dashboard/buyer/rfqs">
                 <FileText className="h-4 w-4" />
-                Submit RFQ
+                {t.buyer.dashboard.quickActions.submitRfq}
               </Link>
             </Button>
           </div>
         </div>
       </div>
 
+      <div className="rounded-xl border border-border bg-card min-w-0">
+        <div className="flex items-center justify-between border-b border-border p-4 sm:p-5">
+          <h2 className="font-semibold text-foreground">{t.buyer.dashboard.recentActivity.title}</h2>
+          <Button variant="ghost" size="sm" className="gap-1 text-secondary" asChild>
+            <Link href="/dashboard/buyer/activity">
+              {t.buyer.dashboard.recentActivity.viewAll}
+              <ArrowRight className="h-4 w-4 rtl:rotate-180" />
+            </Link>
+          </Button>
+        </div>
+        <BuyerActivityList
+          activities={data.recent_activity}
+          emptyMessage={t.buyer.dashboard.recentActivity.noActivity}
+          getLabel={getActivityLabel}
+          compact
+        />
+      </div>
+
       {/* RFQ Status */}
       <div className="rounded-xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border p-4 sm:p-5">
-          <h2 className="font-semibold text-foreground">RFQ Status</h2>
+          <h2 className="font-semibold text-foreground">{t.buyer.dashboard.rfqStatus.title}</h2>
           <Button variant="ghost" size="sm" className="gap-1 text-secondary" asChild>
             <Link href="/dashboard/buyer/rfqs">
-              View all
-              <ArrowRight className="h-4 w-4" />
+              {t.buyer.dashboard.rfqStatus.viewAll}
+              <ArrowRight className="h-4 w-4 rtl:rotate-180" />
             </Link>
           </Button>
         </div>
@@ -217,11 +237,11 @@ export default function BuyerDashboardPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-left text-sm">
-                <th className="px-5 py-3 font-medium text-muted-foreground">RFQ ID</th>
-                <th className="px-5 py-3 font-medium text-muted-foreground">Product</th>
-                <th className="px-5 py-3 font-medium text-muted-foreground">Supplier</th>
-                <th className="px-5 py-3 font-medium text-muted-foreground">Status</th>
-                <th className="px-5 py-3 font-medium text-muted-foreground">Date</th>
+                <th className="px-5 py-3 font-medium text-muted-foreground">{t.buyer.dashboard.rfqStatus.rfqId}</th>
+                <th className="px-5 py-3 font-medium text-muted-foreground">{t.buyer.dashboard.rfqStatus.product}</th>
+                <th className="px-5 py-3 font-medium text-muted-foreground">{t.buyer.dashboard.rfqStatus.supplier}</th>
+                <th className="px-5 py-3 font-medium text-muted-foreground">{t.buyer.dashboard.rfqStatus.status}</th>
+                <th className="px-5 py-3 font-medium text-muted-foreground">{t.buyer.dashboard.rfqStatus.date}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -247,7 +267,7 @@ export default function BuyerDashboardPage() {
               ) : (
                 <tr>
                   <td colSpan={5} className="px-5 py-8 text-center text-sm text-muted-foreground">
-                    No recent RFQs.
+                    {t.buyer.dashboard.rfqStatus.noRfqs}
                   </td>
                 </tr>
               )}
@@ -278,7 +298,7 @@ export default function BuyerDashboardPage() {
             ))
           ) : (
             <div className="text-center text-sm text-muted-foreground p-4">
-              No recent RFQs.
+              {t.buyer.dashboard.rfqStatus.noRfqs}
             </div>
           )}
         </div>
@@ -287,11 +307,11 @@ export default function BuyerDashboardPage() {
       {/* Recommended Suppliers */}
       <div className="rounded-xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border p-5">
-          <h2 className="font-semibold text-foreground">Recommended for You</h2>
+          <h2 className="font-semibold text-foreground">{t.buyer.dashboard.recommended.title}</h2>
           <Button variant="ghost" size="sm" className="gap-1 text-secondary" asChild>
             <Link href="/suppliers">
-              Explore all
-              <ArrowRight className="h-4 w-4" />
+              {t.buyer.dashboard.recommended.exploreAll}
+              <ArrowRight className="h-4 w-4 rtl:rotate-180" />
             </Link>
           </Button>
         </div>
@@ -313,7 +333,7 @@ export default function BuyerDashboardPage() {
                     <div className="mt-2 flex items-center gap-2 text-sm">
                       <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
                       <span className="font-medium">{supplier.rating}</span>
-                      <span className="text-muted-foreground">• {supplier.product_count.toLocaleString()} products</span>
+                      <span className="text-muted-foreground">• {t.buyer.dashboard.recommended.products.replace("{count}", supplier.product_count.toLocaleString())}</span>
                     </div>
                   </div>
                 </div>
@@ -321,7 +341,7 @@ export default function BuyerDashboardPage() {
             ))
           ) : (
             <div className="col-span-full p-8 text-center text-muted-foreground">
-              No recommended suppliers right now.
+              {t.buyer.dashboard.recommended.noSuppliers}
             </div>
           )}
         </div>

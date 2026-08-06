@@ -42,19 +42,29 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       typeRaw === "inquiry" ||
       typeRaw === "quote" ||
       typeRaw === "supplier" ||
-      typeRaw === "order"
-        ? typeRaw
+      typeRaw === "order" ||
+      typeRaw.startsWith("order.")
+        ? typeRaw.startsWith("order.") ? "order" : (typeRaw as NotificationType)
         : "system"
 
-    const id = typeof data.id === "string" && data.id.trim() ? data.id : `realtime-${Date.now()}`
+    const id =
+      data.id !== undefined && data.id !== null && String(data.id).trim()
+        ? String(data.id)
+        : `realtime-${Date.now()}`
     const title =
       typeof data.title === "string" && data.title.trim() ? data.title : "Notification"
     const description =
       typeof data.description === "string" && data.description.trim()
         ? data.description
-        : "You have a new update."
+        : typeof data.body === "string" && data.body.trim()
+          ? data.body
+          : "You have a new update."
     const actionUrl =
-      typeof data.actionUrl === "string" && data.actionUrl.trim() ? data.actionUrl : undefined
+      typeof data.actionUrl === "string" && data.actionUrl.trim()
+        ? data.actionUrl
+        : typeof data.action_url === "string" && data.action_url.trim()
+          ? data.action_url
+          : undefined
     const avatar = typeof data.avatar === "string" && data.avatar.trim() ? data.avatar : undefined
     const createdAt = new Date().toISOString()
 
@@ -128,7 +138,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     }
   }, [fetchNotifications, autoRefresh, refreshInterval, isAuthLoading, isAuthenticated])
 
-  // Real-time notifications from Laravel Echo private user channel.
+  // Real-time notifications from Laravel Echo private notifications channel.
   useEffect(() => {
     if (isAuthLoading || !isAuthenticated || !user?.id) {
       return
@@ -139,10 +149,10 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       return
     }
 
-    const channelName = `App.Models.User.${user.id}`
+    const channelName = `notifications.${user.id}`
     const channel = echo.private(channelName)
 
-    channel.notification((incoming: unknown) => {
+    channel.listen(".user.notification.created", (incoming: unknown) => {
       const normalized = normalizeRealtimeNotification(incoming)
       if (!normalized) return
 

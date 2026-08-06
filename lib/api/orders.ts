@@ -92,6 +92,69 @@ export interface OrderStatusUpdate {
   author: string
 }
 
+export interface OrderItem {
+  id: number
+  productId: number
+  productSlug: string
+  productName: string
+  quantity: number
+  quantityUnit: string
+  unitPrice: number
+  lineTotal: number
+  notes: string | null
+}
+
+export interface OrderItemsSummary {
+  lineCount: number
+  totalQuantity: number
+  quantityUnit: string | null
+  hasMixedUnits: boolean
+  productLabel: string
+  quantityLabel: string
+}
+
+/** Aggregate line-item totals for multi-product orders. */
+export function summarizeOrderItems(
+  items: OrderItem[],
+  fallback?: { quantity: number; quantityUnit: string; productName?: string },
+): OrderItemsSummary {
+  if (items.length === 0) {
+    const qty = fallback?.quantity ?? 0
+    const unit = fallback?.quantityUnit ?? "units"
+    return {
+      lineCount: fallback?.productName ? 1 : 0,
+      totalQuantity: qty,
+      quantityUnit: unit,
+      hasMixedUnits: false,
+      productLabel: fallback?.productName ?? "—",
+      quantityLabel: `${qty.toLocaleString()} ${unit}`,
+    }
+  }
+
+  const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0)
+  const units = [...new Set(items.map((item) => item.quantityUnit))]
+  const hasMixedUnits = units.length > 1
+  const quantityUnit = hasMixedUnits ? null : units[0]
+
+  const productLabel =
+    items.length === 1
+      ? items[0].productName
+      : `${items.length} products`
+
+  const quantityLabel = hasMixedUnits
+    ? `${totalQuantity.toLocaleString()} total units (${items.length} lines)`
+    : `${totalQuantity.toLocaleString()} ${quantityUnit}`
+
+  return {
+    lineCount: items.length,
+    totalQuantity,
+    quantityUnit,
+    hasMixedUnits,
+    productLabel,
+    quantityLabel,
+  }
+}
+
 export interface ApiOrder {
   id: number
   orderNumber: string
@@ -120,6 +183,7 @@ export interface ApiOrder {
   productName: string
   productSlug: string
   // Nested
+  items: OrderItem[]
   attachments: { id: number; name: string; url: string }[]
   statusUpdates: OrderStatusUpdate[]
 }
@@ -190,6 +254,23 @@ function normalizeStatusUpdate(payload: unknown): OrderStatusUpdate {
   }
 }
 
+function normalizeOrderItem(payload: unknown): OrderItem {
+  const item = toRecord(payload)
+  const product = toRecord(item.product)
+
+  return {
+    id: toNumber(item.id),
+    productId: toNumber(item.product_id ?? product.id),
+    productSlug: toString(product.slug ?? item.product_slug ?? product.id ?? item.product_id),
+    productName: toString(product.name ?? item.product_name, "Product"),
+    quantity: toNumber(item.quantity),
+    quantityUnit: toString(item.quantity_unit ?? item.quantityUnit, "pieces"),
+    unitPrice: toNumber(item.unit_price ?? item.unitPrice),
+    lineTotal: toNumber(item.line_total ?? item.lineTotal),
+    notes: toNullableString(item.notes),
+  }
+}
+
 function normalizeOrder(payload: unknown): ApiOrder {
   const item = toRecord(payload)
   const buyer = toRecord(item.buyer)
@@ -220,6 +301,8 @@ function normalizeOrder(payload: unknown): ApiOrder {
       ? item.statusUpdates.map(normalizeStatusUpdate)
       : []
 
+  const items = Array.isArray(item.items) ? item.items.map(normalizeOrderItem) : []
+
   return {
     id: toNumber(item.id),
     orderNumber: toString(item.order_number ?? item.orderNumber ?? `ORD-${toNumber(item.id)}`),
@@ -246,6 +329,7 @@ function normalizeOrder(payload: unknown): ApiOrder {
     productId: item.product_id != null ? toNumber(item.product_id) : (product.id != null ? toNumber(product.id) : null),
     productName: toString(product.name ?? item.product_name, "N/A"),
     productSlug: toString(product.slug ?? item.product_slug),
+    items,
     attachments,
     statusUpdates,
   }
@@ -537,12 +621,18 @@ export async function getManufacturerOrder(orderId: number): Promise<OrderDetail
   }
 }
 
-export async function createManufacturerOrder(data: {
-  buyer_id: number
+export interface CreateOrderItem {
   product_id: number
-  title: string
   quantity: number
   quantity_unit: string
+  unit_price: number
+  notes?: string
+}
+
+export async function createManufacturerOrder(data: {
+  buyer_id: number
+  items: CreateOrderItem[]
+  title: string
   total_amount: number
   currency_code: string
   estimated_delivery_at: string
@@ -556,13 +646,19 @@ export async function createManufacturerOrder(data: {
   try {
     const formData = new FormData()
     formData.append("buyer_id", String(data.buyer_id))
-    formData.append("product_id", String(data.product_id))
     formData.append("title", data.title)
-    formData.append("quantity", String(data.quantity))
-    formData.append("quantity_unit", data.quantity_unit)
     formData.append("total_amount", String(data.total_amount))
     formData.append("currency_code", data.currency_code)
     formData.append("estimated_delivery_at", data.estimated_delivery_at)
+    data.items.forEach((item, i) => {
+      formData.append(`items[${i}][product_id]`, String(item.product_id))
+      formData.append(`items[${i}][quantity]`, String(item.quantity))
+      formData.append(`items[${i}][quantity_unit]`, item.quantity_unit)
+      formData.append(`items[${i}][unit_price]`, String(item.unit_price))
+      if (item.notes) {
+        formData.append(`items[${i}][notes]`, item.notes)
+      }
+    })
     if (data.production_lead) formData.append("production_lead", data.production_lead)
     if (data.payment_terms) formData.append("payment_terms", data.payment_terms)
     if (data.shipping_terms) formData.append("shipping_terms", data.shipping_terms)
@@ -668,15 +764,16 @@ export async function getSelectProducts(): Promise<SelectProductsResponse> {
 }
 
 export async function getSelectBuyers(params: {
-  product_id: number
+  product_ids: number[]
   search?: string
   per_page?: number
   page?: number
 }): Promise<SelectBuyersResponse> {
   try {
-    const queryParams: Record<string, string | number> = {
-      product_id: params.product_id,
-    }
+    const queryParams: Record<string, string | number | number[]> = {}
+    params.product_ids.forEach((id, i) => {
+      queryParams[`product_ids[${i}]`] = id
+    })
     if (params.search) queryParams.search = params.search
     if (params.per_page) queryParams.per_page = params.per_page
     if (params.page) queryParams.page = params.page

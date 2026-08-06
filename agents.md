@@ -228,6 +228,44 @@ import { useAuth } from "@/lib/auth-context"
 const { user, isAuthenticated } = useAuth()
 ```
 
+#### TanStack Query (Incremental Rollout — server state only)
+
+Use TanStack Query for **read-heavy list/detail/CRUD** pages. Keep React Context for auth, favorites, subscriptions, notifications, and realtime messaging.
+
+**Setup**
+- Provider: `lib/query-provider.tsx` → `AppQueryProvider` in `app/layout.tsx`
+- Keys: **always** add factories in `lib/query-keys.ts` (never inline string keys in pages)
+- Family invalidation: use `queryKeyFamilies.*` when a mutation should refresh all filter/page variants
+
+**Patterns**
+- `useQuery` — single fetch (dashboard, detail, stats)
+- `useInfiniteQuery` — load-more lists (buyer/manufacturer orders)
+- `useMutation` — create/update/delete; pair with `setQueryData` or `invalidateQueries`
+- `placeholderData: (prev) => prev` — pagination/filter transitions without layout flash
+- Debounced search stays local `useState` + timer; put **debounced** value in the query key
+
+**After mutations**
+- Prefer `queryClient.setQueryData` when the response is enough to patch the cache
+- Use `invalidateQueries` when nested data is hard to patch (quotes, orders after status change)
+- Invalidate related list keys (e.g. detail mutation → list family + stats)
+
+**Migrated (do not re-migrate)**
+- Admin: products, orders, reviews, subscriptions, contact, analytics, reports, filters, suppliers, users, manufacturer-registrations, RFQs (`RfqList` admin branch), review-management, promotions (+ detail), pricing, industries, help-center, FAQ, dashboard, certificatetype
+- Buyer: dashboard, activity, RFQs (+ detail), orders (+ detail via `OrderDetailView`)
+- Manufacturer: dashboard, inquiries (+ detail), orders (+ detail via `SellerOrdersList` / `SellerOrderDetail`), products, certifications, analytics, review-center
+- Shared: `OrderDetailView` (admin + buyer order detail)
+- Public (Phase 2): home sections, `/search`, `/products`, `/suppliers`, `/industries` (+ `[slug]`), `/products/[slug]`, `/blog` (+ `[slug]`)
+- Public query keys: `publicCategories`, `publicAllCategories`, `publicHomeFeaturedProducts`, `publicHomeFeaturedSuppliers`, `publicFaqCategories`, `publicSearchProducts`, `publicSearchSuppliers`, `publicProducts`, `publicSuppliers`, `publicSuppliersFilterSource`, `publicSuppliersFilterOptions`, `publicIndustriesList`, `publicIndustriesStats`, `publicProductDetail`, `publicBlogArticles`, `publicBlogArticle`
+
+**Intentionally not migrated (freeze unless explicitly requested)**
+- `lib/auth-context.tsx`, messages/realtime, subscription orchestration
+- Admin: settings, site-settings, insights, messages
+- Buyer/manufacturer: settings, messages, support-tickets (chat components), product create/edit wizards
+- Context-driven pages: favorites/saved, cart-like flows
+- Public: pricing, messages, RFQ create, compare/map pages, legacy `/articles/[id]` (SSR pages like `/faq`, `/suppliers/[slug]` stay server components)
+
+**Preserve UX** during migration: existing toasts, Swal dialogs, pagination, filters, and empty/error states.
+
 ---
 
 ## ❌ WHAT NOT TO DO
@@ -326,6 +364,20 @@ pnpm remove          # Uninstall package
 8. **Be respectful of existing code** - Don't delete without reason
 
 **Remember**: The client (Israel) is very particular about code quality and stability. Work carefully! 🎯
+
+## ✅ Final 2-Day Delivery Checklist
+
+- TanStack Query rollout is **complete for standard dashboard list/detail flows**; do not expand scope without approval.
+- Freeze: auth, realtime/messages, subscription orchestration, settings/site-settings, heavy multi-step forms.
+- Validate core routes manually before handoff:
+  - Public landing/search/products/suppliers
+  - Admin products/orders/settings/site-settings
+  - Buyer dashboard orders/rfqs
+  - Manufacturer dashboard products/inquiries/orders
+- For each changed page: verify loading, empty, error, success, pagination, and filter states.
+- Confirm i18n behavior in `en`, `ar`, `he`, and `es` (Chinese slot).
+- Run `pnpm lint` and fix only newly introduced issues.
+- Do not change `.env.local`, auth flow, or core configs unless explicitly approved.
 
 ## Tech Stack
 - **Frontend**: React 18, TypeScript, Next.js App Router, Tailwind CSS

@@ -146,9 +146,21 @@ function normalizeMeta(payload: unknown): AdminRfqMeta | null {
   }
 }
 
-export async function getAdminRfqs(page = 1): Promise<AdminRfqsResponse> {
+export async function getAdminRfqs(params?: {
+  page?: number
+  per_page?: number
+  search?: string
+  status?: string
+}): Promise<AdminRfqsResponse> {
   try {
-    const response = await apiClient.get("/admin/rfqs", { params: { page } })
+    const queryParams: Record<string, string | number> = {
+      page: params?.page ?? 1,
+    }
+    if (params?.per_page) queryParams.per_page = params.per_page
+    if (params?.search) queryParams.search = params.search
+    if (params?.status) queryParams.status = params.status
+
+    const response = await apiClient.get("/admin/rfqs", { params: queryParams })
     const payload = toRecord(response.data)
     const rows = Array.isArray(payload.data) ? payload.data : []
 

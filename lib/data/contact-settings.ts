@@ -46,8 +46,8 @@ export const defaultContactInfo: ContactInfo[] = [
     id: "email-main",
     type: "email",
     label: "Email",
-    value: "hello@sourcenest.com",
-    link: "mailto:hello@sourcenest.com",
+    value: "info@sourcenest.tesh",
+    link: "mailto:info@sourcenest.tesh",
     icon: "mail",
     enabled: true,
     order: 1,
@@ -59,7 +59,7 @@ export const defaultContactInfo: ContactInfo[] = [
     value: "+1 (555) 123-4567",
     link: "tel:+1-555-123-4567",
     icon: "phone",
-    enabled: true,
+    enabled: false,
     order: 2,
   },
   {
@@ -68,7 +68,7 @@ export const defaultContactInfo: ContactInfo[] = [
     label: "Office",
     value: "123 Trade Center Drive\nSuite 400\nNew York, NY 10001",
     icon: "map-pin",
-    enabled: true,
+    enabled: false,
     order: 3,
   },
 ]

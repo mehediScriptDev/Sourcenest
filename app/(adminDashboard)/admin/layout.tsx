@@ -38,11 +38,25 @@ import {
   ClipboardList,
   Award,
   ScanEye,
-  ShoppingBag
+  ShoppingBag,
+  Globe,
 } from "lucide-react"
 import { useState } from "react"
+import { RfqsProvider } from "@/lib/rfqs-context"
 
 export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RfqsProvider>
+      <AdminLayoutInner>{children}</AdminLayoutInner>
+    </RfqsProvider>
+  )
+}
+
+function AdminLayoutInner({
   children,
 }: {
   children: React.ReactNode
@@ -55,32 +69,30 @@ export default function AdminLayout({
 
   // Create navigation array with translated labels
   const navigation = [
-    { name: t?.nav?.adminDashboard || "Dashboard", href: "/admin", icon: LayoutDashboard },
-    { name: t?.nav?.adminUsers || "Users", href: "/admin/users", icon: Users },
-    { name: t?.nav?.adminCreateManufacturer || "Create Manufacturer", href: "/admin/manufacturers/create", icon: UserPlus },
-    { name: t?.nav?.adminMfgRegistrations || "Mfg registrations", href: "/admin/manufacturer-registrations", icon: ClipboardList },
-    { name: t?.nav?.adminReviewManagement || "Review Management", href: "/admin/review-management", icon: ScanEye },
-    { name: t?.nav?.adminSuppliers || "Suppliers", href: "/admin/suppliers", icon: Factory },
-    { name: t?.nav?.adminProducts || "Products", href: "/admin/products", icon: Package },
-    { name: t?.nav?.adminIndustries || "Industries", href: "/admin/industries", icon: Layers },
-    // { name: t?.nav?.adminQuickFilters || "Quick Filters", href: "/admin/filters", icon: Filter },
-    { name: t?.nav?.adminReviews || "Reviews", href: "/admin/reviews", icon: Star },
-    { name: t?.nav?.adminRFQs || "RFQs", href: "/admin/rfqs", icon: FileText },
-    { name: t?.nav?.adminOrders || "Orders", href: "/admin/orders", icon: ShoppingBag },
-    { name: t?.nav?.adminMessages || "Messages", href: "/admin/messages", icon: MessageSquare },
-    { name: t?.nav?.adminSupportTickets || "Support Tickets", href: "/admin/customer-supports/tickets", icon: HelpCircle },
-    // { name: t?.nav?.adminReports || "Reports", href: "/admin/reports", icon: Flag, badge: "3" },
-    { name: t?.nav?.adminPricing || "Pricing", href: "/admin/pricing", icon: DollarSign },
-    { name: t?.nav?.adminPromotions || "Promotions", href: "/admin/promotions", icon: Sparkles },
-    { name: t?.nav?.adminSubscriptions || "Subscriptions", href: "/admin/subscriptions", icon: CreditCard },
-    // { name: t?.nav?.adminInsights || "Insights", href: "/admin/insights", icon: Lightbulb },
-    { name: t?.nav?.adminCertificateType || "Certificate Type", href: "/admin/certificatetype", icon: Award },
-    { name: t?.nav?.adminAnalytics || "Analytics", href: "/admin/analytics", icon: BarChart3 },
-    { name: t?.nav?.adminContactPage || "Contact Page", href: "/admin/contact", icon: Mail },
-    { name: t?.nav?.adminFAQManagement || "FAQ Management", href: "/admin/faq", icon: HelpCircle },
-    // { name: t?.nav?.adminHelpCenter || "Help Center", href: "/admin/help-center", icon: HelpCircle },
-    // { name: t?.nav?.adminSiteSettings || "Site Settings", href: "/admin/site-settings", icon: FileText },
-    { name: t?.nav?.adminSettings || "Settings", href: "/admin/settings", icon: Settings },
+    { name: t.nav.adminDashboard, href: "/admin", icon: LayoutDashboard },
+    { name: t.nav.adminUsers, href: "/admin/users", icon: Users },
+    { name: t.nav.adminCreateManufacturer, href: "/admin/manufacturers/create", icon: UserPlus },
+    { name: t.nav.adminMfgRegistrations, href: "/admin/manufacturer-registrations", icon: ClipboardList },
+    { name: t.nav.adminReviewManagement, href: "/admin/review-management", icon: ScanEye },
+    { name: t.nav.adminSuppliers, href: "/admin/suppliers", icon: Factory },
+    { name: t.nav.adminProducts, href: "/admin/products", icon: Package },
+    { name: t.nav.adminIndustries, href: "/admin/industries", icon: Layers },
+    { name: t.nav.adminReviews, href: "/admin/reviews", icon: Star },
+    { name: t.nav.adminRFQs, href: "/admin/rfqs", icon: FileText },
+    { name: t.nav.adminOrders, href: "/admin/orders", icon: ShoppingBag },
+    { name: t.nav.adminMessages, href: "/admin/messages", icon: MessageSquare },
+    { name: t.nav.adminSupportTickets, href: "/admin/customer-supports/tickets", icon: HelpCircle },
+    { name: t.nav.adminPricing, href: "/admin/pricing", icon: DollarSign },
+    { name: t.nav.adminPromotions, href: "/admin/promotions", icon: Sparkles },
+    { name: t.nav.adminSubscriptions, href: "/admin/subscriptions", icon: CreditCard },
+    { name: t.nav.adminCertificateType, href: "/admin/certificatetype", icon: Award },
+    { name: t.nav.adminAnalytics, href: "/admin/analytics", icon: BarChart3 },
+    { name: t.nav.adminInsights, href: "/admin/insights", icon: Lightbulb },
+    { name: t.nav.adminReports, href: "/admin/reports", icon: Flag },
+    { name: t.nav.adminContactPage, href: "/admin/contact", icon: Mail },
+    { name: t.nav.adminFAQManagement, href: "/admin/faq", icon: HelpCircle },
+    { name: t.nav.adminSiteSettings, href: "/admin/site-settings", icon: Globe },
+    { name: t.nav.adminSettings, href: "/admin/settings", icon: Settings },
   ]
 
   useEffect(() => {
@@ -94,7 +106,7 @@ export default function AdminLayout({
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="mt-4 text-muted-foreground">Loading...</p>
+          <p className="mt-4 text-muted-foreground">{t.admin.layout.loading}</p>
         </div>
       </div>
     )
@@ -116,8 +128,8 @@ export default function AdminLayout({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-dvh w-64 shrink-0 flex-col bg-sidebar shadow-lg transition-transform duration-200 ease-in-out lg:z-30 lg:shadow-none",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          "fixed inset-y-0 inset-s-0 z-50 flex h-dvh w-64 shrink-0 flex-col bg-sidebar shadow-lg transition-transform duration-200 ease-in-out lg:z-30 lg:shadow-none",
+          sidebarOpen ? "translate-x-0" : "ltr:-translate-x-full rtl:translate-x-full lg:translate-x-0 lg:rtl:translate-x-0 lg:ltr:translate-x-0"
         )}
       >
         <div className="flex h-full min-h-0 flex-col">
@@ -126,7 +138,7 @@ export default function AdminLayout({
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive">
                 <Shield className="h-4 w-4 text-destructive-foreground" />
               </div>
-              <span className="font-serif text-lg font-medium text-sidebar-foreground">Admin Panel</span>
+              <span className="font-serif text-lg font-medium text-sidebar-foreground">{t.admin.layout.panelTitle}</span>
             </Link>
             <button 
               className="lg:hidden text-sidebar-foreground"
@@ -176,7 +188,7 @@ export default function AdminLayout({
                 <p className="text-sm font-medium text-sidebar-foreground">
                   {user.firstName} {user.lastName}
                 </p>
-                <p className="text-xs text-sidebar-foreground/60">Super Admin</p>
+                <p className="text-xs text-sidebar-foreground/60">{t.admin.layout.superAdmin}</p>
               </div>
             </div>
             <Button 
@@ -188,13 +200,13 @@ export default function AdminLayout({
               }}
             >
               <LogOut className="h-4 w-4" />
-              {t?.nav?.adminSignOut || "Sign Out"}
+              {t.nav.adminSignOut}
             </Button>
           </div>
         </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:pl-64">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:ps-64">
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 lg:px-6">
           <div className="flex items-center gap-4">
             <button 
@@ -208,7 +220,7 @@ export default function AdminLayout({
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input 
                 type="text"
-                placeholder="Search users, suppliers, products..."
+                placeholder={t.admin.layout.searchPlaceholder}
                 className="h-9 w-full min-w-0 rounded-lg border border-input bg-background pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
@@ -217,7 +229,7 @@ export default function AdminLayout({
           <div className="flex items-center gap-3">
             <NotificationsDropdown />
             <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
-              {t?.nav?.adminViewSite || "View Site"}
+              {t.nav.adminViewSite}
             </Link>
           </div>
         </header>

@@ -4,7 +4,7 @@ import { use } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { useTranslation } from "@/lib/i18n"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Input } from "@/components/ui/input"
 import { 
@@ -47,8 +47,8 @@ export default function HelpCategoryPage({ params }: { params: Promise<{ categor
   const articles = getEnabledArticles(categoryData)
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden">
+      <SiteHeader />
       <main className="flex-1">
         {/* Breadcrumb */}
         <section className="border-b border-border bg-muted/50 py-4">
@@ -64,7 +64,7 @@ export default function HelpCategoryPage({ params }: { params: Promise<{ categor
         </section>
 
         {/* Header */}
-        <section className="py-12 lg:py-16">
+        <section className="py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <Link 
               href="/help" 

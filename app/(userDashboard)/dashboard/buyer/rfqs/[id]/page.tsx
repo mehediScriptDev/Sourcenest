@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,61 +30,62 @@ import {
   Loader2
 } from "lucide-react"
 
-import { getBuyerRFQ, respondToQuote, type BuyerRFQ } from "@/lib/api/rfqs"
+import { getBuyerRFQ, respondToQuote } from "@/lib/api/rfqs"
+import { queryKeys } from "@/lib/query-keys"
 import { format } from "date-fns"
 import Swal from 'sweetalert2'
+import { useTranslation } from "@/lib/i18n"
 
 export default function BuyerRFQDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const id = params.id as string
-  
-  const [rfq, setRfq] = useState<BuyerRFQ | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const queryClient = useQueryClient()
 
-  const loadRFQ = async () => {
-    setLoading(true)
-    const response = await getBuyerRFQ(id)
-    if (response.success && response.data) {
-      setRfq(response.data)
-    }
-    setLoading(false)
-  }
+  const { t } = useTranslation()
 
-  useEffect(() => {
-    loadRFQ()
-  }, [id])
+  const rfqQueryKey = queryKeys.buyerRfqDetail(id)
+
+  const rfqQuery = useQuery({
+    queryKey: rfqQueryKey,
+    queryFn: () => getBuyerRFQ(id),
+    enabled: Boolean(id),
+  })
+
+  const respondMutation = useMutation({
+    mutationFn: (action: "accept" | "cancel") => respondToQuote(id, { action }),
+  })
+
+  const rfq = rfqQuery.data?.success ? rfqQuery.data.data : null
+  const loading = rfqQuery.isLoading
+  const isSubmitting = respondMutation.isPending
 
   const handleAction = async (action: "accept" | "cancel") => {
-    setIsSubmitting(true)
     try {
-      const response = await respondToQuote(id, { action })
+      const response = await respondMutation.mutateAsync(action)
       if (response.success) {
         Swal.fire({
           icon: 'success',
-          title: 'Success!',
-          text: `Quote ${action}ed successfully.`,
+          title: t.buyer.rfqs.details.alerts.success,
+          text: action === "accept" ? t.buyer.rfqs.details.alerts.acceptSuccess : t.buyer.rfqs.details.alerts.declineSuccess,
           confirmButtonColor: '#10b981'
         })
-        loadRFQ() // Reload data to show updated status
+        await queryClient.invalidateQueries({ queryKey: rfqQueryKey })
+        await queryClient.invalidateQueries({ queryKey: queryKeys.buyerRfqs() })
       } else {
         Swal.fire({
           icon: 'error',
-          title: 'Error',
-          text: response.message || `Failed to ${action} quote.`,
+          title: t.buyer.rfqs.details.alerts.error,
+          text: response.message || (action === "accept" ? t.buyer.rfqs.details.alerts.acceptError : t.buyer.rfqs.details.alerts.declineError),
           confirmButtonColor: '#ef4444'
         })
       }
-    } catch (error) {
+    } catch (_error) {
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: 'An unexpected error occurred.',
+        title: t.buyer.rfqs.details.alerts.error,
+        text: t.buyer.rfqs.details.alerts.unexpectedError,
         confirmButtonColor: '#ef4444'
       })
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -100,10 +101,10 @@ export default function BuyerRFQDetailPage() {
     return (
       <div className="py-12 text-center">
         <FileText className="mx-auto h-12 w-12 text-muted-foreground/50" />
-        <h3 className="mt-4 font-semibold text-foreground">RFQ Not Found</h3>
-        <p className="mt-2 text-muted-foreground">The RFQ you are looking for does not exist or has been removed.</p>
+        <h3 className="mt-4 font-semibold text-foreground">{t.buyer.rfqs.details.notFound}</h3>
+        <p className="mt-2 text-muted-foreground">{t.buyer.rfqs.details.notFoundDesc}</p>
         <Button className="mt-4" asChild>
-          <Link href="/dashboard/buyer/rfqs">Back to RFQs</Link>
+          <Link href="/dashboard/buyer/rfqs">{t.buyer.rfqs.details.backToRfqs}</Link>
         </Button>
       </div>
     )
@@ -135,10 +136,12 @@ export default function BuyerRFQDetailPage() {
               <h1 className="font-serif text-2xl font-medium text-foreground">
                 {rfq.rfq_number}
               </h1>
-              <Badge className={statusColors[rfq.status.toLowerCase()] || ""}>{rfq.status}</Badge>
+              <Badge className={statusColors[rfq.status.toLowerCase()] || ""}>
+                {t.buyer.rfqs.status[rfq.status.toLowerCase() as keyof typeof t.buyer.rfqs.status] || rfq.status}
+              </Badge>
             </div>
             <p className="mt-1 text-muted-foreground">
-              Submitted on {format(new Date(rfq.created_at), 'MMM d, yyyy')}
+              {t.buyer.rfqs.details.submittedOn.replace("{date}", format(new Date(rfq.created_at), 'MMM d, yyyy'))}
             </p>
           </div>
         </div>
@@ -149,41 +152,41 @@ export default function BuyerRFQDetailPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Your Request
+            {t.buyer.rfqs.details.yourRequest}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="text-sm text-muted-foreground">Product</p>
+              <p className="text-sm text-muted-foreground">{t.buyer.rfqs.details.fields.product}</p>
               <p className="font-semibold text-foreground">{rfq.product?.name}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Quantity</p>
+              <p className="text-sm text-muted-foreground">{t.buyer.rfqs.details.fields.quantity}</p>
               <p className="font-semibold text-foreground">{rfq.quantity} {rfq.quantity_unit}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Target Price</p>
+              <p className="text-sm text-muted-foreground">{t.buyer.rfqs.details.fields.targetPrice}</p>
               <p className="font-semibold text-foreground">
-                {rfq.target_price ? `${rfq.target_price} ${rfq.target_currency_code}` : "N/A"}
+                {rfq.target_price ? `${rfq.target_price} ${rfq.target_currency_code}` : t.buyer.rfqs.details.na}
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Delivery</p>
+              <p className="text-sm text-muted-foreground">{t.buyer.rfqs.details.fields.delivery}</p>
               <p className="font-semibold text-foreground">
-                {rfq.required_delivery_date ? format(new Date(rfq.required_delivery_date), 'MMM d, yyyy') : "N/A"}
+                {rfq.required_delivery_date ? format(new Date(rfq.required_delivery_date), 'MMM d, yyyy') : t.buyer.rfqs.details.na}
               </p>
             </div>
           </div>
           {rfq.packaging_details && (
-            <div className="mt-4 pt-4 border-t">
-              <p className="text-sm text-muted-foreground mb-1">Packaging Details</p>
+            <div className="mt-4 pt-4 border-t border-border">
+              <p className="text-sm text-muted-foreground mb-1">{t.buyer.rfqs.details.fields.packagingDetails}</p>
               <p className="text-sm">{rfq.packaging_details}</p>
             </div>
           )}
           {rfq.additional_requirements && (
-            <div className="mt-4 pt-4 border-t">
-              <p className="text-sm text-muted-foreground mb-1">Additional Requirements</p>
+            <div className="mt-4 pt-4 border-t border-border">
+              <p className="text-sm text-muted-foreground mb-1">{t.buyer.rfqs.details.fields.additionalRequirements}</p>
               <p className="text-sm">{rfq.additional_requirements}</p>
             </div>
           )}
@@ -197,15 +200,15 @@ export default function BuyerRFQDetailPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 text-xl">
-                  {rfq.supplier?.company_name || "Supplier Offer"}
+                  {rfq.supplier?.company_name || t.buyer.rfqs.details.supplierOffer}
                 </CardTitle>
                 <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                   <MapPin className="h-3 w-3" />
-                  {rfq.supplier?.location || "Unknown Location"}
+                  {rfq.supplier?.location || t.buyer.rfqs.details.na}
                   {rfq.quoted_at && (
                     <>
                       <span className="mx-1">•</span>
-                      Submitted {format(new Date(rfq.quoted_at), 'MMM d, yyyy')}
+                      {t.buyer.rfqs.details.submittedOn.replace("{date}", format(new Date(rfq.quoted_at), 'MMM d, yyyy'))}
                     </>
                   )}
                 </div>
@@ -262,16 +265,16 @@ export default function BuyerRFQDetailPage() {
               <div>
                 <h4 className="font-medium text-foreground mb-3 flex items-center gap-2">
                   <Truck className="h-4 w-4" />
-                  Shipping Terms
+                  {t.buyer.rfqs.details.shippingAndTerms}
                 </h4>
                 <Badge variant="outline" className="text-sm">{rfq.quote_shipping_terms || rfq.shipping_terms}</Badge>
               </div>
               <div>
                 <h4 className="font-medium text-foreground mb-3 flex items-center gap-2">
                   <CreditCard className="h-4 w-4" />
-                  Payment Terms
+                  {t.buyer.rfqs.details.paymentTerms}
                 </h4>
-                <p className="text-sm text-foreground">{rfq.quote_payment_terms || "N/A"}</p>
+                <p className="text-sm text-foreground">{rfq.quote_payment_terms || t.buyer.rfqs.details.na}</p>
               </div>
             </div>
 
@@ -374,7 +377,7 @@ export default function BuyerRFQDetailPage() {
                 <div>
                   <h4 className="font-medium text-foreground mb-3 flex items-center gap-2">
                     <File className="h-4 w-4" />
-                    Documents
+                    {t.buyer.rfqs.details.includedDocuments}
                   </h4>
                   <div className="space-y-2">
                     {rfq.quote_documents.map((file) => (
@@ -394,7 +397,7 @@ export default function BuyerRFQDetailPage() {
                         <Button variant="ghost" size="sm" className="gap-2" asChild>
                           <a href={file.url} target="_blank" rel="noopener noreferrer">
                             <Download className="h-4 w-4" />
-                            Download
+                            {t.buyer.rfqs.details.download}
                           </a>
                         </Button>
                       </div>
@@ -414,7 +417,7 @@ export default function BuyerRFQDetailPage() {
                   disabled={isSubmitting}
                 >
                   <ThumbsUp className="h-4 w-4" />
-                  Accept Offer
+                  {t.buyer.rfqs.details.acceptQuote}
                 </Button>
                 <Button 
                   variant="destructive" 
@@ -423,12 +426,12 @@ export default function BuyerRFQDetailPage() {
                   disabled={isSubmitting}
                 >
                   <AlertCircle className="h-4 w-4" />
-                  Reject Offer
+                  {t.buyer.rfqs.details.declineQuote}
                 </Button>
                 <Button variant="outline" className="gap-2" asChild>
                   <Link href={`/dashboard/buyer/messages?conversation=${rfq.conversation_id || ''}`}>
                     <MessageSquare className="h-4 w-4" />
-                    Message Supplier
+                    {t.buyer.rfqs.details.messageSupplier}
                   </Link>
                 </Button>
               </div>
@@ -439,7 +442,7 @@ export default function BuyerRFQDetailPage() {
                  <Button variant="outline" className="flex-1 gap-2" asChild>
                   <Link href={`/dashboard/buyer/messages?conversation=${rfq.conversation_id || ''}`}>
                     <MessageSquare className="h-4 w-4" />
-                    Message Supplier
+                    {t.buyer.rfqs.details.messageSupplier}
                   </Link>
                 </Button>
               </div>
@@ -450,9 +453,9 @@ export default function BuyerRFQDetailPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <Clock className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 font-semibold text-foreground">Waiting for Quote</h3>
+            <h3 className="mt-4 font-semibold text-foreground">{t.buyer.rfqs.details.waitingForQuote}</h3>
             <p className="mt-2 text-muted-foreground">
-              Your request has been sent to the supplier. You will be notified when they reply.
+              {t.buyer.rfqs.details.waitingForQuoteDesc}
             </p>
           </CardContent>
         </Card>

@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog"
 import { Flag, AlertTriangle, CheckCircle } from "lucide-react"
 import { toast } from "sonner"
+import { submitSupplierReport } from "@/lib/api/supplier-reports"
+import { usePathname } from "next/navigation"
 
 export type ReportType = "supplier" | "product"
 
@@ -46,6 +48,7 @@ const reportReasons = {
 }
 
 export function ReportDialog({ type, targetId, targetName, children }: ReportDialogProps) {
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState("")
   const [details, setDetails] = useState("")
@@ -59,24 +62,38 @@ export function ReportDialog({ type, targetId, targetName, children }: ReportDia
     }
 
     setIsSubmitting(true)
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    setIsSubmitting(false)
-    setIsSubmitted(true)
-    
-    toast.success("Report submitted successfully", {
-      description: "Our team will review your report within 24-48 hours."
-    })
 
-    // Reset and close after showing success
-    setTimeout(() => {
-      setOpen(false)
-      setIsSubmitted(false)
-      setReason("")
-      setDetails("")
-    }, 2000)
+    try {
+      if (type === "supplier") {
+        const result = await submitSupplierReport(targetId, {
+          reason: reason as "fake" | "scam" | "quality" | "communication" | "certification" | "other",
+          details: details.trim() || undefined,
+          source_page: pathname || undefined,
+        })
+
+        setIsSubmitted(true)
+        toast.success("Report submitted successfully", {
+          description: result.message || "Our team will review your report within 24-48 hours.",
+        })
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        setIsSubmitted(true)
+        toast.success("Report submitted successfully", {
+          description: "Our team will review your report within 24-48 hours.",
+        })
+      }
+
+      setTimeout(() => {
+        setOpen(false)
+        setIsSubmitted(false)
+        setReason("")
+        setDetails("")
+      }, 2000)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to submit report")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const reasons = reportReasons[type]

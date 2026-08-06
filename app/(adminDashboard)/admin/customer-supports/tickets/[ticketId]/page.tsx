@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import { useTranslation } from "@/lib/i18n"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,15 +28,8 @@ import {
   type CustomerSupportTicketStatus,
 } from "@/lib/api/admin-customer-support-tickets"
 import { ArrowLeft, Loader2, Paperclip, Send, Save } from "lucide-react"
-
-function statusLabel(status: CustomerSupportTicketStatus): string {
-  if (status === "in_progress") return "Open"
-  if (status === "waiting_on_customer") return "Waiting On Customer"
-  if (status === "resolved") return "Resolved"
-  if (status === "closed") return "Closed"
-  if (status === "open") return "Pending"
-  return "Unknown"
-}
+import { SupportErrorDialog } from "@/components/support/support-error-dialog"
+import { SUPPORT_ATTACHMENT_ACCEPT } from "@/components/support/support-message-attachments"
 
 function statusClass(status: CustomerSupportTicketStatus): string {
   if (status === "open") return "bg-amber-100 text-amber-700"
@@ -61,20 +55,12 @@ function parseTicketId(rawId: string | string[] | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return "N/A"
-  const asDate = new Date(value)
-  if (!Number.isNaN(asDate.getTime())) {
-    return asDate.toLocaleString()
-  }
-  return value
-}
-
-function displayMessageName(message: CustomerSupportTicketMessage): string {
-  return message.user?.fullName || "Unknown User"
-}
-
 export default function AdminCustomerSupportTicketDetailsPage() {
+  const { t } = useTranslation()
+  const p = t.admin.pages.supportTickets
+  const c = t.admin.common
+  const ts = t.admin.ticketStatus
+  const roles = t.admin.roles
   const params = useParams<{ ticketId: string }>()
   const ticketId = parseTicketId(params?.ticketId)
   const { user } = useAuth()
@@ -92,6 +78,49 @@ export default function AdminCustomerSupportTicketDetailsPage() {
 
   const [replyMessage, setReplyMessage] = useState("")
   const [replyAttachments, setReplyAttachments] = useState<File[]>([])
+  const [errorDialog, setErrorDialog] = useState<{ title: string; message: string } | null>(null)
+
+  const showError = (title: string, message?: string) => {
+    setErrorDialog({
+      title,
+      message: message?.trim() || c.pleaseTryAgain,
+    })
+  }
+
+  const getStatusLabel = (value: CustomerSupportTicketStatus): string => {
+    if (value === "open") return ts.pending
+    if (value === "in_progress") return ts.open
+    if (value === "waiting_on_customer") return ts.waiting_on_customer
+    if (value === "resolved") return ts.resolved
+    if (value === "closed") return ts.closed
+    return ts.unknown
+  }
+
+  const getPriorityLabel = (value: CustomerSupportTicketPriority): string => {
+    if (value === "urgent") return c.urgent
+    if (value === "high") return c.high
+    if (value === "medium") return c.medium
+    if (value === "low") return c.low
+    return c.normal
+  }
+
+  const formatDate = (value: string | null): string => {
+    if (!value) return c.na
+    const asDate = new Date(value)
+    if (!Number.isNaN(asDate.getTime())) {
+      return asDate.toLocaleString()
+    }
+    return value
+  }
+
+  const displayMessageName = (message: CustomerSupportTicketMessage): string => {
+    return message.user?.fullName || c.unknownUser
+  }
+
+  const getRoleLabel = (role?: string | null): string => {
+    if (!role) return roles.unknown
+    return roles[role as keyof typeof roles] || role
+  }
 
   useEffect(() => {
     if (!ticketId) {
@@ -109,8 +138,8 @@ export default function AdminCustomerSupportTicketDetailsPage() {
 
       if (!response.success || !response.data) {
         toast({
-          title: "Failed to load ticket",
-          description: response.message || "Please try again.",
+          title: p.loadFailed,
+          description: response.message || c.pleaseTryAgain,
           variant: "destructive",
         })
         setTicket(null)
@@ -131,7 +160,7 @@ export default function AdminCustomerSupportTicketDetailsPage() {
     return () => {
       mounted = false
     }
-  }, [ticketId, toast])
+  }, [ticketId, toast, p.loadFailed, c.pleaseTryAgain])
 
   const sortedMessages = useMemo(() => {
     if (!ticket?.messages) return []
@@ -152,22 +181,22 @@ export default function AdminCustomerSupportTicketDetailsPage() {
 
     if (!response.success || !response.data) {
       toast({
-        title: "Failed to update ticket",
-        description: response.message || "Please try again.",
+        title: c.failedToUpdateTicket,
+        description: response.message || c.pleaseTryAgain,
         variant: "destructive",
       })
       return
     }
 
     setTicket(response.data)
-    toast({ title: "Ticket updated" })
+    toast({ title: p.ticketUpdated })
   }
 
   const handleSendReply = async () => {
     if (!ticketId || !replyMessage.trim()) {
       toast({
-        title: "Reply message required",
-        description: "Please write a message before sending.",
+        title: p.replyRequired,
+        description: p.replyRequiredDesc,
         variant: "destructive",
       })
       return
@@ -181,11 +210,7 @@ export default function AdminCustomerSupportTicketDetailsPage() {
     setIsReplying(false)
 
     if (!response.success || !response.data) {
-      toast({
-        title: "Failed to send reply",
-        description: response.message || "Please try again.",
-        variant: "destructive",
-      })
+      showError(c.failedToSendReplyGeneric, response.message)
       return
     }
 
@@ -197,7 +222,7 @@ export default function AdminCustomerSupportTicketDetailsPage() {
 
     setReplyMessage("")
     setReplyAttachments([])
-    toast({ title: "Reply sent" })
+    toast({ title: p.replySent })
   }
 
   if (!ticketId) {
@@ -206,11 +231,11 @@ export default function AdminCustomerSupportTicketDetailsPage() {
         <Button variant="outline" asChild>
           <Link href="/admin/customer-supports/tickets" className="gap-2">
             <ArrowLeft className="h-4 w-4" />
-            Back To Tickets
+            {c.backToTickets}
           </Link>
         </Button>
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          Invalid ticket id.
+          {p.invalidTicketId}
         </div>
       </div>
     )
@@ -230,11 +255,11 @@ export default function AdminCustomerSupportTicketDetailsPage() {
         <Button variant="outline" asChild>
           <Link href="/admin/customer-supports/tickets" className="gap-2">
             <ArrowLeft className="h-4 w-4" />
-            Back To Tickets
+            {c.backToTickets}
           </Link>
         </Button>
         <div className="rounded-lg border border-dashed border-border py-14 text-center text-muted-foreground">
-          Ticket not found.
+          {p.ticketNotFound}
         </div>
       </div>
     )
@@ -247,95 +272,95 @@ export default function AdminCustomerSupportTicketDetailsPage() {
           <Button variant="outline" asChild className="mb-3">
             <Link href="/admin/customer-supports/tickets" className="gap-2">
               <ArrowLeft className="h-4 w-4" />
-              Back To Tickets
+              {c.backToTickets}
             </Link>
           </Button>
-          <h1 className="font-serif text-2xl font-medium text-foreground">Ticket #{ticket.id}</h1>
+          <h1 className="font-serif text-2xl font-medium text-foreground">{c.ticketNumber.replace("{id}", String(ticket.id))}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{ticket.subject}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge className={statusClass(ticket.status)}>{statusLabel(ticket.status)}</Badge>
-          <Badge className={priorityClass(ticket.priority)}>{ticket.priority}</Badge>
+          <Badge className={statusClass(ticket.status)}>{getStatusLabel(ticket.status)}</Badge>
+          <Badge className={priorityClass(ticket.priority)}>{getPriorityLabel(ticket.priority)}</Badge>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-4 lg:col-span-1 space-y-4">
-          <h2 className="font-medium text-foreground">Ticket Settings</h2>
+          <h2 className="font-medium text-foreground">{p.ticketSettings}</h2>
 
           <div className="space-y-2">
-            <Label>Status</Label>
+            <Label>{c.status}</Label>
             <Select value={status} onValueChange={(value) => setStatus(value as CustomerSupportTicketStatus)}>
               <SelectTrigger>
-                <SelectValue placeholder="Select status" />
+                <SelectValue placeholder={c.selectStatus} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="open">Pending</SelectItem>
-                <SelectItem value="in_progress">Open</SelectItem>
-                <SelectItem value="waiting_on_customer">Waiting On Customer</SelectItem>
-                <SelectItem value="resolved">Resolved</SelectItem>
-                <SelectItem value="closed">Closed</SelectItem>
+                <SelectItem value="open">{ts.pending}</SelectItem>
+                <SelectItem value="in_progress">{ts.open}</SelectItem>
+                <SelectItem value="waiting_on_customer">{ts.waiting_on_customer}</SelectItem>
+                <SelectItem value="resolved">{ts.resolved}</SelectItem>
+                <SelectItem value="closed">{ts.closed}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label>Priority</Label>
+            <Label>{c.priority}</Label>
             <Select value={priority} onValueChange={(value) => setPriority(value as CustomerSupportTicketPriority)}>
               <SelectTrigger>
-                <SelectValue placeholder="Select priority" />
+                <SelectValue placeholder={c.selectPriority} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="urgent">Urgent</SelectItem>
+                <SelectItem value="low">{c.low}</SelectItem>
+                <SelectItem value="medium">{c.medium}</SelectItem>
+                <SelectItem value="high">{c.high}</SelectItem>
+                <SelectItem value="urgent">{c.urgent}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="department-type">Department Type</Label>
+            <Label htmlFor="department-type">{p.departmentType}</Label>
             <Input
               id="department-type"
               value={departmentType}
               onChange={(event) => setDepartmentType(event.target.value)}
-              placeholder="sales / technical / billing"
+              placeholder={p.departmentPlaceholder}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="assign-to">Assign To (Admin ID)</Label>
+            <Label htmlFor="assign-to">{p.assignTo}</Label>
             <Input
               id="assign-to"
               type="number"
               value={assignTo}
               onChange={(event) => setAssignTo(event.target.value)}
-              placeholder="Leave empty for unassigned"
+              placeholder={p.assignPlaceholder}
             />
           </div>
 
           <Button className="w-full gap-2" onClick={() => void handleUpdateTicket()} disabled={isSaving}>
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save Ticket Changes
+            {p.saveTicketChanges}
           </Button>
 
           <div className="rounded-lg border border-border p-3 text-xs text-muted-foreground space-y-1">
-            <p>Requester: {ticket.user?.fullName || "N/A"}</p>
-            <p>Email: {ticket.user?.email || "N/A"}</p>
-            <p>Role: {ticket.user?.role || "unknown"}</p>
-            <p>Created: {formatDate(ticket.createdAt)}</p>
-            <p>Updated: {formatDate(ticket.updatedAt)}</p>
-            <p>Assignee: {ticket.assignee?.fullName || "Unassigned"}</p>
+            <p>{p.requester} {ticket.user?.fullName || c.na}</p>
+            <p>{c.emailColon} {ticket.user?.email || c.na}</p>
+            <p>{c.roleLabel} {getRoleLabel(ticket.user?.role)}</p>
+            <p>{c.createdLabel} {formatDate(ticket.createdAt)}</p>
+            <p>{c.updatedLabel} {formatDate(ticket.updatedAt)}</p>
+            <p>{p.assignee} {ticket.assignee?.fullName || c.unassigned}</p>
           </div>
         </div>
 
         <div className="rounded-xl border border-border bg-card p-4 lg:col-span-2 space-y-4">
-          <h2 className="font-medium text-foreground">Conversation</h2>
+          <h2 className="font-medium text-foreground">{p.conversation}</h2>
 
           <div className="max-h-130 space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3">
             {sortedMessages.length === 0 ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">No messages yet.</p>
+              <p className="py-10 text-center text-sm text-muted-foreground">{c.noMessagesYet}</p>
             ) : (
               sortedMessages.map((message) => {
                 const isMine = user?.id != null && Number(user.id) === message.userId
@@ -378,21 +403,22 @@ export default function AdminCustomerSupportTicketDetailsPage() {
           </div>
 
           <div className="space-y-3 rounded-lg border border-border p-3">
-            <Label htmlFor="reply-message">Reply Message</Label>
+            <Label htmlFor="reply-message">{p.replyMessage}</Label>
             <Textarea
               id="reply-message"
               value={replyMessage}
               onChange={(event) => setReplyMessage(event.target.value)}
-              placeholder="Write your response to the customer"
+              placeholder={c.writeResponse}
               rows={4}
             />
 
             <div className="space-y-2">
-              <Label htmlFor="reply-attachments">Attachments</Label>
+              <Label htmlFor="reply-attachments">{p.attachments}</Label>
               <Input
                 id="reply-attachments"
                 type="file"
                 multiple
+                accept={SUPPORT_ATTACHMENT_ACCEPT}
                 onChange={(event) => setReplyAttachments(Array.from(event.target.files || []))}
               />
               {replyAttachments.length > 0 ? (
@@ -411,12 +437,20 @@ export default function AdminCustomerSupportTicketDetailsPage() {
                 disabled={isReplying || !replyMessage.trim()}
               >
                 {isReplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Send Reply
+                {p.sendReply}
               </Button>
             </div>
           </div>
         </div>
       </div>
+
+      <SupportErrorDialog
+        open={!!errorDialog}
+        title={errorDialog?.title ?? ""}
+        message={errorDialog?.message ?? ""}
+        onClose={() => setErrorDialog(null)}
+        closeLabel={c.ok}
+      />
     </div>
   )
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useTranslation } from "@/lib/i18n"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { 
@@ -89,21 +89,21 @@ export default function VerificationPage() {
   ]
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden">
+      <SiteHeader />
       <main className="flex-1">
         {/* Hero */}
-        <section className="bg-primary py-20 lg:py-28">
+        <section className="bg-primary py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
               <div className="inline-flex items-center gap-2 rounded-full bg-secondary/20 px-4 py-1.5 text-sm text-primary-foreground">
                 <Shield className="h-4 w-4" />
                 <span>{t?.verification?.hero?.badge}</span>
               </div>
-              <h1 className="mt-6 font-serif text-4xl font-medium tracking-tight text-primary-foreground sm:text-5xl">
+              <h1 className="mt-4 font-serif text-3xl font-medium tracking-tight text-primary-foreground min-[400px]:text-4xl sm:mt-6 sm:text-5xl lg:text-6xl">
                 {t?.verification?.hero?.title}
               </h1>
-              <p className="mx-auto mt-6 max-w-2xl text-lg text-primary-foreground/80">
+              <p className="mx-auto mt-4 max-w-2xl text-sm text-primary-foreground/80 sm:mt-6 sm:text-base lg:text-lg">
                 {t?.verification?.hero?.description}
               </p>
             </div>
@@ -111,10 +111,10 @@ export default function VerificationPage() {
         </section>
 
         {/* Why Review Matters */}
-        <section className="py-20 lg:py-28">
+        <section className="py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl">
-              <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+              <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground sm:text-3xl lg:text-4xl">
                 {t?.verification?.whyMatters?.title}
               </h2>
               <div className="mt-8 space-y-6 text-muted-foreground leading-relaxed">
@@ -139,26 +139,26 @@ export default function VerificationPage() {
         </section>
 
         {/* Review Steps */}
-        <section className="bg-muted/50 py-20 lg:py-28">
+        <section className="bg-muted/50 py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
-              <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+              <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground sm:text-3xl lg:text-4xl">
                 {t?.verification?.steps?.title}
               </h2>
-              <p className="mt-4 text-lg text-muted-foreground">
+              <p className="mt-3 text-sm text-muted-foreground sm:mt-4 sm:text-base">
                 {t?.verification?.steps?.subtitle}
               </p>
             </div>
 
-            <div className="mt-16 grid gap-6 md:grid-cols-2">
+            <div className="mt-8 grid grid-cols-1 gap-3 sm:mt-12 sm:grid-cols-2 sm:gap-5 lg:gap-6">
               {verificationSteps.map((step) => (
-                <div key={step.title} className="group relative overflow-hidden rounded-2xl border border-border bg-card p-8 transition-shadow hover:shadow-lg">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-secondary/10">
-                    <step.icon className="h-7 w-7 text-secondary" />
+                <div key={step.title} className="group relative overflow-hidden rounded-xl border border-border bg-card p-4 transition-shadow hover:shadow-lg sm:rounded-2xl sm:p-6">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary/10 sm:h-14 sm:w-14">
+                    <step.icon className="h-6 w-6 text-secondary sm:h-7 sm:w-7" />
                   </div>
-                  <h3 className="mt-6 text-xl font-semibold text-foreground">{step.title}</h3>
-                  <p className="mt-2 text-muted-foreground">{step.description}</p>
-                  <ul className="mt-6 space-y-2">
+                  <h3 className="mt-4 text-lg font-semibold text-foreground sm:mt-6 sm:text-xl">{step.title}</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">{step.description}</p>
+                  <ul className="mt-4 space-y-2 sm:mt-6">
                     {step.items.map((item) => (
                       <li key={item} className="flex items-center gap-2 text-sm text-muted-foreground">
                         <CheckCircle className="h-4 w-4 text-secondary" />
@@ -173,24 +173,24 @@ export default function VerificationPage() {
         </section>
 
         {/* Trust Badges */}
-        <section className="py-20 lg:py-28">
+        <section className="py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
-              <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+              <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground sm:text-3xl lg:text-4xl">
                 {t?.verification?.badges?.title}
               </h2>
-              <p className="mt-4 text-lg text-muted-foreground">
+              <p className="mt-3 text-sm text-muted-foreground sm:mt-4 sm:text-base">
                 {t?.verification?.badges?.subtitle}
               </p>
             </div>
 
-            <div className="mt-14 grid gap-6 md:grid-cols-3">
+            <div className="mt-8 grid grid-cols-1 gap-5 sm:mt-12 sm:grid-cols-3 sm:gap-5 lg:gap-6">
               {badges.map((badge) => (
                 <div key={badge.name} className="text-center">
-                  <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-2xl ${badge.color} text-white`}>
-                    <badge.icon className="h-10 w-10" />
+                  <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-xl sm:h-20 sm:w-20 sm:rounded-2xl ${badge.color} text-white`}>
+                    <badge.icon className="h-8 w-8 sm:h-10 sm:w-10" />
                   </div>
-                  <h3 className="mt-6 text-lg font-semibold text-foreground">{badge.name}</h3>
+                  <h3 className="mt-4 text-base font-semibold text-foreground sm:mt-6 sm:text-lg">{badge.name}</h3>
                   <p className="mt-2 text-sm text-muted-foreground">{badge.description}</p>
                 </div>
               ))}
@@ -199,7 +199,7 @@ export default function VerificationPage() {
         </section>
 
         {/* What If Rejected */}
-        <section className="bg-muted/50 py-20 lg:py-28">
+        <section className="bg-muted/50 py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl">
               <div className="flex items-start gap-4">
@@ -234,13 +234,13 @@ export default function VerificationPage() {
         </section>
 
         {/* CTA */}
-        <section className="py-20 lg:py-28">
+        <section className="py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
-              <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+              <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground sm:text-3xl lg:text-4xl">
                 {t?.verification?.cta?.title}
               </h2>
-              <p className="mt-4 text-lg text-muted-foreground">
+              <p className="mt-3 text-sm text-muted-foreground sm:mt-4 sm:text-base">
                 {t?.verification?.cta?.subtitle}
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">

@@ -33,6 +33,11 @@ export interface AuthTokenPayload {
   user: User;
 }
 
+export interface EmailVerificationChallenge {
+  verification_token: string;
+  code_expiry_time: number;
+}
+
 /**
  * Login and register share this envelope. Register may return `data: null` and
  * `manufacture_status` when the manufacturer account is pending review.
@@ -40,6 +45,21 @@ export interface AuthTokenPayload {
 export interface LoginResponse {
   success: boolean;
   message: string;
-  data: AuthTokenPayload | null;
+  data: AuthTokenPayload | EmailVerificationChallenge | null;
   manufacture_status?: string | null;
+}
+
+export interface EmailVerificationVerifyResponse {
+  success: boolean;
+  message: string;
+  data: AuthTokenPayload | null;
+}
+
+export interface EmailVerificationResendResponse {
+  success: boolean;
+  message: string;
+  data: EmailVerificationChallenge | {
+    retry_after_seconds?: number;
+    available_at?: string;
+  } | null;
 }

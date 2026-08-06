@@ -44,6 +44,7 @@ import type {
   ManufacturerProductStatus,
   ManufacturerSelectOption,
 } from "@/lib/api/manufacturer-products"
+import { useTranslation } from "@/lib/i18n"
 
 const units = [
   { value: "pieces", label: "Pieces" },
@@ -108,6 +109,7 @@ function productionDurationLabel(period: string): string {
 type ProductImageSlot = { file: File; url: string }
 
 export default function AddProductPage() {
+  const { t } = useTranslation()
   const router = useRouter()
   const imageInputRef = useRef<HTMLInputElement>(null)
   const brochureInputRef = useRef<HTMLInputElement>(null)
@@ -302,43 +304,43 @@ export default function AddProductPage() {
   const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
     e.preventDefault()
     if (!formData.categoryId.trim()) {
-      toast.error("Please select a category.")
+      toast.error(t.mfg.products.selectCategoryError || "Please select a category.")
       return
     }
     if (subcategoriesForCategory.length > 0 && !formData.subCategoryId.trim()) {
-      toast.error("Please select a sub-category.")
+      toast.error(t.mfg.products.selectSubcategoryError || "Please select a sub-category.")
       return
     }
     if (!formData.currencyId.trim()) {
-      toast.error("Please select a currency.")
+      toast.error(t.mfg.products.selectCurrencyError || "Please select a currency.")
       return
     }
     if (imageSlots.length === 0) {
-      toast.error("Add at least one product image.")
+      toast.error(t.mfg.products.addImageError || "Add at least one product image.")
       return
     }
     if (!formData.name.trim()) {
-      toast.error("Please enter a product name.")
+      toast.error(t.mfg.products.enterNameError || "Please enter a product name.")
       return
     }
     if (!formData.description.trim()) {
-      toast.error("Please enter a product description.")
+      toast.error(t.mfg.products.enterDescError || "Please enter a product description.")
       return
     }
     if (!formData.priceMin.trim() || isNaN(Number(formData.priceMin))) {
-      toast.error("Please enter a valid minimum price.")
+      toast.error(t.mfg.products.enterMinPriceError || "Please enter a valid minimum price.")
       return
     }
     if (!formData.priceMax.trim() || isNaN(Number(formData.priceMax))) {
-      toast.error("Please enter a valid maximum price.")
+      toast.error(t.mfg.products.enterMaxPriceError || "Please enter a valid maximum price.")
       return
     }
     if (!formData.moq.trim() || isNaN(Number(formData.moq))) {
-      toast.error("Please enter a minimum order quantity (MOQ).")
+      toast.error(t.mfg.products.enterMoqError || "Please enter a minimum order quantity (MOQ).")
       return
     }
     if (!formData.leadTime.trim()) {
-      toast.error("Please enter a lead time.")
+      toast.error(t.mfg.products.enterLeadTimeError || "Please enter a lead time.")
       return
     }
 
@@ -400,52 +402,52 @@ export default function AddProductPage() {
         }
       }
       await Swal.fire({
-        title: "Failed to Create Product",
+        title: t.mfg.products.createFailed || "Failed to Create Product",
         html: errorLines.length
           ? `<div style="text-align:left;line-height:1.8">${errorLines.join("<br/>")}</div>`
-          : res.message ?? "Could not create product.",
+          : res.message ?? (t.mfg.products.createFailed || "Could not create product."),
         icon: "error",
-        confirmButtonText: "OK",
+        confirmButtonText: t.common.ok || "OK",
       })
       return
     }
-    toast.success(res.message ?? "Product created.")
+    toast.success(res.message ?? (t.mfg.productForm.successCreate || "Product created."))
     router.push("/dashboard/manufacturer/products")
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 pb-12">
+    <div className="mx-auto min-w-0 max-w-4xl space-y-6 overflow-x-hidden pb-8 sm:space-y-8 sm:pb-12">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 min-w-0">
         <Button variant="ghost" size="icon" asChild>
           <Link href="/dashboard/manufacturer/products">
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>
         <div>
-          <h1 className="font-serif text-2xl font-medium text-foreground">Add New Product</h1>
+          <h1 className="font-serif text-2xl font-medium text-foreground">{t.mfg.productForm.createTitle}</h1>
           <p className="mt-1 text-muted-foreground">
-            Fill in the details to list your product
+            {t.mfg.products.newSubtitle || "Fill in the details to list your product"}
           </p>
         </div>
       </div>
 
-      <form onSubmit={(e) => handleSubmit(e)} className="space-y-8">
+      <form onSubmit={(e) => handleSubmit(e)} className="space-y-6 sm:space-y-8">
         {/* Basic Information */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <Package className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Basic Information</h2>
-              <p className="text-sm text-muted-foreground">Product name and description</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.productForm.basicInfo}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.basicInfoDesc || "Product name and description"}</p>
             </div>
           </div>
 
           <div className="space-y-5">
             <div>
-              <Label htmlFor="name">Product Name *</Label>
+              <Label htmlFor="name">{t.mfg.productForm.productName} *</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -456,7 +458,7 @@ export default function AddProductPage() {
             </div>
 
             <div>
-              <Label htmlFor="description">Product Description *</Label>
+              <Label htmlFor="description">{t.mfg.productForm.description} *</Label>
               <Textarea
                 id="description"
                 value={formData.description}
@@ -466,15 +468,9 @@ export default function AddProductPage() {
               />
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Data from GET /categories: the first list is each top-level category (maps to category_id on
-              create). The second list is that category’s sub_categories from the API (maps to
-              sub_category_id).
-            </p>
-
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <Label htmlFor="category-parent">Category *</Label>
+                <Label htmlFor="category-parent">{t.mfg.productForm.category} *</Label>
                 <Select
                   value={formData.categoryId || undefined}
                   onValueChange={(value) =>
@@ -490,10 +486,10 @@ export default function AddProductPage() {
                     <SelectValue
                       placeholder={
                         categoriesLoading
-                          ? "Loading categories…"
+                          ? (t.mfg.products.loadingCategories || "Loading categories…")
                           : categories.length === 0
-                            ? "No categories available"
-                            : "Select category"
+                            ? (t.mfg.products.noCategories || "No categories available")
+                            : (t.mfg.productForm.selectCategory || "Select category")
                       }
                     />
                   </SelectTrigger>
@@ -508,7 +504,7 @@ export default function AddProductPage() {
               </div>
 
               <div>
-                <Label htmlFor="subcategory">Sub-category *</Label>
+                <Label htmlFor="subcategory">{t.mfg.products.subcategory || "Sub-category"} *</Label>
                 <Select
                   value={formData.subCategoryId || undefined}
                   onValueChange={(value) =>
@@ -520,10 +516,10 @@ export default function AddProductPage() {
                     <SelectValue
                       placeholder={
                         !formData.categoryId
-                          ? "Select a category first"
+                          ? (t.mfg.products.selectCategoryFirst || "Select a category first")
                           : subcategoriesForCategory.length === 0
-                            ? "No sub-categories for this category"
-                            : "Select sub-category"
+                            ? (t.mfg.products.noSubcategories || "No sub-categories for this category")
+                            : (t.mfg.products.selectSubcategory || "Select sub-category")
                       }
                     />
                   </SelectTrigger>
@@ -541,14 +537,14 @@ export default function AddProductPage() {
         </div>
 
         {/* Product Images */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <ImageIcon className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Product Images</h2>
-              <p className="text-sm text-muted-foreground">Upload up to 10 high-quality images (required)</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.productForm.images}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.imagesDesc || "Upload up to 10 high-quality images (required)"}</p>
             </div>
           </div>
 
@@ -584,31 +580,31 @@ export default function AddProductPage() {
                 className="flex aspect-square flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/50 text-muted-foreground transition-colors hover:border-secondary hover:text-secondary"
               >
                 <Upload className="h-6 w-6" />
-                <span className="text-xs">Upload</span>
+                <span className="text-xs">{t.mfg.productForm.uploadImages || "Upload"}</span>
               </button>
             )}
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Recommended: 800x800px or larger. JPG, PNG, or WebP format.
+            {t.mfg.products.imagesRecommend || "Recommended: 800x800px or larger. JPG, PNG, or WebP format."}
           </p>
         </div>
 
         {/* Pricing & MOQ */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <DollarSign className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Pricing & Quantity</h2>
-              <p className="text-sm text-muted-foreground">Set your price range and minimum order</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.pricingQuantity || "Pricing & Quantity"}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.pricingDesc || "Set your price range and minimum order"}</p>
             </div>
           </div>
 
           <div className="space-y-5">
             <div className="grid gap-5 sm:grid-cols-3">
               <div>
-                <Label htmlFor="priceMin">Price Min *</Label>
+                <Label htmlFor="priceMin">{t.mfg.products.priceMin || "Price Min"} *</Label>
                 <div className="relative mt-2">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                   <Input
@@ -624,7 +620,7 @@ export default function AddProductPage() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="priceMax">Price Max *</Label>
+                <Label htmlFor="priceMax">{t.mfg.products.priceMax || "Price Max"} *</Label>
                 <div className="relative mt-2">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                   <Input
@@ -640,7 +636,7 @@ export default function AddProductPage() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="currency">Currency *</Label>
+                <Label htmlFor="currency">{t.mfg.products.currency || "Currency"} *</Label>
                 <Select
                   value={formData.currencyId || undefined}
                   onValueChange={(value) => setFormData({ ...formData, currencyId: value })}
@@ -662,7 +658,7 @@ export default function AddProductPage() {
 
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <Label htmlFor="moq">Minimum Order Quantity (MOQ) *</Label>
+                <Label htmlFor="moq">{t.mfg.productForm.minOrderQty} *</Label>
                 <div className="mt-2 flex gap-2">
                   <Input
                     id="moq"
@@ -691,7 +687,7 @@ export default function AddProductPage() {
               </div>
 
               <div>
-                <Label htmlFor="leadTime">Lead Time *</Label>
+                <Label htmlFor="leadTime">{t.mfg.products.leadTime || "Lead Time"} *</Label>
                 <Input
                   id="leadTime"
                   value={formData.leadTime}
@@ -703,7 +699,7 @@ export default function AddProductPage() {
             </div>
 
             <div>
-              <Label htmlFor="supplyCapacity">Supply Capacity</Label>
+              <Label htmlFor="supplyCapacity">{t.mfg.products.supplyCapacity || "Supply Capacity"}</Label>
               <div className="mt-2 flex gap-2">
                 <Input
                   id="supplyCapacity"
@@ -736,9 +732,9 @@ export default function AddProductPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="day">Per Day</SelectItem>
-                    <SelectItem value="week">Per Week</SelectItem>
-                    <SelectItem value="month">Per Month</SelectItem>
+                    <SelectItem value="day">{t.mfg.products.supplyPeriodDay || "Per Day"}</SelectItem>
+                    <SelectItem value="week">{t.mfg.products.supplyPeriodWeek || "Per Week"}</SelectItem>
+                    <SelectItem value="month">{t.mfg.products.supplyPeriodMonth || "Per Month"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -747,14 +743,14 @@ export default function AddProductPage() {
         </div>
 
         {/* Specifications */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <FileText className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Product Specifications</h2>
-              <p className="text-sm text-muted-foreground">Add detailed specifications</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.specificationsTitle || "Product Specifications"}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.specificationsDesc || "Add detailed specifications"}</p>
             </div>
           </div>
 
@@ -793,20 +789,20 @@ export default function AddProductPage() {
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
-              Add Specification
+              {t.mfg.products.addSpecification || "Add Specification"}
             </Button>
           </div>
         </div>
 
         {/* Key Features */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <Zap className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Key Features</h2>
-              <p className="text-sm text-muted-foreground">Highlight the main selling points of your product</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.keyFeatures || "Key Features"}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.keyFeaturesDesc || "Highlight the main selling points of your product"}</p>
             </div>
           </div>
 
@@ -814,7 +810,7 @@ export default function AddProductPage() {
             {keyFeatures.map((feature, index) => (
               <div key={index} className="flex gap-3">
                 <Input
-                  placeholder={`Feature ${index + 1} (e.g., "Active Noise Cancellation")`}
+                  placeholder={`${t.common.feature || "Feature"} ${index + 1}`}
                   value={feature}
                   onChange={(e) => {
                     const updated = [...keyFeatures]
@@ -843,23 +839,23 @@ export default function AddProductPage() {
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
-              Add Feature
+              {t.mfg.products.addFeature || "Add Feature"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Add up to 10 key features that make your product stand out
+              {t.mfg.products.keyFeaturesLimit || "Add up to 10 key features that make your product stand out"}
             </p>
           </div>
         </div>
 
         {/* Customization Options */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <Sparkles className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Customization Options</h2>
-              <p className="text-sm text-muted-foreground">What can buyers customize for this product?</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.customizationOptions || "Customization Options"}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.customizationDesc || "What can buyers customize for this product?"}</p>
             </div>
           </div>
 
@@ -867,7 +863,7 @@ export default function AddProductPage() {
             {customizationOptions.map((option, index) => (
               <div key={index} className="flex gap-3">
                 <Input
-                  placeholder={`Option ${index + 1} (e.g., "Logo printing", "Custom color")`}
+                  placeholder={`${t.common.option || "Option"} ${index + 1}`}
                   value={option}
                   onChange={(e) => {
                     const updated = [...customizationOptions]
@@ -896,30 +892,30 @@ export default function AddProductPage() {
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
-              Add Option
+              {t.mfg.products.addOption || "Add Option"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Common options: Logo printing, Custom color, Custom packaging, OEM branding
+              {t.mfg.products.customizationCommon || "Common options: Logo printing, Custom color, Custom packaging, OEM branding"}
             </p>
           </div>
         </div>
 
         {/* Shipping & Packaging */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <Truck className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Shipping & Packaging</h2>
-              <p className="text-sm text-muted-foreground">Logistics and packaging details</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.shippingPackaging || "Shipping & Packaging"}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.shippingPackagingDesc || "Logistics and packaging details"}</p>
             </div>
           </div>
 
           <div className="space-y-5">
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <Label htmlFor="packaging">Packaging Type</Label>
+                <Label htmlFor="packaging">{t.mfg.products.packagingType || "Packaging Type"}</Label>
                 <Select 
                   value={formData.packaging} 
                   onValueChange={(value) => setFormData({ ...formData, packaging: value })}
@@ -938,7 +934,7 @@ export default function AddProductPage() {
               </div>
 
               <div>
-                <Label htmlFor="portOfLoading">Port of Loading</Label>
+                <Label htmlFor="portOfLoading">{t.mfg.products.portOfLoading || "Port of Loading"}</Label>
                 <Input
                   id="portOfLoading"
                   value={formData.portOfLoading}
@@ -951,7 +947,7 @@ export default function AddProductPage() {
 
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <Label htmlFor="packagingDimensions">Package Dimensions</Label>
+                <Label htmlFor="packagingDimensions">{t.mfg.products.packageDimensions || "Package Dimensions"}</Label>
                 <Input
                   id="packagingDimensions"
                   value={formData.packagingDimensions}
@@ -961,7 +957,7 @@ export default function AddProductPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="packagingWeight">Package Weight</Label>
+                <Label htmlFor="packagingWeight">{t.mfg.products.packageWeight || "Package Weight"}</Label>
                 <Input
                   id="packagingWeight"
                   value={formData.packagingWeight}
@@ -971,7 +967,7 @@ export default function AddProductPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="packagingCostPerUnit">Packaging cost per unit</Label>
+                <Label htmlFor="packagingCostPerUnit">{t.mfg.products.packagingCost || "Packaging cost per unit"}</Label>
                 <Input
                   id="packagingCostPerUnit"
                   type="number"
@@ -986,7 +982,7 @@ export default function AddProductPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="unitsPerCarton">Units per Carton</Label>
+                <Label htmlFor="unitsPerCarton">{t.mfg.products.unitsPerCarton || "Units per Carton"}</Label>
                 <Input
                   id="unitsPerCarton"
                   type="number"
@@ -1000,7 +996,7 @@ export default function AddProductPage() {
             </div>
 
             <div>
-              <Label htmlFor="packagingDetails">Packaging Description</Label>
+              <Label htmlFor="packagingDetails">{t.mfg.products.packagingDesc || "Packaging Description"}</Label>
               <Textarea
                 id="packagingDetails"
                 value={formData.packagingDetails}
@@ -1011,14 +1007,14 @@ export default function AddProductPage() {
             </div>
 
             <div>
-              <Label>Shipping methods</Label>
+              <Label>{t.mfg.products.shippingMethods || "Shipping methods"}</Label>
               <p className="mt-1 text-xs text-muted-foreground">
-                Loaded from the API. Select at least one if your listing requires shipping options.
+                {t.mfg.products.shippingMethodsDesc || "Loaded from the API. Select at least one if your listing requires shipping options."}
               </p>
               <div className="mt-3 flex flex-wrap gap-3">
                 {shippingOptions.length === 0 ? (
                   <span className="text-sm text-muted-foreground">
-                    No shipping methods returned — you can still submit; the API may assign defaults.
+                    {t.mfg.products.noShippingMethods || "No shipping methods returned."}
                   </span>
                 ) : (
                   shippingOptions.map((method) => {
@@ -1040,14 +1036,14 @@ export default function AddProductPage() {
         </div>
 
         {/* Additional Options */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
               <Tags className="h-5 w-5 text-secondary" />
             </div>
             <div>
-              <h2 className="font-semibold text-foreground">Additional Options</h2>
-              <p className="text-sm text-muted-foreground">Samples, customization, and keywords</p>
+              <h2 className="font-semibold text-foreground">{t.mfg.products.additionalOptions || "Additional Options"}</h2>
+              <p className="text-sm text-muted-foreground">{t.mfg.products.additionalOptionsDesc || "Samples, customization, and keywords"}</p>
             </div>
           </div>
 
@@ -1059,14 +1055,14 @@ export default function AddProductPage() {
                 onCheckedChange={(checked) => setFormData({ ...formData, sampleAvailable: checked as boolean })}
               />
               <div>
-                <Label htmlFor="sampleAvailable" className="cursor-pointer">Samples Available</Label>
-                <p className="text-sm text-muted-foreground">Buyers can request product samples</p>
+                <Label htmlFor="sampleAvailable" className="cursor-pointer">{t.mfg.products.samplesAvailable || "Samples Available"}</Label>
+                <p className="text-sm text-muted-foreground">{t.mfg.products.samplesDesc || "Buyers can request product samples"}</p>
               </div>
             </div>
 
             {formData.sampleAvailable && (
               <div className="ml-6">
-                <Label htmlFor="samplePrice">Sample Price</Label>
+                <Label htmlFor="samplePrice">{t.mfg.products.samplePrice || "Sample Price"}</Label>
                 <div className="relative mt-2 max-w-xs">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                   <Input
@@ -1076,7 +1072,7 @@ export default function AddProductPage() {
                     min="0"
                     value={formData.samplePrice}
                     onChange={(e) => setFormData({ ...formData, samplePrice: e.target.value })}
-                    placeholder="0.00 (Free if empty)"
+                    placeholder="0.00"
                     className="pl-7"
                   />
                 </div>
@@ -1090,26 +1086,26 @@ export default function AddProductPage() {
                 onCheckedChange={(checked) => setFormData({ ...formData, customization: checked as boolean })}
               />
               <div>
-                <Label htmlFor="customization" className="cursor-pointer">Customization Available</Label>
-                <p className="text-sm text-muted-foreground">OEM/ODM services for this product</p>
+                <Label htmlFor="customization" className="cursor-pointer">{t.mfg.products.customizationAvailable || "Customization Available"}</Label>
+                <p className="text-sm text-muted-foreground">{t.mfg.products.customizationAvailableDesc || "OEM/ODM services for this product"}</p>
               </div>
             </div>
 
             {formData.customization && (
               <div className="ml-6">
-                <Label htmlFor="customizationDetails">Customization Details</Label>
+                <Label htmlFor="customizationDetails">{t.mfg.products.customizationDetails || "Customization Details"}</Label>
                 <Textarea
                   id="customizationDetails"
                   value={formData.customizationDetails}
                   onChange={(e) => setFormData({ ...formData, customizationDetails: e.target.value })}
-                  placeholder="Describe available customization options (logo printing, color options, packaging design...)"
+                  placeholder="Describe details..."
                   className="mt-2"
                 />
               </div>
             )}
 
             <div>
-              <Label htmlFor="keywords">Product Keywords</Label>
+              <Label htmlFor="keywords">{t.mfg.products.keywords || "Product Keywords"}</Label>
               <Input
                 id="keywords"
                 value={formData.keywords}
@@ -1118,14 +1114,14 @@ export default function AddProductPage() {
                 className="mt-2"
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Separate keywords with commas. These help buyers find your product.
+                {t.mfg.products.keywordsDesc || "Separate keywords with commas. These help buyers find your product."}
               </p>
             </div>
 
             <div className="pt-4 border-t border-border">
-              <Label>Product brochure (PDF)</Label>
+              <Label>{t.mfg.products.brochure || "Product brochure (PDF)"}</Label>
               <p className="text-sm text-muted-foreground mt-1">
-                Optional PDF for buyers (sent as product_brochure in the create request).
+                {t.mfg.products.brochureDesc || "Optional PDF brochure for buyers."}
               </p>
               <input
                 ref={brochureInputRef}
@@ -1149,7 +1145,7 @@ export default function AddProductPage() {
                   <Upload className="h-5 w-5 shrink-0 text-muted-foreground" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground">
-                      {brochureFile ? brochureFile.name : "Upload PDF"}
+                      {brochureFile ? brochureFile.name : (t.mfg.products.uploadPdf || "Upload PDF")}
                     </p>
                     <p className="text-xs text-muted-foreground">Max 10MB · optional</p>
                   </div>
@@ -1164,7 +1160,7 @@ export default function AddProductPage() {
                         setBrochureFile(null)
                       }}
                     >
-                      Clear
+                      {t.common.clear || "Clear"}
                     </Button>
                   )}
                 </div>
@@ -1176,7 +1172,7 @@ export default function AddProductPage() {
         {/* Action Buttons */}
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
           <Button type="button" variant="outline" asChild>
-            <Link href="/dashboard/manufacturer/products">Cancel</Link>
+            <Link href="/dashboard/manufacturer/products">{t.common.cancel}</Link>
           </Button>
           <div className="flex gap-3">
             <Button
@@ -1188,20 +1184,20 @@ export default function AddProductPage() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving…
+                  {t.mfg.productForm.saving}
                 </>
               ) : (
-                "Save as Draft"
+                t.mfg.products.saveAsDraft || "Save as Draft"
               )}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Publishing…
+                  {t.mfg.products.publishing || "Publishing…"}
                 </>
               ) : (
-                "Publish Product"
+                t.mfg.products.publishProduct || "Publish Product"
               )}
             </Button>
           </div>

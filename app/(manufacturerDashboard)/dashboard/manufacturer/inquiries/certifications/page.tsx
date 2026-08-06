@@ -143,7 +143,7 @@ export default function ManufacturerCertificationsPage() {
     (c) => calculateCertStatus(c.expiry_date) === "expired"
   ).length
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-serif text-2xl font-medium text-foreground">Certifications</h1>
@@ -167,7 +167,7 @@ export default function ManufacturerCertificationsPage() {
       ) : (
         <>
           {/* Stats */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
             <ManufacturerStatCard
               title="Valid Certifications"
               value={validCount}

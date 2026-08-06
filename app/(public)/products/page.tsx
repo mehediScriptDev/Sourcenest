@@ -1,11 +1,11 @@
 "use client"
 
-import { Suspense } from "react"
-import { useState, useEffect, useMemo } from "react"
+import { Suspense, useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useQuery } from "@tanstack/react-query"
 import { useTranslation } from "@/lib/i18n"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,9 +18,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { getProducts, type Product } from "@/lib/api/products"
+import { getProducts, mapProductSortParam, PRODUCTS_LIST_PER_PAGE, type Product } from "@/lib/api/products"
 import { getPublicCategories, type BackendCategory } from "@/lib/api/categories"
+import { queryKeys } from "@/lib/query-keys"
 import { ProductActionButtons } from "@/components/products/product-action-buttons"
+import { countries as countryData } from "@/lib/data/countries"
+import { getPublicSuppliers } from "@/lib/api/public-suppliers"
+
+
+
 import { 
   Search, 
   Filter, 
@@ -29,41 +35,198 @@ import {
   X,
   Factory,
   CheckCircle,
-  Loader2
+  Loader2,
+  MapPin,
+  ShieldCheck,
+  Globe
 } from "lucide-react"
+
+function buildPublicProductFilters(
+  allCategories: BackendCategory[],
+  selectedCategory: string,
+  debouncedSearch: string,
+  selectedCountry: string,
+  selectedMoq: string,
+  selectedCerts: string[],
+  selectedMarkets: string[],
+  sortBy: string
+): Record<string, unknown> {
+  const filters: Record<string, unknown> = {}
+
+  if (selectedCategory !== "all") {
+    filters.category = selectedCategory
+    let foundCat = allCategories.find(
+      (c) => (c.slug || c.name.toLowerCase().replace(/\s+/g, "-")) === selectedCategory
+    )
+    if (foundCat) {
+      filters.category_id = foundCat.id
+      filters.category_slug = foundCat.slug || selectedCategory
+    } else {
+      for (const cat of allCategories) {
+        const sub = (cat.sub_categories || cat.subcategories || []).find(
+          (s) => (s.slug || s.name.toLowerCase().replace(/\s+/g, "-")) === selectedCategory
+        )
+        if (sub) {
+          foundCat = cat
+          filters.category_id = cat.id
+          filters.category_slug = cat.slug
+          break
+        }
+      }
+    }
+  }
+
+  if (debouncedSearch) {
+    filters.search = debouncedSearch
+  }
+  if (selectedCountry) filters.country = selectedCountry
+  if (selectedMoq) filters.moq = selectedMoq
+  if (selectedCerts.length > 0) filters.certifications = selectedCerts.join(",")
+  if (selectedMarkets.length > 0) filters.markets = selectedMarkets.join(",")
+
+  const sortParam = mapProductSortParam(sortBy)
+  if (sortParam) filters.sort = sortParam
+
+  filters.per_page = PRODUCTS_LIST_PER_PAGE
+  return filters
+}
 
 function ProductsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = useTranslation()
 
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const moqRanges = useMemo(() => [
+    { label: `< 100 ${t?.landing?.products?.pieces || "pieces"}`, value: "<100" },
+    { label: `100 - 500 ${t?.landing?.products?.pieces || "pieces"}`, value: "100-500" },
+    { label: `500 - 1000 ${t?.landing?.products?.pieces || "pieces"}`, value: "500-1000" },
+    { label: `> 1000 ${t?.landing?.products?.pieces || "pieces"}`, value: ">1000" },
+  ], [t])
+
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>(searchParams.get("category") || "all")
   const [sortBy, setSortBy] = useState("relevance")
   const [showFilters, setShowFilters] = useState(false)
-  const [allCategories, setAllCategories] = useState<BackendCategory[]>([])
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalProducts, setTotalProducts] = useState(0)
+  const [currentPage, setCurrentPage] = useState(() => {
+    const pageParam = searchParams.get("page")
+    const parsed = pageParam ? parseInt(pageParam, 10) : 1
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+  })
+  const skipFilterPageReset = useRef(true)
 
-  // Reset page when category, search or sort changes
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [selectedCategory, searchQuery, sortBy])
+  // New Quick Filters states
+  const [selectedCountry, setSelectedCountry] = useState<string>("")
+  const [selectedMoq, setSelectedMoq] = useState<string>("")
+  const [selectedCerts, setSelectedCerts] = useState<string[]>([])
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([])
 
-  // Fetch all categories once
   useEffect(() => {
-    const fetchCategories = async () => {
-      const response = await getPublicCategories()
-      if (response.success) {
-        setAllCategories(response.data)
-      }
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Get featured countries
+  const featuredCountries = useMemo(() => {
+    const featured = countryData.filter(c => c.featured)
+    if (featured.length > 0) {
+      return featured.slice(0, 8)
     }
-    fetchCategories()
+    return countryData
+      .filter(c => ["CN", "IN", "VN", "TH", "TR", "DE", "ID", "BD"].includes(c.code))
+      .slice(0, 8)
   }, [])
+
+  const categoriesQuery = useQuery({
+    queryKey: queryKeys.publicCategories(100),
+    queryFn: () => getPublicCategories({ perPage: 100 }),
+  })
+
+  const supplierFiltersQuery = useQuery({
+    queryKey: queryKeys.publicSuppliersFilterSource(),
+    queryFn: () => getPublicSuppliers(),
+  })
+
+  const allCategories = categoriesQuery.data?.success ? categoriesQuery.data.data : []
+
+  const dynamicCertifications = useMemo(() => {
+    const suppliers = supplierFiltersQuery.data?.data
+    if (!suppliers) return []
+    const certSet = new Set<string>()
+    suppliers.forEach((supplier) => {
+      supplier.certifications?.forEach((cert) => certSet.add(cert))
+    })
+    return Array.from(certSet).sort()
+  }, [supplierFiltersQuery.data])
+
+  const dynamicExportMarkets = useMemo(() => {
+    const suppliers = supplierFiltersQuery.data?.data
+    if (!suppliers) return []
+    const marketSet = new Set<string>()
+    suppliers.forEach((supplier) => {
+      supplier.export_markets?.forEach((market) => marketSet.add(market))
+    })
+    return Array.from(marketSet).sort()
+  }, [supplierFiltersQuery.data])
+
+  const certsKey = selectedCerts.join(",")
+  const marketsKey = selectedMarkets.join(",")
+
+  const productsQuery = useQuery({
+    queryKey: queryKeys.publicProducts(
+      currentPage,
+      debouncedSearch,
+      selectedCategory,
+      sortBy,
+      selectedCountry,
+      selectedMoq,
+      certsKey,
+      marketsKey,
+      allCategories.length
+    ),
+    queryFn: () =>
+      getProducts(
+        currentPage,
+        buildPublicProductFilters(
+          allCategories,
+          selectedCategory,
+          debouncedSearch,
+          selectedCountry,
+          selectedMoq,
+          selectedCerts,
+          selectedMarkets,
+          sortBy
+        )
+      ),
+    placeholderData: (previousData) => previousData,
+  })
+
+  const products: Product[] = productsQuery.data?.success ? productsQuery.data.data : []
+  const loading = productsQuery.isLoading
+  const error =
+    productsQuery.data?.success === false
+      ? productsQuery.data.message || "Failed to load products"
+      : null
+  const totalPages = productsQuery.data?.success ? productsQuery.data.meta?.last_page || 1 : 1
+  const totalProducts = productsQuery.data?.success
+    ? productsQuery.data.meta?.total ?? products.length
+    : 0
+  const paginationFrom = productsQuery.data?.success ? productsQuery.data.meta?.from ?? null : null
+  const paginationTo = productsQuery.data?.success ? productsQuery.data.meta?.to ?? null : null
+
+  // Reset page when filters change (skip initial mount so ?page=2 URLs still work)
+  useEffect(() => {
+    if (skipFilterPageReset.current) {
+      skipFilterPageReset.current = false
+      return
+    }
+
+    setCurrentPage(1)
+    const params = new URLSearchParams(window.location.search)
+    params.delete("page")
+    const query = params.toString()
+    router.replace(query ? `/products?${query}` : "/products", { scroll: false })
+  }, [selectedCategory, searchQuery, sortBy, selectedCountry, selectedMoq, selectedCerts, selectedMarkets, router])
 
   // Use the fetched categories for the dropdown
   const categories = useMemo(() => {
@@ -84,201 +247,84 @@ function ProductsPageContent() {
     return list
   }, [allCategories, selectedCategory])
 
-  // Fetch products when filters or page changes
-  useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true)
-      setError(null)
-      
-      const filters: Record<string, unknown> = {}
-      if (selectedCategory !== "all") {
-        filters.category = selectedCategory
-        // Try to find if it's a category or subcategory to pass the correct ID to backend
-        let foundCat = allCategories.find(c => (c.slug || c.name.toLowerCase().replace(/\s+/g, '-')) === selectedCategory)
-        if (foundCat) {
-          filters.category_id = foundCat.id
-          filters.category_slug = foundCat.slug || selectedCategory
-        } else {
-          // Check subcategories
-          for (const cat of allCategories) {
-            const sub = (cat.sub_categories || cat.subcategories || []).find(s => (s.slug || s.name.toLowerCase().replace(/\s+/g, '-')) === selectedCategory)
-            if (sub) {
-              // TRICK: The user requested that if a subcategory is clicked, we show ALL products from the parent category!
-              // So we deliberately treat this as if the parent category was clicked for filtering purposes.
-              foundCat = cat
-              filters.category_id = cat.id 
-              filters.category_slug = cat.slug
-              // We omit sub_category_id so the backend doesn't filter out the parent's other products
-              break
-            }
-          }
-        }
-      }
-      if (searchQuery) {
-        filters.search = searchQuery
-      }
+  const goToPage = (page: number) => {
+    const nextPage = Math.max(1, Math.min(page, totalPages))
+    setCurrentPage(nextPage)
 
-      const response = await getProducts(currentPage, filters)
-      
-      if (response.success) {
-        setProducts(response.data)
-        setTotalPages(response.meta?.last_page || 1)
-        setTotalProducts(response.meta?.total || response.data.length)
-      } else {
-        setError(response.message || "Failed to load products")
-        setProducts([])
-        setTotalPages(1)
-        setTotalProducts(0)
-      }
-      
-      setLoading(false)
+    const params = new URLSearchParams(searchParams.toString())
+    if (nextPage > 1) {
+      params.set("page", String(nextPage))
+    } else {
+      params.delete("page")
     }
+    const query = params.toString()
+    router.replace(query ? `/products?${query}` : "/products", { scroll: false })
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
 
-    const timeoutId = setTimeout(fetchProducts, 300)
-    return () => clearTimeout(timeoutId)
-  }, [selectedCategory, searchQuery, currentPage])
-
-  // Sync state with URL params when they change
+  // Sync category from URL params when they change
   useEffect(() => {
     const cat = searchParams.get("category")
     if (cat) {
       setSelectedCategory(cat)
     }
+
+    const pageParam = searchParams.get("page")
+    const parsed = pageParam ? parseInt(pageParam, 10) : 1
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setCurrentPage(parsed)
+    }
   }, [searchParams])
-
-  // Filter and sort products
-  const filteredAndSortedProducts = useMemo(() => {
-    let result = [...products]
-
-    // Apply search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      result = result.filter(p =>
-        p.name.toLowerCase().includes(query) ||
-        p.description.toLowerCase().includes(query) ||
-        p.category.name.toLowerCase().includes(query)
-      )
-    }
-
-    // Local category filter is redundant if backend handles it, but keep it just in case
-    if (selectedCategory !== "all") {
-      const lowerSelected = selectedCategory.toLowerCase()
-      
-      // Resolve the category/subcategory from allCategories
-      let foundCat = allCategories.find(c => (c.slug || c.name.toLowerCase().replace(/\s+/g, '-')) === selectedCategory)
-      let foundSub: any = null
-      if (!foundCat) {
-        for (const cat of allCategories) {
-          foundSub = (cat.sub_categories || cat.subcategories || []).find(s => (s.slug || s.name.toLowerCase().replace(/\s+/g, '-')) === selectedCategory)
-          if (foundSub) {
-            // TRICK: Treat the parent category as the found category to show all parent products
-            foundCat = cat
-            break
-          }
-        }
-      }
-
-      result = result.filter(p => {
-        const pCat = p.category
-        const pSub = p.sub_category
-
-        // Exact slug match
-        if (pCat && pCat.slug && pCat.slug.toLowerCase() === lowerSelected) return true
-        if (pSub && pSub.slug && pSub.slug.toLowerCase() === lowerSelected) return true
-
-        // Match by resolved ID
-        if (foundCat && String(pCat?.id) === String(foundCat.id)) return true
-        if (foundCat && String(p.categoryId) === String(foundCat.id)) return true
-        if (foundSub && String(pSub?.id) === String(foundSub.id)) return true
-        if (foundSub && String(p.subCategoryId) === String(foundSub.id)) return true
-
-        // Match by exact name (very useful for dummy data where slugs differ but names match)
-        if (foundCat && pCat && pCat.name && pCat.name.toLowerCase() === foundCat.name.toLowerCase()) return true
-        if (foundSub && pSub && pSub.name && pSub.name.toLowerCase() === foundSub.name.toLowerCase()) return true
-
-        return false
-      })
-    }
-
-    // Apply sorting
-    switch (sortBy) {
-      case "price-low":
-        result.sort((a, b) => {
-          const priceA = parseFloat(a.pricing_quantities.min_price.price.amount)
-          const priceB = parseFloat(b.pricing_quantities.min_price.price.amount)
-          return priceA - priceB
-        })
-        break
-      case "price-high":
-        result.sort((a, b) => {
-          const priceA = parseFloat(a.pricing_quantities.max_price.price.amount)
-          const priceB = parseFloat(b.pricing_quantities.max_price.price.amount)
-          return priceB - priceA
-        })
-        break
-      case "moq-low":
-        result.sort((a, b) =>
-          a.pricing_quantities.minimum_order_quantity - b.pricing_quantities.minimum_order_quantity
-        )
-        break
-      case "newest":
-        result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        break
-      case "popularity":
-        result.sort((a, b) => b.inquiry_count - a.inquiry_count)
-        break
-      default:
-        // Relevance: by inquiry count
-        result.sort((a, b) => b.inquiry_count - a.inquiry_count)
-    }
-
-    return result
-  }, [products, searchQuery, selectedCategory, sortBy])
 
   const clearFilters = () => {
     setSearchQuery("")
     setSelectedCategory("all")
     setSortBy("relevance")
+    setSelectedCountry("")
+    setSelectedMoq("")
+    setSelectedCerts([])
+    setSelectedMarkets([])
+    setCurrentPage(1)
   }
 
-  const hasActiveFilters = searchQuery || selectedCategory !== "all" || sortBy !== "relevance"
+  const hasActiveFilters = searchQuery || selectedCategory !== "all" || sortBy !== "relevance" || selectedCountry || selectedMoq || selectedCerts.length > 0 || selectedMarkets.length > 0
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
-      <main className="flex-1">
+    <div className="flex min-h-screen min-w-0 flex-col overflow-x-hidden bg-background">
+      <SiteHeader />
+      <main className="min-w-0 flex-1">
         {/* Hero Section */}
-        <section className="bg-primary py-12 lg:py-16">
+        <section className="bg-primary py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="text-center">
-              <h1 className="font-serif text-3xl font-medium tracking-tight text-primary-foreground sm:text-4xl lg:text-5xl">
+              <h1 className="font-serif text-2xl font-medium tracking-tight text-primary-foreground sm:text-4xl lg:text-5xl">
                 {t?.landing?.products?.pageTitle || "Discover Products"}
               </h1>
-              <p className="mx-auto mt-4 max-w-2xl text-lg text-primary-foreground/80">
+              <p className="mx-auto mt-3 max-w-2xl text-sm text-primary-foreground/80 sm:mt-4 sm:text-lg">
                 {t?.landing?.products?.pageDescription?.replace("{productCount}", totalProducts.toLocaleString()) || `Browse ${totalProducts.toLocaleString()}+ products from reviewed manufacturers worldwide`}
               </p>
             </div>
 
-            {/* Search Bar */}
-            <div className="mx-auto mt-8 max-w-3xl">
+            <div className="mx-auto mt-6 max-w-3xl sm:mt-8">
               <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                <div className="relative min-w-0 flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground sm:left-4 sm:h-5 sm:w-5" />
                   <Input
                     type="text"
                     placeholder={t?.landing?.products?.searchPlaceholder || "Search products, categories..."}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-12 bg-background pl-12 text-base"
+                    className="h-11 bg-background pl-10 text-sm sm:h-12 sm:pl-12 sm:text-base"
                   />
                 </div>
                 <Button 
                   variant="secondary" 
-                  size="lg"
-                  className="gap-2 bg-primary-foreground text-primary hover:bg-primary-foreground/90 lg:hidden"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 bg-primary-foreground text-primary hover:bg-primary-foreground/90 lg:hidden"
                   onClick={() => setShowFilters(!showFilters)}
+                  aria-label={t?.landing?.products?.filters || "Filters"}
                 >
-                  <Filter className="h-5 w-5" />
+                  <Filter className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -286,12 +332,12 @@ function ProductsPageContent() {
         </section>
 
         {/* Main Content */}
-        <section className="py-8 lg:py-12">
+        <section className="py-6 sm:py-8 lg:py-12">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col gap-8 lg:flex-row">
+            <div className="flex flex-col gap-5 lg:flex-row lg:gap-8">
               {/* Filters Sidebar */}
-              <aside className={`w-full lg:w-64 lg:shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-                <div className="sticky top-24 rounded-xl border border-border bg-card p-5">
+              <aside className={`w-full lg:w-64 lg:shrink-0 ${showFilters ? "block" : "hidden lg:block"}`}>
+                <div className="rounded-xl border border-border bg-card p-4 sm:p-5 lg:sticky lg:top-24">
                   <div className="flex items-center justify-between">
                     <h2 className="font-semibold text-foreground">{t?.landing?.products?.filters || "Filters"}</h2>
                     {hasActiveFilters && (
@@ -340,22 +386,147 @@ function ProductsPageContent() {
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {/* Country Filter */}
+                    <div className="border-t border-border pt-5">
+                      <label className="text-sm font-medium text-foreground">{t?.landing?.products?.country || "Country"}</label>
+                      <Select 
+                        value={selectedCountry || "all"} 
+                        onValueChange={(val) => setSelectedCountry(val === "all" ? "" : val)}
+                      >
+                        <SelectTrigger className="mt-2 w-full">
+                          <SelectValue placeholder={t?.landing?.products?.country || "Select country"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">{t?.landing?.products?.allCountries || "All Countries"}</SelectItem>
+                          {featuredCountries.map((country) => (
+                            <SelectItem key={country.code} value={country.name.toLowerCase()}>
+                              {country.flag || ""} {country.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* MOQ Range */}
+                    <div className="border-t border-border pt-5">
+                      <label className="text-sm font-medium text-foreground">{t?.landing?.products?.minimumOrder || "Minimum Order"}</label>
+                      <Select 
+                        value={selectedMoq || "all"} 
+                        onValueChange={(val) => setSelectedMoq(val === "all" ? "" : val)}
+                      >
+                        <SelectTrigger className="mt-2 w-full">
+                          <SelectValue placeholder={t?.landing?.products?.minimumOrder || "Select MOQ range"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">{t?.landing?.products?.anyMoq || "Any MOQ"}</SelectItem>
+                          {moqRanges.map((range) => (
+                            <SelectItem key={range.value} value={range.value}>
+                              {range.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Certifications */}
+                    <div className="border-t border-border pt-5">
+                      <label className="text-sm font-medium text-foreground">{t?.landing?.products?.certifications || "Certifications"}</label>
+                      <div className="mt-3 space-y-2">
+                        {dynamicCertifications.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No certifications available</p>
+                        ) : dynamicCertifications.map((cert) => (
+                          <label
+                            key={cert}
+                            className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                          >
+                            <Checkbox
+                              checked={selectedCerts.includes(cert)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedCerts([...selectedCerts, cert])
+                                } else {
+                                  setSelectedCerts(selectedCerts.filter(c => c !== cert))
+                                }
+                              }}
+                            />
+                            <ShieldCheck className="h-3 w-3" />
+                            {cert}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Export Markets 
+                    <div className="border-t border-border pt-5">
+                      <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <Globe className="h-4 w-4" />
+                        {t?.landing?.products?.exportMarkets || "Export Markets"}
+                      </label>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {dynamicExportMarkets.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No markets available</p>
+                        ) : dynamicExportMarkets.map((market) => (
+                          <Badge 
+                            key={market}
+                            variant={selectedMarkets.includes(market) ? "default" : "outline"} 
+                            className={`cursor-pointer transition-colors ${selectedMarkets.includes(market) ? 'bg-secondary text-secondary-foreground hover:bg-secondary/90' : 'hover:bg-secondary hover:text-secondary-foreground'}`}
+                            onClick={() => {
+                              if (selectedMarkets.includes(market)) {
+                                setSelectedMarkets(selectedMarkets.filter(m => m !== market))
+                              } else {
+                                setSelectedMarkets([...selectedMarkets, market])
+                              }
+                            }}
+                          >
+                            {market}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    */}
                   </div>
                 </div>
               </aside>
 
               {/* Results */}
-              <div className="flex-1">
-                {/* Results Header */}
-                <div className="mb-6 flex items-center justify-between">
-                  <p className="text-muted-foreground">
-                    <span className="font-medium text-foreground">{totalProducts}</span> {t?.landing?.products?.productsFound || "products found"}
+              <div className="min-w-0 flex-1">
+                <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {paginationFrom != null && paginationTo != null ? (
+                      <>
+                        {t?.landing?.products?.showingResults
+                          ?.replace("{from}", String(paginationFrom))
+                          ?.replace("{to}", String(paginationTo))
+                          ?.replace("{total}", totalProducts.toLocaleString()) ||
+                          `Showing ${paginationFrom}-${paginationTo} of ${totalProducts.toLocaleString()} products`}
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-foreground">{totalProducts.toLocaleString()}</span>{" "}
+                        {t?.landing?.products?.productsFound || "products found"}
+                      </>
+                    )}
                   </p>
+                  <div className="lg:hidden">
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                      <SelectTrigger className="h-9 w-full text-sm sm:w-[200px]">
+                        <SelectValue placeholder={t?.landing?.products?.sortBy || "Sort by"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="relevance">{t?.landing?.products?.relevance || "Relevance"}</SelectItem>
+                        <SelectItem value="price-low">{t?.landing?.products?.priceLow || "Price: Low to High"}</SelectItem>
+                        <SelectItem value="price-high">{t?.landing?.products?.priceHigh || "Price: High to Low"}</SelectItem>
+                        <SelectItem value="moq-low">{t?.landing?.products?.lowestMOQ || "Lowest MOQ"}</SelectItem>
+                        <SelectItem value="newest">{t?.landing?.products?.newestFirst || "Newest First"}</SelectItem>
+                        <SelectItem value="popularity">{t?.landing?.products?.mostPopular || "Most Popular"}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                {/* Active Filters */}
                 {hasActiveFilters && (
-                  <div className="mb-6 flex flex-wrap items-center gap-2">
+                  <div className="mb-4 flex flex-wrap items-center gap-1.5 sm:mb-6 sm:gap-2">
                     <span className="text-sm text-muted-foreground">{t?.landing?.suppliers?.activeFilters || "Active filters:"}</span>
                     {searchQuery && (
                       <Badge variant="secondary" className="gap-1">
@@ -381,6 +552,38 @@ function ProductsPageContent() {
                         </button>
                       </Badge>
                     )}
+                    {selectedCountry && (
+                      <Badge variant="secondary" className="gap-1">
+                        {t?.landing?.products?.country || "Country"}: {selectedCountry}
+                        <button onClick={() => setSelectedCountry("")}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {selectedMoq && (
+                      <Badge variant="secondary" className="gap-1">
+                        {t?.landing?.products?.moqLabel || "MOQ:"} {moqRanges.find(r => r.value === selectedMoq)?.label || selectedMoq}
+                        <button onClick={() => setSelectedMoq("")}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {selectedCerts.map(cert => (
+                      <Badge key={cert} variant="secondary" className="gap-1">
+                        {t?.landing?.products?.certifications || "Cert:"} {cert}
+                        <button onClick={() => setSelectedCerts(selectedCerts.filter(c => c !== cert))}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    {selectedMarkets.map(market => (
+                      <Badge key={market} variant="secondary" className="gap-1">
+                        {t?.landing?.products?.exportMarkets || "Market:"} {market}
+                        <button onClick={() => setSelectedMarkets(selectedMarkets.filter(m => m !== market))}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
                   </div>
                 )}
 
@@ -402,100 +605,153 @@ function ProductsPageContent() {
                 {/* Product Cards */}
                 {!loading && !error && (
                   <>
-                    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                      {filteredAndSortedProducts.map((product) => (
+                    <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 lg:gap-6">
+                      {products.map((product) => {
+                        const minPrice = product.pricing_quantities?.min_price?.price?.amount
+                        const maxPrice = product.pricing_quantities?.max_price?.price?.amount
+                        const unit = product.pricing_quantities?.unit || "units"
+                        const moq = product.pricing_quantities?.minimum_order_quantity ?? 1
+                        const leadTime = product.pricing_quantities?.lead_time || "N/A"
+                        const imageSrc = product.image || product.images?.[0]
+
+                        return (
                         <div
                           key={product.id}
                           onClick={() => router.push(`/products/${product.id}`)}
-                          className="group cursor-pointer overflow-hidden rounded-xl border border-border bg-card transition-all hover:shadow-md"
+                          className="group flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-xl border border-border bg-card transition-all hover:shadow-md sm:rounded-2xl sm:hover:shadow-lg"
                         >
-                          {/* Product Image */}
-                          <div className="relative aspect-4/3 bg-muted">
-                            {product.image ? (
+                          <div className="relative aspect-square overflow-hidden bg-muted sm:aspect-4/3">
+                            {imageSrc ? (
                               <img 
-                                src={product.image} 
+                                src={imageSrc} 
                                 alt={product.name} 
-                                className="absolute inset-0 h-full w-full object-cover" 
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" 
                               />
                             ) : (
                               <div className="absolute inset-0 flex items-center justify-center">
-                                <Package className="h-12 w-12 text-muted-foreground/30" />
+                                <Package className="h-10 w-10 text-muted-foreground/30 sm:h-12 sm:w-12" />
                               </div>
                             )}
-                            <Badge className="absolute left-3 top-3">{product.category.name}</Badge>
-                            {/* {product.is_approved && (
-                              <Badge className="absolute right-3 top-3 bg-green-500/20 text-green-700 border-green-200">
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                {t?.landing?.products?.verified || "Reviewed"}
+                            {product.category?.name && (
+                              <Badge className="absolute left-2 top-2 max-w-[calc(100%-1rem)] truncate px-1.5 py-0.5 text-[10px] sm:left-3 sm:top-3 sm:px-2.5 sm:text-xs">
+                                {product.category.name}
                               </Badge>
-                            )} */}
+                            )}
                           </div>
 
-                          <div className="p-4">
-                            <h3 className="font-semibold text-foreground group-hover:text-secondary line-clamp-2">
+                          <div className="flex flex-1 flex-col p-2.5 sm:p-4">
+                            <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground group-hover:text-secondary sm:line-clamp-1 sm:text-base">
                               {product.name}
                             </h3>
-                            
-                            <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+
+                            <p className="mt-1 hidden line-clamp-2 text-sm text-muted-foreground sm:block">
                               {product.description}
                             </p>
 
-                            <div className="mt-3">
-                              <span className="text-lg font-semibold text-foreground">
-                                ${parseFloat(product.pricing_quantities.min_price.price.amount).toFixed(2)} - ${parseFloat(product.pricing_quantities.max_price.price.amount).toFixed(2)}
-                              </span>
-                              <span className="text-sm text-muted-foreground"> / {product.pricing_quantities.unit}</span>
-                            </div>
+                            {minPrice && maxPrice && (
+                              <div className="mt-2 sm:mt-3">
+                                <span className="text-sm font-semibold text-foreground sm:text-lg">
+                                  ${parseFloat(minPrice).toFixed(2)} - ${parseFloat(maxPrice).toFixed(2)}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground sm:text-sm"> / {unit}</span>
+                              </div>
+                            )}
 
-                            <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-                              <span>{t?.landing?.products?.moqLabel || "MOQ:"} {product.pricing_quantities.minimum_order_quantity}</span>
-                              <span>{product.pricing_quantities.lead_time} {t?.landing?.products?.daysLabel || "days"}</span>
+                            <div className="mt-auto grid grid-cols-1 gap-2 border-t border-border pt-2.5 text-xs sm:mt-3 sm:grid-cols-2 sm:gap-3 sm:pt-3 sm:text-sm">
+                              <div className="min-w-0">
+                                <span className="block text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">MOQ</span>
+                                <span className="mt-0.5 line-clamp-2 font-medium text-foreground sm:truncate">
+                                  {moq.toLocaleString()}{" "}
+                                  <span className="text-muted-foreground">{unit}</span>
+                                </span>
+                              </div>
+                              <div className="min-w-0">
+                                <span className="block text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">Lead</span>
+                                <span className="mt-0.5 line-clamp-1 font-medium text-foreground sm:truncate">
+                                  {leadTime} {t?.landing?.products?.daysLabel || "days"}
+                                </span>
+                              </div>
                             </div>
 
                             {product.inquiry_count > 0 && (
-                              <div className="mt-2 text-xs text-amber-600">
+                              <div className="mt-1.5 hidden text-xs text-amber-600 sm:mt-2 sm:block">
                                 ⭐ {product.inquiry_count} {t?.landing?.products?.inquiriesLabel || "inquiries"}
                               </div>
                             )}
                           </div>
                         </div>
-                      ))}
+                      )})}
                     </div>
 
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                      <div className="mt-8 flex justify-center gap-2">
-                        <Button
-                          variant="outline"
-                          disabled={currentPage === 1 || loading}
-                          onClick={() => {
-                            setCurrentPage(p => Math.max(1, p - 1))
-                            window.scrollTo({ top: 0, behavior: 'smooth' })
-                          }}
-                        >
-                          Previous
-                        </Button>
-                        <div className="flex items-center justify-center px-4">
-                          <span className="text-sm font-medium">Page {currentPage} of {totalPages}</span>
-                        </div>
-                        <Button
-                          variant="outline"
-                          disabled={currentPage === totalPages || loading}
-                          onClick={() => {
-                            setCurrentPage(p => Math.min(totalPages, p + 1))
-                            window.scrollTo({ top: 0, behavior: 'smooth' })
-                          }}
-                        >
-                          Next
-                        </Button>
+                    {totalProducts > 0 && (
+                      <div className="mt-6 flex flex-col items-stretch gap-3 sm:mt-8">
+                        {totalPages > 1 && (
+                          <div className="flex flex-wrap items-center justify-center gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-9 px-3"
+                              disabled={currentPage === 1 || loading}
+                              onClick={() => goToPage(currentPage - 1)}
+                            >
+                              {t?.landing?.products?.previous || "Previous"}
+                            </Button>
+
+                            {Array.from({ length: totalPages }, (_, i) => i + 1)
+                              .filter((page) => {
+                                if (totalPages <= 7) return true
+                                if (page === 1 || page === totalPages) return true
+                                return Math.abs(page - currentPage) <= 1
+                              })
+                              .map((page, index, visiblePages) => {
+                                const prevPage = visiblePages[index - 1]
+                                const showEllipsis = prevPage != null && page - prevPage > 1
+
+                                return (
+                                  <span key={page} className="flex items-center gap-1.5">
+                                    {showEllipsis && (
+                                      <span className="px-1 text-sm text-muted-foreground">…</span>
+                                    )}
+                                    <Button
+                                      variant={page === currentPage ? "default" : "outline"}
+                                      size="sm"
+                                      className="h-9 min-w-9 px-3"
+                                      disabled={loading}
+                                      onClick={() => goToPage(page)}
+                                    >
+                                      {page}
+                                    </Button>
+                                  </span>
+                                )
+                              })}
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-9 px-3"
+                              disabled={currentPage === totalPages || loading}
+                              onClick={() => goToPage(currentPage + 1)}
+                            >
+                              {t?.landing?.products?.next || "Next"}
+                            </Button>
+                          </div>
+                        )}
+
+                        <p className="text-center text-xs text-muted-foreground sm:text-sm">
+                          {t?.landing?.products?.pageOf
+                            ?.replace("{page}", String(currentPage))
+                            ?.replace("{lastPage}", String(totalPages)) ||
+                            `Page ${currentPage} of ${totalPages}`}
+                          {` · ${PRODUCTS_LIST_PER_PAGE} ${t?.landing?.products?.perPage || "per page"}`}
+                        </p>
                       </div>
                     )}
                   </>
                 )}
 
                 {/* Empty State */}
-                {!loading && !error && filteredAndSortedProducts.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-border py-16 text-center">
+                {!loading && !error && products.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-border px-4 py-12 text-center sm:py-16">
                     <Package className="mx-auto h-12 w-12 text-muted-foreground/50" />
                     <h3 className="mt-4 font-semibold text-foreground">{t?.landing?.products?.noProductsFound || "No products found"}</h3>
                     <p className="mt-2 text-muted-foreground">
@@ -523,8 +779,8 @@ function ProductsPageContent() {
 export default function ProductsPage() {
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen flex-col bg-background">
-        <Header />
+      <div className="flex min-h-screen flex-col overflow-x-hidden bg-background">
+        <SiteHeader />
         <main className="flex-1 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </main>

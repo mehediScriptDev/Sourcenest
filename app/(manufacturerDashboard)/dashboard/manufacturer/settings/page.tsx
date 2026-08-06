@@ -101,7 +101,7 @@ export default function ManufacturerSettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-serif text-2xl font-medium text-foreground">{t.settings.title}</h1>
@@ -232,7 +232,7 @@ export default function ManufacturerSettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <TwoFactorSettings />
-              <div className="flex items-center justify-between py-2 border-t border-border">
+              <div className="flex flex-col gap-3 py-2 border-t border-border sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-medium text-foreground">{t.settings.loginHistory}</p>
                   <p className="text-sm text-muted-foreground">{t.settings.loginHistoryDesc}</p>
@@ -246,7 +246,7 @@ export default function ManufacturerSettingsPage() {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6 overflow-x-hidden">
 
           <AccountDangerZone />
         </div>

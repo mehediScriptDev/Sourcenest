@@ -3,13 +3,12 @@
 import { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -18,11 +17,17 @@ import {
 } from "@/components/ui/select"
 import { getProduct, type Product } from "@/lib/api/products"
 import { createRFQ } from "@/lib/api/rfqs"
-import { suppliers } from "@/lib/data/suppliers"
+import {
+  getPublicSupplierDetails,
+  getPublicSupplierProducts,
+  getPublicSuppliers,
+  type Supplier,
+  type ApiSupplierProduct,
+} from "@/lib/api/public-suppliers"
 import { countries } from "@/lib/data/countries"
 import { useToast } from "@/hooks/use-toast"
 import Swal from "sweetalert2"
-import { 
+import {
   ArrowLeft,
   Package,
   FileText,
@@ -31,169 +36,287 @@ import {
   Factory,
   CheckCircle,
   Star,
-  X
+  Plus,
+  Trash2,
 } from "lucide-react"
+import { DEFAULT_PRODUCT_UNIT, PRODUCT_UNIT_OPTIONS } from "@/lib/product-units"
+
+interface RfqProductLine {
+  key: string
+  productId: string
+  quantity: string
+  quantity_unit: string
+  target_price: string
+  packaging_details: string
+}
+
+let lineCounterSeed = 0
+
+function newProductLine(productId = "", unit: string = DEFAULT_PRODUCT_UNIT): RfqProductLine {
+  lineCounterSeed += 1
+  return {
+    key: `line-${Date.now()}-${lineCounterSeed}`,
+    productId,
+    quantity: "",
+    quantity_unit: unit,
+    target_price: "",
+    packaging_details: "",
+  }
+}
 
 function NewRFQForm() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { toast } = useToast()
-  const productId = searchParams.get('product_id') || searchParams.get('product')
-  const supplierSlug = searchParams.get('supplier')
-  
-  const initialSupplier = supplierSlug ? suppliers.find(s => s.slug === supplierSlug) : null
-  
-  const [product, setProduct] = useState<Product | null>(null)
-  const [loading, setLoading] = useState(!!productId)
+
+  const productIdParam = searchParams.get("product_id") || searchParams.get("product")
+  const supplierParam = searchParams.get("supplier")
+
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
+  const [supplierProducts, setSupplierProducts] = useState<ApiSupplierProduct[]>([])
+  const [loadingSupplier, setLoadingSupplier] = useState(!!supplierParam)
+  const [loadingProducts, setLoadingProducts] = useState(false)
+  const [initialProduct, setInitialProduct] = useState<Product | null>(null)
+  const [loadingInitialProduct, setLoadingInitialProduct] = useState(!!productIdParam)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  
-  const [selectedSupplier, setSelectedSupplier] = useState<typeof suppliers[0] | null>(initialSupplier || null)
+
   const [manufacturerSearch, setManufacturerSearch] = useState("")
+  const [searchResults, setSearchResults] = useState<Supplier[]>([])
+  const [searchingSuppliers, setSearchingSuppliers] = useState(false)
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false)
-  
+
+  const [productLines, setProductLines] = useState<RfqProductLine[]>([newProductLine()])
+
   const [formData, setFormData] = useState({
-    quantity: "",
-    quantity_unit: "pieces",
-    target_price: "",
     target_currency_code: "USD",
     required_delivery_date: "",
     shipping_terms: "FOB",
     destination_country: "",
     destination_port_city: "",
-    packaging_details: "",
     additional_requirements: "",
   })
 
-  // Filter suppliers based on search
-  const filteredSuppliers = suppliers.filter(s =>
-    s.name.toLowerCase().includes(manufacturerSearch.toLowerCase()) ||
-    s.industry.toLowerCase().includes(manufacturerSearch.toLowerCase())
-  ).slice(0, 8)
+  const updateLine = (key: string, patch: Partial<RfqProductLine>) =>
+    setProductLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
+
+  const addLine = () => setProductLines((prev) => [...prev, newProductLine()])
+
+  const removeLine = (key: string) =>
+    setProductLines((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.key !== key)))
+
+  const selectLineProduct = (key: string, productId: string) => {
+    const product = supplierProducts.find((p) => String(p.id) === productId)
+    updateLine(key, {
+      productId,
+      quantity_unit: product?.pricing_quantities?.unit || "pieces",
+    })
+  }
+
+  const getProductById = (id: string) => supplierProducts.find((p) => String(p.id) === id)
+
+  const linesValid =
+    productLines.length > 0 &&
+    productLines.every(
+      (l) => l.productId && Number.parseFloat(l.quantity) > 0,
+    )
+
+  const canSubmit =
+    selectedSupplier &&
+    linesValid &&
+    formData.required_delivery_date &&
+    formData.destination_country
 
   useEffect(() => {
-    if (!productId) {
-      setLoading(false)
+    if (!productIdParam) {
+      setLoadingInitialProduct(false)
       return
     }
 
-    const fetchProductData = async () => {
-      setLoading(true)
+    const fetchInitialProduct = async () => {
+      setLoadingInitialProduct(true)
       try {
-        const response = await getProduct(productId)
+        const response = await getProduct(productIdParam)
         if (response.success && response.data) {
-          const actualProduct = response.data
-          setProduct(actualProduct)
-          
-          if (!initialSupplier) {
-            setSelectedSupplier({
-              id: actualProduct.supplierId || "custom",
-              name: actualProduct.supplierName || "Supplier",
-              slug: actualProduct.supplierSlug || "supplier",
-              description: "",
-              shortDescription: "",
-              industry: "General",
-              industrySlug: "general",
-              categories: [],
-              location: {
-                city: "Global",
-                country: "International",
-                countryCode: "INT"
-              },
-              reviewed: true,
-              reviewedLevel: "basic",
-              yearEstablished: new Date().getFullYear(),
-              employeeCount: "Unknown",
-              productCount: 0,
-              rating: 5.0,
-              reviewCount: 0,
-              responseRate: 100,
-              responseTime: "Usually responds within 24h",
-              onTimeDelivery: 100,
-              certifications: [],
-              mainProducts: [],
-              exportMarkets: []
-            })
-          }
-        } else {
-          setError(response.message || "Product not found")
+          setInitialProduct(response.data)
+          setProductLines([newProductLine(String(response.data.id), response.data.pricing_quantities?.unit || "pieces")])
         }
-      } catch (err) {
-        setError("Failed to fetch product data")
+      } catch {
+        // optional prefill — ignore
       } finally {
-        setLoading(false)
+        setLoadingInitialProduct(false)
       }
     }
 
-    fetchProductData()
-  }, [productId, initialSupplier])
+    void fetchInitialProduct()
+  }, [productIdParam])
 
+  useEffect(() => {
+    if (supplierParam || !initialProduct?.supplierId) return
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!product) {
-      toast({
-        title: "Error",
-        description: "Product is required",
-        variant: "destructive",
-      })
+    const fetchSupplierFromProduct = async () => {
+      const idOrSlug = initialProduct.supplierSlug || initialProduct.supplierId
+      const res = await getPublicSupplierDetails(String(idOrSlug))
+      if (res?.success && res.data) {
+        setSelectedSupplier(res.data)
+      }
+    }
+
+    void fetchSupplierFromProduct()
+  }, [initialProduct, supplierParam])
+
+  useEffect(() => {
+    if (!supplierParam) {
+      setLoadingSupplier(false)
       return
     }
 
-    if (!formData.quantity || !formData.required_delivery_date || !formData.destination_country) {
+    const fetchSupplier = async () => {
+      setLoadingSupplier(true)
+      try {
+        const res = await getPublicSupplierDetails(supplierParam)
+        if (res?.success && res.data) {
+          setSelectedSupplier(res.data)
+        }
+      } catch {
+        setError("Failed to load supplier")
+      } finally {
+        setLoadingSupplier(false)
+      }
+    }
+
+    void fetchSupplier()
+  }, [supplierParam])
+
+  useEffect(() => {
+    if (!selectedSupplier) {
+      setSupplierProducts([])
+      return
+    }
+
+    const loadCatalog = async () => {
+      setLoadingProducts(true)
+      const idOrSlug = String(selectedSupplier.id)
+      const res = await getPublicSupplierProducts(idOrSlug)
+      if (res?.success) {
+        setSupplierProducts(res.data)
+      } else {
+        setSupplierProducts([])
+      }
+      setLoadingProducts(false)
+    }
+
+    void loadCatalog()
+  }, [selectedSupplier])
+
+  useEffect(() => {
+    if (!initialProduct || supplierProducts.length === 0) return
+    const exists = supplierProducts.some((p) => String(p.id) === String(initialProduct.id))
+    if (!exists) return
+    setProductLines((prev) => {
+      if (prev.length === 1 && prev[0].productId === String(initialProduct.id)) return prev
+      if (prev.length === 1 && !prev[0].productId) {
+        return [newProductLine(String(initialProduct.id), initialProduct.pricing_quantities?.unit || "pieces")]
+      }
+      return prev
+    })
+  }, [initialProduct, supplierProducts])
+
+  useEffect(() => {
+    if (!manufacturerSearch.trim()) {
+      setSearchResults([])
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchingSuppliers(true)
+      const res = await getPublicSuppliers({ search: manufacturerSearch.trim() })
+      setSearchResults(res?.data ?? [])
+      setSearchingSuppliers(false)
+    }, 350)
+
+    return () => clearTimeout(timer)
+  }, [manufacturerSearch])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!canSubmit) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields (Quantity, Delivery Date, Destination)",
+        description: "Please select a supplier, add valid product lines, delivery date, and destination.",
         variant: "destructive",
       })
       return
     }
 
     setSubmitting(true)
-    setSubmitError(null)
 
-    const payload = {
-      product_id: Number(product.id),
-      quantity: Number(formData.quantity),
-      quantity_unit: formData.quantity_unit,
-      target_price: formData.target_price ? Number(formData.target_price) : 0,
-      target_currency_code: formData.target_currency_code,
-      required_delivery_date: formData.required_delivery_date,
-      shipping_terms: formData.shipping_terms,
-      destination_country: formData.destination_country,
-      destination_port_city: formData.destination_port_city,
-      packaging_details: formData.packaging_details,
-      additional_requirements: formData.additional_requirements
+    const failures: string[] = []
+    let successCount = 0
+
+    for (const line of productLines) {
+      const payload = {
+        product_id: Number(line.productId),
+        quantity: Number(line.quantity),
+        quantity_unit: line.quantity_unit,
+        target_price: line.target_price ? Number(line.target_price) : 0,
+        target_currency_code: formData.target_currency_code,
+        required_delivery_date: formData.required_delivery_date,
+        shipping_terms: formData.shipping_terms,
+        destination_country: formData.destination_country,
+        destination_port_city: formData.destination_port_city,
+        packaging_details: line.packaging_details,
+        additional_requirements: formData.additional_requirements,
+      }
+
+      const response = await createRFQ(payload)
+      if (response.success) {
+        successCount += 1
+      } else {
+        failures.push(response.message || "Unknown error")
+      }
     }
 
-    const response = await createRFQ(payload)
+    setSubmitting(false)
 
-    if (response.success) {
+    if (successCount === productLines.length) {
+      const productLabel =
+        successCount === 1
+          ? getProductById(productLines[0].productId)?.name || "your product"
+          : `${successCount} products`
+
       Swal.fire({
-        title: 'Success! 🎉',
-        text: `Your RFQ for "${product.name}" has been sent successfully. Suppliers will review your request shortly.`,
-        icon: 'success',
-        confirmButtonColor: '#503322',
-        confirmButtonText: 'View My RFQs',
-        customClass: { confirmButton: 'text-white' }
+        title: "Success!",
+        text: `Your quotation request for ${productLabel} has been sent. Suppliers will review your request shortly.`,
+        icon: "success",
+        confirmButtonColor: "#503322",
+        confirmButtonText: "View My RFQs",
+        customClass: { confirmButton: "text-white" },
       }).then(() => {
-        router.push('/dashboard/buyer/rfqs')
+        router.push("/dashboard/buyer/rfqs")
       })
-    } else {
-      setSubmitError(response.message || "Failed to create RFQ")
+      return
+    }
+
+    if (successCount > 0) {
       toast({
-        title: "Error",
-        description: response.message || "Failed to create RFQ. Please try again.",
+        title: "Partially submitted",
+        description: `${successCount} of ${productLines.length} products were submitted.`,
         variant: "destructive",
       })
+      router.push("/dashboard/buyer/rfqs")
+      return
     }
-    
-    setSubmitting(false)
+
+    toast({
+      title: "Error",
+      description: failures[0] || "Failed to create RFQ. Please try again.",
+      variant: "destructive",
+    })
   }
 
-  if (loading) {
+  if (loadingSupplier || loadingInitialProduct) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -206,16 +329,11 @@ function NewRFQForm() {
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="rounded-xl border border-red-200 bg-red-50 p-6">
           <div className="flex gap-3">
-            <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
             <div>
               <h3 className="font-semibold text-red-900">Error</h3>
               <p className="mt-1 text-sm text-red-700">{error}</p>
-              <Button 
-                variant="outline" 
-                size="sm"
-                className="mt-3"
-                onClick={() => router.push('/products')}
-              >
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => router.push("/products")}>
                 Back to Products
               </Button>
             </div>
@@ -227,10 +345,9 @@ function NewRFQForm() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Header */}
       <div className="mb-8">
-        <Link 
-          href="/products" 
+        <Link
+          href="/products"
           className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -240,17 +357,15 @@ function NewRFQForm() {
           Request for Quotation
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Submit a detailed quote request to receive competitive pricing
+          Add one or more products and submit a detailed quote request to receive competitive pricing.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Supplier */}
         <div className="rounded-xl border border-border bg-card p-6">
-          <label className="text-sm font-medium text-foreground">
-            Supplier
-          </label>
-          
+          <label className="text-sm font-medium text-foreground">Supplier</label>
+
           {selectedSupplier ? (
             <div className="mt-3 flex items-center justify-between rounded-lg border border-border bg-muted/50 p-4">
               <div className="flex items-center gap-3">
@@ -265,7 +380,9 @@ function NewRFQForm() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>{selectedSupplier.location.city}, {selectedSupplier.location.country}</span>
+                    <span>
+                      {selectedSupplier.location.city}, {selectedSupplier.location.country}
+                    </span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
                       <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
@@ -274,20 +391,21 @@ function NewRFQForm() {
                   </div>
                 </div>
               </div>
-              <Button 
+              <Button
                 type="button"
-                variant="ghost" 
+                variant="ghost"
                 size="sm"
                 onClick={() => {
                   setSelectedSupplier(null)
                   setManufacturerSearch("")
+                  setProductLines([newProductLine()])
                 }}
               >
                 Change
               </Button>
             </div>
           ) : (
-            <div className="mt-3 relative">
+            <div className="relative mt-3">
               <Input
                 type="text"
                 placeholder="Search by manufacturer name or industry..."
@@ -299,15 +417,20 @@ function NewRFQForm() {
                 onFocus={() => setShowSupplierDropdown(true)}
                 className="w-full"
               />
-              
+
               {showSupplierDropdown && manufacturerSearch && (
-                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-border bg-card shadow-lg z-10">
-                  {filteredSuppliers.length === 0 ? (
+                <div className="absolute top-full right-0 left-0 z-10 mt-1 rounded-lg border border-border bg-card shadow-lg">
+                  {searchingSuppliers ? (
+                    <div className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Searching...
+                    </div>
+                  ) : searchResults.length === 0 ? (
                     <div className="p-4 text-center text-sm text-muted-foreground">
                       No manufacturers found
                     </div>
                   ) : (
-                    filteredSuppliers.map((supplier) => (
+                    searchResults.map((supplier) => (
                       <button
                         key={supplier.id}
                         type="button"
@@ -315,6 +438,7 @@ function NewRFQForm() {
                           setSelectedSupplier(supplier)
                           setShowSupplierDropdown(false)
                           setManufacturerSearch("")
+                          setProductLines([newProductLine()])
                         }}
                         className="flex w-full items-center gap-3 border-b border-border p-3 text-left last:border-b-0 hover:bg-muted/50"
                       >
@@ -345,108 +469,186 @@ function NewRFQForm() {
           )}
         </div>
 
-        {/* Selected Product */}
-        {product && (
-          <div className="rounded-xl border border-border bg-card p-6">
-            <label className="text-sm font-medium text-foreground">
-              Product Reference
-            </label>
-            <div className="mt-3 flex items-center gap-4 rounded-lg border border-border bg-muted/50 p-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted">
-                <Package className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-medium text-foreground">{product.name}</h3>
-                <p className="text-sm text-muted-foreground">{product.category.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  ${parseFloat(product.pricing_quantities.min_price.price.amount).toFixed(2)} - ${parseFloat(product.pricing_quantities.max_price.price.amount).toFixed(2)} / {product.pricing_quantities.unit}
-                </p>
-              </div>
-            </div>
+        {/* Products */}
+        <div className="rounded-xl border border-border bg-card p-6">
+          <div className="mb-4">
+            <h2 className="font-semibold text-foreground">Products</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Add every product you want quoted in this request. Each line can have its own quantity,
+              target price, and packaging notes.
+            </p>
           </div>
-        )}
 
-        {/* Product Details */}
-        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-          <h2 className="font-semibold text-foreground">Product Details</h2>
-          
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="quantity" className="text-sm font-medium text-foreground">
-                Quantity <span className="text-red-500">*</span>
-              </label>
-              <div className="mt-2 flex gap-2">
-                <Input
-                  id="quantity"
-                  type="number"
-                  placeholder="e.g., 5000"
-                  value={formData.quantity}
-                  onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                  className="flex-1"
-                  required
-                  min="1"
-                />
-                <Select 
-                  value={formData.quantity_unit} 
-                  onValueChange={(value) => setFormData({ ...formData, quantity_unit: value })}
-                >
-                  <SelectTrigger className="w-28">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pieces">Pieces</SelectItem>
-                    <SelectItem value="sets">Sets</SelectItem>
-                    <SelectItem value="units">Units</SelectItem>
-                    <SelectItem value="kg">KG</SelectItem>
-                    <SelectItem value="meters">Meters</SelectItem>
-                    <SelectItem value="cartons">Cartons</SelectItem>
-                    <SelectItem value="pallets">Pallets</SelectItem>
-                    <SelectItem value="20ft container">20ft Container</SelectItem>
-                    <SelectItem value="40ft container">40ft Container</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+          {!selectedSupplier ? (
+            <p className="rounded-lg border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+              Select a supplier first to choose products from their catalog.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {productLines.map((line, index) => {
+                const catalogProduct = getProductById(line.productId)
+                return (
+                  <div key={line.key} className="rounded-lg border border-border bg-muted/20 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                        Product {index + 1}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeLine(line.key)}
+                        disabled={productLines.length <= 1}
+                        aria-label={`Remove product ${index + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
 
-            <div>
-              <label htmlFor="target_price" className="text-sm font-medium text-foreground">
-                Target Price (Optional)
-              </label>
-              <div className="mt-2 flex gap-2">
-                <Select 
-                  value={formData.target_currency_code} 
-                  onValueChange={(value) => setFormData({ ...formData, target_currency_code: value })}
-                >
-                  <SelectTrigger className="w-20">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                    <SelectItem value="GBP">GBP</SelectItem>
-                    <SelectItem value="CNY">CNY</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  id="target_price"
-                  type="number"
-                  placeholder="15.00"
-                  value={formData.target_price}
-                  onChange={(e) => setFormData({ ...formData, target_price: e.target.value })}
-                  className="flex-1"
-                  step="0.01"
-                  min="0"
-                />
-              </div>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-sm font-medium text-foreground">Product</label>
+                        <Select
+                          value={line.productId || undefined}
+                          onValueChange={(v) => selectLineProduct(line.key, v)}
+                          disabled={loadingProducts}
+                        >
+                          <SelectTrigger className="mt-2">
+                            <SelectValue
+                              placeholder={loadingProducts ? "Loading products..." : "Select a product"}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {supplierProducts.map((p) => (
+                              <SelectItem key={p.id} value={String(p.id)}>
+                                {p.name}
+                              </SelectItem>
+                            ))}
+                            {supplierProducts.length === 0 && !loadingProducts && (
+                              <SelectItem value="none" disabled>
+                                No products available
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {catalogProduct && (
+                        <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 text-sm text-muted-foreground">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                            <Package className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground">{catalogProduct.name}</p>
+                            {catalogProduct.price_display && (
+                              <p>{catalogProduct.price_display}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <label className="text-sm font-medium text-foreground">
+                            Quantity <span className="text-red-500">*</span>
+                          </label>
+                          <Input
+                            type="number"
+                            min="1"
+                            placeholder="e.g., 5000"
+                            value={line.quantity}
+                            onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
+                            className="mt-2"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-foreground">Unit</label>
+                          <Select
+                            value={line.quantity_unit}
+                            onValueChange={(v) => updateLine(line.key, { quantity_unit: v })}
+                          >
+                            <SelectTrigger className="mt-2">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PRODUCT_UNIT_OPTIONS.map((u) => (
+                                <SelectItem key={u} value={u}>
+                                  {u}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-foreground">Target price</label>
+                          <div className="mt-2 flex gap-2">
+                            <Select
+                              value={formData.target_currency_code}
+                              onValueChange={(v) =>
+                                setFormData((p) => ({ ...p, target_currency_code: v }))
+                              }
+                            >
+                              <SelectTrigger className="w-20">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="USD">USD</SelectItem>
+                                <SelectItem value="EUR">EUR</SelectItem>
+                                <SelectItem value="GBP">GBP</SelectItem>
+                                <SelectItem value="CNY">CNY</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              placeholder="15.00"
+                              value={line.target_price}
+                              onChange={(e) => updateLine(line.key, { target_price: e.target.value })}
+                              className="flex-1"
+                              step="0.01"
+                              min="0"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-foreground">Packaging notes</label>
+                          <Input
+                            placeholder="e.g., OEM logo, export carton"
+                            value={line.packaging_details}
+                            onChange={(e) =>
+                              updateLine(line.key, { packaging_details: e.target.value })
+                            }
+                            className="mt-2"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={addLine}
+                disabled={!selectedSupplier || loadingProducts}
+              >
+                <Plus className="h-4 w-4" />
+                Add Product
+              </Button>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Delivery Details */}
-        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+        <div className="space-y-4 rounded-xl border border-border bg-card p-6">
           <h2 className="font-semibold text-foreground">Delivery Details</h2>
-          
-          <div className="grid gap-4 sm:grid-cols-2">
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <label htmlFor="required_delivery_date" className="text-sm font-medium text-foreground">
                 Required Delivery Date <span className="text-red-500">*</span>
@@ -455,7 +657,9 @@ function NewRFQForm() {
                 id="required_delivery_date"
                 type="date"
                 value={formData.required_delivery_date}
-                onChange={(e) => setFormData({ ...formData, required_delivery_date: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, required_delivery_date: e.target.value })
+                }
                 className="mt-2"
                 required
               />
@@ -465,9 +669,9 @@ function NewRFQForm() {
               <label htmlFor="shipping_terms" className="text-sm font-medium text-foreground">
                 Shipping Terms
               </label>
-              <Select 
-                value={formData.shipping_terms} 
-                onValueChange={(value) => setFormData({ ...formData, shipping_terms: value })}
+              <Select
+                value={formData.shipping_terms}
+                onValueChange={(v) => setFormData({ ...formData, shipping_terms: v })}
               >
                 <SelectTrigger className="mt-2">
                   <SelectValue />
@@ -480,16 +684,14 @@ function NewRFQForm() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="destination_country" className="text-sm font-medium text-foreground">
                 Destination Country <span className="text-red-500">*</span>
               </label>
-              <Select 
-                value={formData.destination_country} 
-                onValueChange={(value) => setFormData({ ...formData, destination_country: value })}
+              <Select
+                value={formData.destination_country}
+                onValueChange={(v) => setFormData({ ...formData, destination_country: v })}
               >
                 <SelectTrigger className="mt-2">
                   <SelectValue placeholder="Select country" />
@@ -504,7 +706,7 @@ function NewRFQForm() {
               </Select>
             </div>
 
-            <div>
+            <div className="sm:col-span-2 lg:col-span-3">
               <label htmlFor="destination_port_city" className="text-sm font-medium text-foreground">
                 Destination Port / City
               </label>
@@ -513,28 +715,12 @@ function NewRFQForm() {
                 type="text"
                 placeholder="e.g., Chattogram"
                 value={formData.destination_port_city}
-                onChange={(e) => setFormData({ ...formData, destination_port_city: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, destination_port_city: e.target.value })
+                }
                 className="mt-2"
               />
             </div>
-          </div>
-        </div>
-
-        {/* Packaging Requirements */}
-        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-          <h2 className="font-semibold text-foreground">Packaging Requirements</h2>
-          
-          <div>
-            <label htmlFor="packaging_details" className="text-sm font-medium text-foreground">
-              Packaging Details
-            </label>
-            <Textarea
-              id="packaging_details"
-              placeholder="e.g., Standard Packaging, OEM logo required, export carton needed..."
-              value={formData.packaging_details}
-              onChange={(e) => setFormData({ ...formData, packaging_details: e.target.value })}
-              className="mt-2 min-h-25"
-            />
           </div>
         </div>
 
@@ -547,24 +733,19 @@ function NewRFQForm() {
             id="additional_requirements"
             placeholder="Include any specific requirements such as customization, certifications, quality standards, etc."
             value={formData.additional_requirements}
-            onChange={(e) => setFormData({ ...formData, additional_requirements: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, additional_requirements: e.target.value })
+            }
             className="mt-3 min-h-30"
           />
-          <p className="mt-2 text-xs text-muted-foreground">
-            Fields marked with * are required
-          </p>
+          <p className="mt-2 text-xs text-muted-foreground">Fields marked with * are required</p>
         </div>
 
-        {/* Submit */}
         <div className="flex justify-end gap-4">
           <Button type="button" variant="outline" asChild>
             <Link href="/products">Cancel</Link>
           </Button>
-          <Button 
-            type="submit" 
-            className="gap-2"
-            disabled={!product || !formData.quantity || !formData.required_delivery_date || submitting}
-          >
+          <Button type="submit" className="gap-2" disabled={!canSubmit || submitting}>
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -574,6 +755,7 @@ function NewRFQForm() {
               <>
                 <FileText className="h-4 w-4" />
                 Submit RFQ
+                {productLines.length > 1 ? ` (${productLines.length} products)` : ""}
               </>
             )}
           </Button>
@@ -585,14 +767,16 @@ function NewRFQForm() {
 
 export default function NewRFQPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-background">
+      <SiteHeader />
       <main className="flex-1">
-        <Suspense fallback={
-          <div className="flex min-h-[50vh] items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        }>
+        <Suspense
+          fallback={
+            <div className="flex min-h-[50vh] items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          }
+        >
           <NewRFQForm />
         </Suspense>
       </main>

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react"
+import { useTranslation } from "@/lib/i18n"
 import AdditionalInformationSubmit from "@/components/manufacturers/additional-information-submit"
 import { fetchManufacturerReviewCenter } from "@/lib/api/manufacturer-review-center"
 import type { AdditionalInformationRequest } from "@/lib/api/manufacturer-additional-information"
@@ -18,6 +19,7 @@ import {
 function AdditionalInformationSubmitPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { t } = useTranslation()
   const [request, setRequest] = useState<AdditionalInformationRequest | null>(null)
   const [loading, setLoading] = useState(true)
   const [canSubmit, setCanSubmit] = useState(false)
@@ -60,9 +62,9 @@ function AdditionalInformationSubmitPageContent() {
   if (loading) {
     return (
       <Card>
-        <CardContent className="flex flex-col items-center py-16 text-center">
+        <CardContent className="flex flex-col items-center py-12 text-center sm:py-16">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="mt-4 text-sm text-muted-foreground">Loading submission form...</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t.mfg.inquiries.loading}</p>
         </CardContent>
       </Card>
     )
@@ -74,13 +76,13 @@ function AdditionalInformationSubmitPageContent() {
         <CardContent className="space-y-4 py-12 text-center">
           <AlertCircle className="mx-auto h-10 w-10 text-muted-foreground" />
           <div>
-            <p className="font-medium">No additional information request found</p>
+            <p className="font-medium">{t.mfg.reviewCenter.noReviews}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              The admin team has not asked for anything yet, or your request has expired.
+              {t.mfg.reviewCenter.subtitle}
             </p>
           </div>
           <Button asChild variant="outline">
-            <Link href="/dashboard/manufacturer/review-center">Back to Review Center</Link>
+            <Link href="/dashboard/manufacturer/review-center">{t.mfg.reviewSubmit.backToReviews}</Link>
           </Button>
         </CardContent>
       </Card>
@@ -88,22 +90,22 @@ function AdditionalInformationSubmitPageContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" asChild className="-ml-2">
           <Link href="/dashboard/manufacturer/review-center">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Review Center
+            {t.mfg.reviewSubmit.backToReviews}
           </Link>
         </Button>
       </div>
 
       <div>
         <h1 className="font-serif text-2xl font-medium tracking-tight md:text-3xl">
-          Submit Additional Information
+          {t.mfg.reviewSubmit.title}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Use live camera capture for photos and videos. Add text or documents as needed, then submit to admin.
+          {t.mfg.reviewSubmit.writeResponse}
         </p>
       </div>
 

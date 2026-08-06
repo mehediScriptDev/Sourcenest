@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -50,6 +51,9 @@ import {
   updateAdminFaq,
   updateAdminFaqCategory,
 } from "@/lib/api/admin-faqs"
+import type { AdminFaqCategory } from "@/lib/api/admin-faqs"
+import { queryKeys } from "@/lib/query-keys"
+import { useTranslation } from "@/lib/i18n"
 import Swal from "sweetalert2"
 import {
   DndContext,
@@ -126,30 +130,87 @@ function createSlug(value: string): string {
   return `category-${Date.now()}`
 }
 
-function showSuccessAlert(message: string) {
+function showSuccessAlert(c: { success: string; ok: string }, message: string) {
   void Swal.fire({
     icon: "success",
-    title: "Success",
+    title: c.success,
     text: message,
-    confirmButtonText: "OK",
+    confirmButtonText: c.ok,
     confirmButtonColor: "#3d2e1f",
   })
 }
 
-function showErrorAlert(message: string) {
+function showErrorAlert(c: { ok: string }, oopsTitle: string, message: string) {
   void Swal.fire({
     icon: "error",
-    title: "Oops...",
+    title: oopsTitle,
     text: message,
-    confirmButtonText: "OK",
+    confirmButtonText: c.ok,
     confirmButtonColor: "#3d2e1f",
   })
+}
+
+function normalizeFaqCategories(data: AdminFaqCategory[], noneLabel: string): FAQCategory[] {
+  return data
+    .map((category, index) => ({ ...category, tempOrder: index }))
+    .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || a.tempOrder - b.tempOrder)
+    .map((category, categoryIndex) => ({
+      id: String(category.id),
+      name: (category.name || "").trim().length > 0 ? category.name : noneLabel,
+      slug: category.slug,
+      sort: Number.isFinite(category.sort) ? category.sort : categoryIndex,
+      faqs: (category.faqs || [])
+        .map((faq, faqIndex) => ({ ...faq, tempOrder: faqIndex }))
+        .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || a.tempOrder - b.tempOrder)
+        .map((faq, faqIndex) => ({
+          id: String(faq.id),
+          question: (faq.question || "").trim().length > 0 ? faq.question : noneLabel,
+          answer: (faq.answer || "").trim().length > 0 ? faq.answer : noneLabel,
+          sort: Number.isFinite(faq.sort) ? faq.sort : faqIndex,
+        })),
+    }))
 }
 
 export default function AdminFaqPage() {
-  const [categories, setCategories] = useState<FAQCategory[]>([])
+  const { t } = useTranslation()
+  const p = t.admin.pages.faq
+  const c = t.admin.common
+  const queryClient = useQueryClient()
+  const faqQueryKey = queryKeys.adminFaqCategories()
+
+  const faqQuery = useQuery({
+    queryKey: faqQueryKey,
+    queryFn: async () => {
+      const response = await getAdminFaqCategories()
+      if (!response.success) {
+        throw new Error(response.message || p.failedFetchCategories)
+      }
+      return normalizeFaqCategories(response.data, c.none)
+    },
+  })
+
+  useEffect(() => {
+    if (faqQuery.isError) {
+      showErrorAlert(
+        c,
+        p.oops,
+        faqQuery.error instanceof Error ? faqQuery.error.message : p.failedFetchCategories
+      )
+    }
+  }, [faqQuery.isError, faqQuery.error, c, p.failedFetchCategories, p.oops])
+
+  const categories = faqQuery.data ?? []
+  const isLoading = faqQuery.isLoading
+
+  const patchFaqCategories = (updater: (prev: FAQCategory[]) => FAQCategory[]) => {
+    queryClient.setQueryData(faqQueryKey, updater)
+  }
+
+  const refreshFaqCategories = async () => {
+    await queryClient.invalidateQueries({ queryKey: faqQueryKey })
+  }
+
   const [expandedCategories, setExpandedCategories] = useState<string[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isReordering, setIsReordering] = useState(false)
@@ -180,49 +241,6 @@ export default function AdminFaqPage() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   )
-
-  const loadCategories = useCallback(async (silent = false) => {
-    if (!silent) {
-      setIsLoading(true)
-    }
-
-    const response = await getAdminFaqCategories()
-    if (response.success) {
-      const normalizedCategories: FAQCategory[] = response.data
-        .map((category, index) => ({ ...category, tempOrder: index }))
-        .sort((a: any, b: any) => (a.sort ?? 0) - (b.sort ?? 0) || a.tempOrder - b.tempOrder)
-        .map((category, categoryIndex) => ({
-          id: String(category.id),
-          name: (category.name || "").trim().length > 0 ? category.name : "None",
-          slug: category.slug,
-          sort: Number.isFinite(category.sort) ? category.sort : categoryIndex,
-          faqs: (category.faqs || [])
-            .map((faq, faqIndex) => ({ ...faq, tempOrder: faqIndex }))
-            .sort((a: any, b: any) => (a.sort ?? 0) - (b.sort ?? 0) || a.tempOrder - b.tempOrder)
-            .map((faq, faqIndex) => ({
-              id: String(faq.id),
-              question: (faq.question || "").trim().length > 0 ? faq.question : "None",
-              answer: (faq.answer || "").trim().length > 0 ? faq.answer : "None",
-              sort: Number.isFinite(faq.sort) ? faq.sort : faqIndex,
-            })),
-        }))
-
-      setCategories(normalizedCategories)
-    } else {
-      showErrorAlert(response.message || "Failed to fetch FAQ categories")
-      if (!silent) {
-        setCategories([])
-      }
-    }
-
-    if (!silent) {
-      setIsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void loadCategories()
-  }, [loadCategories])
 
   // Calculate totals
   const totalCategories = categories.length
@@ -255,7 +273,7 @@ export default function AdminFaqPage() {
     }
 
     if (!categoryTitle.trim()) {
-      showErrorAlert("Please enter a category title")
+      showErrorAlert(c, p.oops, c.enterCategoryTitle)
       return
     }
 
@@ -277,12 +295,12 @@ export default function AdminFaqPage() {
           })
 
       if (!response.success) {
-        showErrorAlert(response.message || "Failed to save category")
+        showErrorAlert(c, p.oops, response.message || p.failedSaveCategory)
         return
       }
 
-      await loadCategories(true)
-      showSuccessAlert(response.message || (editingCategory ? "Category updated successfully" : "Category added successfully"))
+      await refreshFaqCategories()
+      showSuccessAlert(c, response.message || (editingCategory ? p.categoryUpdated : p.categoryAdded))
       setCategoryDialogOpen(false)
       setCategoryTitle("")
       setEditingCategory(null)
@@ -312,12 +330,12 @@ export default function AdminFaqPage() {
     }
 
     if (!faqQuestion.trim() || !faqAnswer.trim()) {
-      showErrorAlert("Please fill in both question and answer")
+      showErrorAlert(c, p.oops, c.fillQuestionAnswer)
       return
     }
 
     if (!selectedCategoryId) {
-      showErrorAlert("Please select a category")
+      showErrorAlert(c, p.oops, c.selectCategory)
       return
     }
 
@@ -339,12 +357,12 @@ export default function AdminFaqPage() {
           })
 
       if (!response.success) {
-        showErrorAlert(response.message || "Failed to save FAQ")
+        showErrorAlert(c, p.oops, response.message || p.failedSaveFaq)
         return
       }
 
-      await loadCategories(true)
-      showSuccessAlert(response.message || (editingFaq ? "FAQ updated successfully" : "FAQ added successfully"))
+      await refreshFaqCategories()
+      showSuccessAlert(c, response.message || (editingFaq ? p.faqUpdated : p.faqAdded))
       setFaqDialogOpen(false)
       setFaqQuestion("")
       setFaqAnswer("")
@@ -373,12 +391,12 @@ export default function AdminFaqPage() {
         : await deleteAdminFaq(itemToDelete.id)
 
       if (!response.success) {
-        showErrorAlert(response.message || "Failed to delete item")
+        showErrorAlert(c, p.oops, response.message || p.failedDeleteItem)
         return
       }
 
-      await loadCategories(true)
-      showSuccessAlert(response.message || (itemToDelete.type === "category" ? "Category deleted successfully" : "FAQ deleted successfully"))
+      await refreshFaqCategories()
+      showSuccessAlert(c, response.message || (itemToDelete.type === "category" ? p.categoryDeleted : p.faqDeleted))
       setDeleteDialogOpen(false)
       setItemToDelete(null)
     } finally {
@@ -399,14 +417,14 @@ export default function AdminFaqPage() {
     const currentPosition = toPosition(category.sort, index)
     const newPosition = toPosition(targetCategory?.sort, newIndex)
 
-    setCategories((prev) => arrayMove(prev, index, newIndex))
+    patchFaqCategories((prev) => arrayMove(prev, index, newIndex))
     setIsReordering(true)
     try {
       const response = await moveAdminFaqCategoryPosition(category.id, currentPosition, newPosition)
       if (!response.success) {
-        showErrorAlert(response.message || "Failed to reorder category")
+        showErrorAlert(c, p.oops, response.message || p.failedReorderCategory)
       }
-      await loadCategories(true)
+      await refreshFaqCategories()
     } finally {
       setIsReordering(false)
     }
@@ -425,14 +443,14 @@ export default function AdminFaqPage() {
     const currentPosition = toPosition(category.sort, index)
     const newPosition = toPosition(targetCategory?.sort, newIndex)
 
-    setCategories((prev) => arrayMove(prev, index, newIndex))
+    patchFaqCategories((prev) => arrayMove(prev, index, newIndex))
     setIsReordering(true)
     try {
       const response = await moveAdminFaqCategoryPosition(category.id, currentPosition, newPosition)
       if (!response.success) {
-        showErrorAlert(response.message || "Failed to reorder category")
+        showErrorAlert(c, p.oops, response.message || p.failedReorderCategory)
       }
-      await loadCategories(true)
+      await refreshFaqCategories()
     } finally {
       setIsReordering(false)
     }
@@ -455,7 +473,7 @@ export default function AdminFaqPage() {
     const newPosition = toPosition(targetFaq?.sort, newIndex)
     const faqCategoryId = toPosition(categoryId, Number(categoryId))
 
-    setCategories((prev) =>
+    patchFaqCategories((prev) =>
       prev.map((c) => {
         if (c.id === categoryId) {
           return { ...c, faqs: arrayMove(c.faqs, faqIndex, newIndex) }
@@ -468,9 +486,9 @@ export default function AdminFaqPage() {
     try {
       const response = await moveAdminFaqPosition(faq.id, currentPosition, newPosition, faqCategoryId)
       if (!response.success) {
-        showErrorAlert(response.message || "Failed to reorder FAQ")
+        showErrorAlert(c, p.oops, response.message || p.failedReorderFaq)
       }
-      await loadCategories(true)
+      await refreshFaqCategories()
     } finally {
       setIsReordering(false)
     }
@@ -492,7 +510,7 @@ export default function AdminFaqPage() {
     const newPosition = toPosition(targetFaq?.sort, newIndex)
     const faqCategoryId = toPosition(categoryId, Number(categoryId))
 
-    setCategories((prev) =>
+    patchFaqCategories((prev) =>
       prev.map((c) => {
         if (c.id === categoryId) {
           return { ...c, faqs: arrayMove(c.faqs, faqIndex, newIndex) }
@@ -505,9 +523,9 @@ export default function AdminFaqPage() {
     try {
       const response = await moveAdminFaqPosition(faq.id, currentPosition, newPosition, faqCategoryId)
       if (!response.success) {
-        showErrorAlert(response.message || "Failed to reorder FAQ")
+        showErrorAlert(c, p.oops, response.message || p.failedReorderFaq)
       }
-      await loadCategories(true)
+      await refreshFaqCategories()
     } finally {
       setIsReordering(false)
     }
@@ -526,14 +544,14 @@ export default function AdminFaqPage() {
       const currentPosition = Number.isFinite(activeCategory?.sort) ? activeCategory.sort : oldIndex
       const newPosition = Number.isFinite(targetCategory?.sort) ? targetCategory.sort : newIndex
 
-      setCategories((items) => arrayMove(items, oldIndex, newIndex))
+      patchFaqCategories((items) => arrayMove(items, oldIndex, newIndex))
       setIsReordering(true)
       try {
         const response = await moveAdminFaqCategoryPosition(String(active.id), currentPosition, newPosition)
         if (!response.success) {
-          showErrorAlert(response.message || "Failed to reorder category")
+          showErrorAlert(c, p.oops, response.message || p.failedReorderCategory)
         }
-        await loadCategories(true)
+        await refreshFaqCategories()
       } finally {
         setIsReordering(false)
       }
@@ -557,7 +575,7 @@ export default function AdminFaqPage() {
       const newPosition = toPosition(targetFaq?.sort, newIndex)
       const faqCategoryId = toPosition(categoryId, Number(categoryId))
 
-      setCategories((prev) =>
+      patchFaqCategories((prev) =>
         prev.map((c) => {
           if (c.id === categoryId) {
             return {
@@ -573,9 +591,9 @@ export default function AdminFaqPage() {
       try {
         const response = await moveAdminFaqPosition(String(active.id), currentPosition, newPosition, faqCategoryId)
         if (!response.success) {
-          showErrorAlert(response.message || "Failed to reorder FAQ")
+          showErrorAlert(c, p.oops, response.message || p.failedReorderFaq)
         }
-        await loadCategories(true)
+        await refreshFaqCategories()
       } finally {
         setIsReordering(false)
       }
@@ -588,9 +606,9 @@ export default function AdminFaqPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">FAQ Management</h1>
+          <h1 className="text-2xl font-semibold text-foreground">{p.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage frequently asked questions displayed on the FAQ page
+            {p.subtitle}
           </p>
         </div>
         <Button
@@ -599,14 +617,14 @@ export default function AdminFaqPage() {
           disabled={isLoading || isSaving || isReordering || isDeleting}
         >
           <FolderPlus className="h-4 w-4" />
-          Add Category
+          {c.addCategoryBtn}
         </Button>
       </div>
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
         <AdminStatCard
-          title="Total Categories"
+          title={p.totalCategories}
           value={totalCategories}
           icon={FolderPlus}
           iconClassName="text-muted-foreground"
@@ -615,7 +633,7 @@ export default function AdminFaqPage() {
           contentClassName="p-6"
         />
         <AdminStatCard
-          title="Total Questions"
+          title={p.totalQuestions}
           value={totalFaqs}
           icon={HelpCircle}
           iconClassName="text-muted-foreground"
@@ -624,7 +642,7 @@ export default function AdminFaqPage() {
           contentClassName="p-6"
         />
         <AdminStatCard
-          title="Avg Questions/Category"
+          title={p.avgQuestions}
           value={totalCategories > 0 ? (totalFaqs / totalCategories).toFixed(1) : 0}
           icon={MessageSquareText}
           iconClassName="text-muted-foreground"
@@ -637,28 +655,28 @@ export default function AdminFaqPage() {
       {/* Categories List */}
       <Card>
         <CardHeader>
-          <CardTitle>FAQ Categories</CardTitle>
+          <CardTitle>{p.faqCategories}</CardTitle>
           <CardDescription>
-            Organize your FAQs by category. Drag to reorder or use the arrow buttons.
+            {p.categoriesDesc}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="py-12 text-center">
               <HelpCircle className="mx-auto h-12 w-12 text-muted-foreground/50" />
-              <p className="mt-4 text-muted-foreground">Loading FAQ categories...</p>
+              <p className="mt-4 text-muted-foreground">{p.loadingCategories}</p>
             </div>
           ) : categories.length === 0 ? (
             <div className="py-12 text-center">
               <HelpCircle className="mx-auto h-12 w-12 text-muted-foreground/50" />
-              <p className="mt-4 text-muted-foreground">No FAQ categories yet</p>
+              <p className="mt-4 text-muted-foreground">{p.noCategories}</p>
               <Button
                 onClick={() => openCategoryDialog()}
                 className="mt-4 gap-2"
                 disabled={isSaving || isReordering || isDeleting}
               >
                 <Plus className="h-4 w-4" />
-                Add Your First Category
+                {c.addYourFirstCategory}
               </Button>
             </div>
           ) : (
@@ -670,24 +688,28 @@ export default function AdminFaqPage() {
                       {({ attributes, listeners }) => (
                         <div className="rounded-lg border border-border">
                           {/* Category Header */}
-                          <div className="flex items-center gap-3 bg-muted/50 p-4">
-                            <div {...attributes} {...listeners} className="cursor-move">
-                              <GripVertical className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-muted/50 p-4">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div {...attributes} {...listeners} className="cursor-move shrink-0">
+                                <GripVertical className="h-4 w-4 text-muted-foreground" />
+                              </div>
+
+                              <button onClick={() => toggleCategory(category.id)} className="flex-1 flex items-center gap-2 text-left min-w-0">
+                                <ChevronDown
+                                  className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                                    expandedCategories.includes(category.id) ? "rotate-180" : ""
+                                  }`}
+                                />
+                                <span className="font-medium text-foreground truncate">{category.name}</span>
+                                <Badge variant="secondary" className="ml-2 shrink-0">
+                                  {category.faqs.length === 1
+                                    ? c.questionsCount.replace("{count}", String(category.faqs.length))
+                                    : c.questionsCountPlural.replace("{count}", String(category.faqs.length))}
+                                </Badge>
+                              </button>
                             </div>
 
-                            <button onClick={() => toggleCategory(category.id)} className="flex-1 flex items-center gap-2 text-left">
-                              <ChevronDown
-                                className={`h-4 w-4 text-muted-foreground transition-transform ${
-                                  expandedCategories.includes(category.id) ? "rotate-180" : ""
-                                }`}
-                              />
-                              <span className="font-medium text-foreground">{category.name}</span>
-                              <Badge variant="secondary" className="ml-2">
-                                {category.faqs.length} {category.faqs.length === 1 ? "question" : "questions"}
-                              </Badge>
-                            </button>
-
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center justify-end sm:justify-start gap-1 shrink-0">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -732,7 +754,7 @@ export default function AdminFaqPage() {
                             <div className="border-t border-border p-4">
                               {category.faqs.length === 0 ? (
                                 <div className="py-8 text-center">
-                                  <p className="text-sm text-muted-foreground">No questions in this category</p>
+                                  <p className="text-sm text-muted-foreground">{p.noQuestions}</p>
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -741,7 +763,7 @@ export default function AdminFaqPage() {
                                     disabled={isSaving || isReordering || isDeleting}
                                   >
                                     <Plus className="h-4 w-4" />
-                                    Add Question
+                                    {c.addQuestion}
                                   </Button>
                                 </div>
                               ) : (
@@ -755,17 +777,19 @@ export default function AdminFaqPage() {
                                       {category.faqs.map((faq, faqIndex) => (
                                         <SortableItem key={faq.id} id={faq.id}>
                                           {({ attributes, listeners }) => (
-                                            <div className="flex items-start gap-3 rounded-lg border border-border bg-background p-4">
-                                              <div {...attributes} {...listeners} className="cursor-move mt-1">
-                                                <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                            <div className="flex flex-col sm:flex-row sm:items-start gap-3 rounded-lg border border-border bg-background p-4">
+                                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                                <div {...attributes} {...listeners} className="cursor-move mt-1 shrink-0">
+                                                  <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                </div>
+
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="font-medium text-foreground wrap-break-word">{faq.question}</p>
+                                                  <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{faq.answer}</p>
+                                                </div>
                                               </div>
 
-                                              <div className="flex-1 min-w-0">
-                                                <p className="font-medium text-foreground">{faq.question}</p>
-                                                <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{faq.answer}</p>
-                                              </div>
-
-                                              <div className="flex items-center gap-1 shrink-0">
+                                              <div className="flex items-center justify-end sm:justify-start gap-1 shrink-0 mt-2 sm:mt-0">
                                                 <Button
                                                   variant="ghost"
                                                   size="icon"
@@ -818,7 +842,7 @@ export default function AdminFaqPage() {
                                     disabled={isSaving || isReordering || isDeleting}
                                   >
                                     <Plus className="h-4 w-4" />
-                                    Add Question
+                                    {c.addQuestion}
                                   </Button>
                                 </div>
                               )}
@@ -839,32 +863,32 @@ export default function AdminFaqPage() {
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingCategory ? "Edit Category" : "Add Category"}</DialogTitle>
+            <DialogTitle>{editingCategory ? c.editCategory : c.addCategoryTitle}</DialogTitle>
             <DialogDescription>
               {editingCategory 
-                ? "Update the category name" 
-                : "Create a new FAQ category to organize your questions"
+                ? p.updateCategoryName 
+                : p.createCategoryDesc
               }
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="category-title">Category Title</Label>
+              <Label htmlFor="category-title">{c.categoryTitle}</Label>
               <Input
                 id="category-title"
                 value={categoryTitle}
                 onChange={(e) => setCategoryTitle(e.target.value)}
-                placeholder="e.g., General, For Buyers, Billing"
+                placeholder={c.categoryTitlePlaceholder}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCategoryDialogOpen(false)}>
-              Cancel
+              {c.cancel}
             </Button>
             <Button onClick={() => void saveCategory()} className="gap-2" disabled={isSaving}>
               <Save className="h-4 w-4" />
-              {editingCategory ? "Save Changes" : "Add Category"}
+              {editingCategory ? c.saveChanges : c.addCategoryTitle}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -874,42 +898,42 @@ export default function AdminFaqPage() {
       <Dialog open={faqDialogOpen} onOpenChange={setFaqDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingFaq ? "Edit Question" : "Add Question"}</DialogTitle>
+            <DialogTitle>{editingFaq ? c.editQuestion : c.addQuestionTitle}</DialogTitle>
             <DialogDescription>
               {editingFaq 
-                ? "Update the question and answer" 
-                : "Add a new FAQ to this category"
+                ? c.editQuestionDesc 
+                : p.addFaqToCategory
               }
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="faq-question">Question</Label>
+              <Label htmlFor="faq-question">{c.question}</Label>
               <Input
                 id="faq-question"
                 value={faqQuestion}
                 onChange={(e) => setFaqQuestion(e.target.value)}
-                placeholder="e.g., How do I reset my password?"
+                placeholder={p.questionPlaceholder}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="faq-answer">Answer</Label>
+              <Label htmlFor="faq-answer">{c.answer}</Label>
               <Textarea
                 id="faq-answer"
                 value={faqAnswer}
                 onChange={(e) => setFaqAnswer(e.target.value)}
-                placeholder="Provide a clear and helpful answer..."
+                placeholder={p.answerPlaceholder}
                 rows={6}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFaqDialogOpen(false)}>
-              Cancel
+              {c.cancel}
             </Button>
             <Button onClick={() => void saveFaq()} className="gap-2" disabled={isSaving}>
               <Save className="h-4 w-4" />
-              {editingFaq ? "Save Changes" : "Add Question"}
+              {editingFaq ? c.saveChanges : c.addQuestionTitle}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -919,22 +943,22 @@ export default function AdminFaqPage() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>{c.areYouSure}</AlertDialogTitle>
             <AlertDialogDescription>
               {itemToDelete?.type === "category" 
-                ? "This will delete the category and all questions within it. This action cannot be undone."
-                : "This will permanently delete this question. This action cannot be undone."
+                ? p.deleteCategoryDesc
+                : p.deleteFaqDesc
               }
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{c.cancel}</AlertDialogCancel>
             <AlertDialogAction 
               onClick={() => void confirmDelete()}
               disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {c.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

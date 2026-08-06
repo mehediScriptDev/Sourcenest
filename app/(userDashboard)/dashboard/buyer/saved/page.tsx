@@ -16,6 +16,7 @@ import {
   Heart,
   Scale
 } from "lucide-react"
+import { useTranslation } from "@/lib/i18n"
 
 function formatTimeAgo(dateString: string) {
   const date = new Date(dateString)
@@ -42,13 +43,15 @@ export default function BuyerSavedPage() {
     maxCompare
   } = useFavorites()
 
+  const { t } = useTranslation()
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="font-serif text-2xl font-medium text-foreground">Saved Suppliers & Products</h1>
+          <h1 className="font-serif text-2xl font-medium text-foreground">{t.buyer.saved.title}</h1>
           <p className="mt-1 text-muted-foreground">
-            Suppliers and products you've saved by clicking the heart icon
+            {t.buyer.saved.subtitle}
           </p>
         </div>
         <div className="hidden sm:flex items-center gap-2">
@@ -63,11 +66,11 @@ export default function BuyerSavedPage() {
         <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-grid">
           <TabsTrigger value="suppliers" className="gap-2">
             <Factory className="h-4 w-4" />
-            <span className="hidden sm:inline">Saved</span> Suppliers ({savedSuppliers.length})
+            <span className="hidden sm:inline">{t.buyer.saved.suppliersTab}</span> ({savedSuppliers.length})
           </TabsTrigger>
           <TabsTrigger value="products" className="gap-2">
             <Package className="h-4 w-4" />
-            <span className="hidden sm:inline">Saved</span> Products ({savedProducts.length})
+            <span className="hidden sm:inline">{t.buyer.saved.productsTab}</span> ({savedProducts.length})
           </TabsTrigger>
         </TabsList>
 
@@ -75,12 +78,12 @@ export default function BuyerSavedPage() {
           {savedSuppliers.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border py-16 text-center">
               <Heart className="mx-auto h-12 w-12 text-muted-foreground/30" />
-              <h3 className="mt-4 font-semibold text-foreground">No saved suppliers</h3>
+              <h3 className="mt-4 font-semibold text-foreground">{t.buyer.saved.empty.title}</h3>
               <p className="mt-2 text-muted-foreground">
-                Browse suppliers and save your favorites for later
+                {t.buyer.saved.empty.desc}
               </p>
               <Button className="mt-4" asChild>
-                <Link href="/suppliers">Browse Suppliers</Link>
+                <Link href="/suppliers">{t.buyer.layout.browseSuppliers}</Link>
               </Button>
             </div>
           ) : (
@@ -170,7 +173,7 @@ export default function BuyerSavedPage() {
                 Browse products and save your favorites for later
               </p>
               <Button className="mt-4" asChild>
-                <Link href="/products">Browse Products</Link>
+                <Link href="/products">{t.buyer.dashboard.quickActions.browseProducts}</Link>
               </Button>
             </div>
           ) : (

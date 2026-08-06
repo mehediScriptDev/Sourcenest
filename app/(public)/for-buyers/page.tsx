@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { useTranslation } from "@/lib/i18n"
@@ -42,24 +42,24 @@ const benefitKeys = ["free", "reviewed", "directComm", "comparison", "secure", "
 export default function ForBuyersPage() {
   const { t } = useTranslation()
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden">
+      <SiteHeader />
       <main className="flex-1">
         {/* Hero */}
-        <section className="bg-primary py-20 lg:py-28">
+        <section className="bg-primary py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
               <div className="inline-flex items-center gap-2 rounded-full bg-secondary/20 px-4 py-1.5 text-sm text-primary-foreground">
                 <Wallet className="h-4 w-4" />
                 <span>{t?.landing?.forBuyers?.hero?.badge || "100% Free for Buyers"}</span>
               </div>
-              <h1 className="mt-6 font-serif text-4xl font-medium tracking-tight text-primary-foreground sm:text-5xl">
+              <h1 className="mt-4 font-serif text-3xl font-medium tracking-tight text-primary-foreground min-[400px]:text-4xl sm:mt-6 sm:text-5xl lg:text-6xl">
                 {t?.landing?.forBuyers?.hero?.title || "Source Globally, Completely Free"}
               </h1>
-              <p className="mx-auto mt-6 max-w-2xl text-lg text-primary-foreground/80">
+              <p className="mx-auto mt-4 max-w-2xl text-sm text-primary-foreground/80 sm:mt-6 sm:text-base lg:text-lg">
                 {t?.landing?.forBuyers?.hero?.subtitle || "Search reviewed suppliers, compare factories, request quotes, and communicate directly with manufacturers — all at no cost. SourceNest is free for buyers, forever."}
               </p>
-              <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:mt-10 sm:flex-row sm:gap-4">
                 <Button size="lg" variant="secondary" className="gap-2 bg-primary-foreground text-primary hover:bg-primary-foreground/90" asChild>
                   <Link href="/auth/signup?role=buyer">
                     {t?.landing?.forBuyers?.hero?.signupButton || "Create Free Account"}
@@ -77,28 +77,28 @@ export default function ForBuyersPage() {
         </section>
 
         {/* Features Grid */}
-        <section className="py-20 lg:py-28">
+        <section className="py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
-              <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+              <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground sm:text-3xl lg:text-4xl">
                 {t?.landing?.forBuyers?.featuresTitle || "Everything You Need to Source Smarter"}
               </h2>
-              <p className="mt-4 text-lg text-muted-foreground">
+              <p className="mt-3 text-sm text-muted-foreground sm:mt-4 sm:text-base">
                 {t?.landing?.forBuyers?.featuresSubtitle || "Powerful tools designed to streamline your entire sourcing workflow"}
               </p>
             </div>
 
-            <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-12 sm:gap-5 lg:grid-cols-4 lg:gap-6">
               {featureKeys.map((feature) => {
                 const feats = t?.landing?.forBuyers?.features as any
                 const featureData = feats?.[feature.titleKey.split('.')[0]] || {}
                 return (
-                  <div key={feature.titleKey} className="group relative overflow-hidden rounded-2xl border border-border bg-card p-8 transition-shadow hover:shadow-lg">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary/10">
-                      <feature.icon className="h-6 w-6 text-secondary" />
+                  <div key={feature.titleKey} className="group relative overflow-hidden rounded-xl border border-border bg-card p-3 transition-shadow hover:shadow-lg sm:rounded-2xl sm:p-6">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/10 sm:h-12 sm:w-12">
+                      <feature.icon className="h-5 w-5 text-secondary sm:h-6 sm:w-6" />
                     </div>
-                    <h3 className="mt-4 font-semibold text-foreground">{featureData.title || "Feature Title"}</h3>
-                    <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                    <h3 className="mt-3 text-sm font-semibold text-foreground sm:mt-4 sm:text-base">{featureData.title || "Feature Title"}</h3>
+                    <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed sm:mt-2 sm:text-sm">
                       {featureData.description || "Feature description"}
                     </p>
                   </div>
@@ -109,14 +109,14 @@ export default function ForBuyersPage() {
         </section>
 
         {/* Benefits */}
-        <section className="bg-muted/50 py-20 lg:py-28">
+        <section className="bg-muted/50 py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+            <div className="grid items-center gap-6 sm:gap-8 lg:grid-cols-2 lg:gap-12">
               <div>
-                <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+                <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground sm:text-3xl lg:text-4xl">
                   {t?.landing?.forBuyers?.benefitsTitle || "Why Buyers Love SourceNest"}
                 </h2>
-                <p className="mt-4 text-lg text-muted-foreground">
+                <p className="mt-3 text-sm text-muted-foreground sm:mt-4 sm:text-base">
                   {t?.landing?.forBuyers?.benefitsSubtitle || "Join thousands of procurement professionals, importers, and sourcing managers who trust SourceNest for their global sourcing needs."}
                 </p>
                 <ul className="mt-8 space-y-4">
@@ -130,8 +130,8 @@ export default function ForBuyersPage() {
                   ))}
                 </ul>
               </div>
-              <div className="rounded-2xl bg-primary p-8 text-primary-foreground lg:p-12">
-                <h3 className="font-serif text-2xl font-medium">{t?.landing?.forBuyers?.benefitBoxTitle || "Why is it free for buyers?"}</h3>
+              <div className="rounded-xl bg-primary p-4 text-primary-foreground sm:rounded-2xl sm:p-6 lg:p-8">
+                <h3 className="font-serif text-xl font-medium sm:text-2xl">{t?.landing?.forBuyers?.benefitBoxTitle || "Why is it free for buyers?"}</h3>
                 <p className="mt-4 text-primary-foreground/80 leading-relaxed">
                   {t?.landing?.forBuyers?.benefitBoxDescription1 || "Our business model is simple: manufacturers pay a subscription to be listed on the platform, while buyers use it for free. This ensures maximum reach for factories while giving you access to a premium sourcing tool at no cost."}
                 </p>
@@ -144,13 +144,13 @@ export default function ForBuyersPage() {
         </section>
 
         {/* CTA */}
-        <section className="py-20 lg:py-28">
+        <section className="py-8 sm:py-12 lg:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
-              <h2 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+              <h2 className="font-serif text-2xl font-medium tracking-tight text-foreground sm:text-3xl lg:text-4xl">
                 {t?.landing?.forBuyers?.ctaTitle || "Start Sourcing Today"}
               </h2>
-              <p className="mt-4 text-lg text-muted-foreground">
+              <p className="mt-3 text-sm text-muted-foreground sm:mt-4 sm:text-base">
                 {t?.landing?.forBuyers?.ctaSubtitle || "Create your free account in seconds and start connecting with reviewed manufacturers worldwide."}
               </p>
               <Button size="lg" className="mt-8 gap-2" asChild>

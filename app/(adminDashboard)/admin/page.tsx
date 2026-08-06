@@ -1,17 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AdminStatCard } from "@/components/admin/admin-stat-card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { getAdminDashboard, AdminDashboardData } from "@/lib/api/admin-dashboard"
+import { getAdminDashboard, AdminDashboardData, type GetAdminDashboardResponse } from "@/lib/api/admin-dashboard"
 import { approveManufacturer, rejectManufacturer } from "@/lib/api/admin-manufacturer-registrations"
+import { queryKeys } from "@/lib/query-keys"
 import { useToast } from "@/hooks/use-toast"
+import { useTranslation } from "@/lib/i18n"
+import { AdminDialogContent } from "@/components/admin/admin-dialog-content"
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -51,28 +54,34 @@ const getStatIcon = (key: string) => {
 }
 
 export default function AdminDashboardPage() {
+  const { t } = useTranslation()
+  const p = t.admin.pages.dashboard
+  const c = t.admin.common
   const { toast } = useToast()
-  const [data, setData] = useState<AdminDashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const dashboardQueryKey = queryKeys.adminDashboard()
+
+  const dashboardQuery = useQuery({
+    queryKey: dashboardQueryKey,
+    queryFn: getAdminDashboard,
+  })
+
+  const data = dashboardQuery.data?.success ? dashboardQuery.data.data : null
+  const loading = dashboardQuery.isLoading
   const [processingId, setProcessingId] = useState<string | null>(null)
+
+  const patchDashboard = (updater: (prev: AdminDashboardData) => AdminDashboardData) => {
+    queryClient.setQueryData(dashboardQueryKey, (previous: GetAdminDashboardResponse | undefined) => {
+      if (!previous?.data) return previous
+      return { ...previous, data: updater(previous.data) }
+    })
+  }
 
   // Modals state
   const [showReviewDialog, setShowReviewDialog] = useState(false)
   const [showRejectDialog, setShowRejectDialog] = useState(false)
   const [currentItem, setCurrentItem] = useState<any | null>(null)
   const [rejectReason, setRejectReason] = useState("")
-
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      setLoading(true)
-      const res = await getAdminDashboard()
-      if (res.success && res.data) {
-        setData(res.data)
-      }
-      setLoading(false)
-    }
-    fetchDashboard()
-  }, [])
 
   const openReview = (item: any) => {
     setCurrentItem(item)
@@ -91,24 +100,24 @@ export default function AdminDashboardPage() {
       if (item.type === 'manufacturer' || item.type === 'supplier' || item.type === 'Supplier' || item.type === 'Manufacturer' || !item.type) {
         await approveManufacturer(id)
         toast({
-          title: "Approved",
-          description: `${item.name} has been approved.`,
+          title: c.approved,
+          description: c.approvedDesc.replace("{name}", item.name),
         })
       } else {
         toast({
-          title: "Notice",
-          description: `Approval for type ${item.type} is not fully wired yet. Removed from list.`,
+          title: c.notice,
+          description: c.approvalNotWired.replace("{type}", item.type),
         })
       }
 
-      setData({
-        ...data,
-        pending_approvals: data.pending_approvals.filter((i) => i.id !== id)
-      })
-    } catch (error: any) {
+      patchDashboard((prev) => ({
+        ...prev,
+        pending_approvals: prev.pending_approvals.filter((i) => i.id !== id),
+      }))
+    } catch (error: unknown) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to approve application.",
+        title: c.error,
+        description: error instanceof Error ? error.message : c.approveFailed,
         variant: "destructive"
       })
     } finally {
@@ -120,8 +129,8 @@ export default function AdminDashboardPage() {
     if (!currentItem || !data) return
     if (!rejectReason.trim()) {
       toast({
-        title: "Error",
-        description: "Please provide a reason for rejection.",
+        title: c.error,
+        description: c.rejectReasonRequired,
         variant: "destructive"
       })
       return
@@ -132,22 +141,22 @@ export default function AdminDashboardPage() {
       if (currentItem.type === 'manufacturer' || currentItem.type === 'supplier' || currentItem.type === 'Supplier' || currentItem.type === 'Manufacturer' || !currentItem.type) {
         await rejectManufacturer(currentItem.id, rejectReason)
         toast({
-          title: "Rejected",
-          description: `${currentItem.name} has been rejected.`,
+          title: c.rejected,
+          description: c.rejectedDesc.replace("{name}", currentItem.name),
         })
       }
 
-      setData({
-        ...data,
-        pending_approvals: data.pending_approvals.filter((i) => i.id !== currentItem.id)
-      })
+      patchDashboard((prev) => ({
+        ...prev,
+        pending_approvals: prev.pending_approvals.filter((i) => i.id !== currentItem.id),
+      }))
       setShowRejectDialog(false)
       setCurrentItem(null)
       setRejectReason("")
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to reject application.",
+        title: c.error,
+        description: error instanceof Error ? error.message : c.rejectFailed,
         variant: "destructive"
       })
     } finally {
@@ -166,7 +175,7 @@ export default function AdminDashboardPage() {
   if (!data) {
     return (
       <div className="flex h-[400px] flex-col items-center justify-center">
-        <p className="text-muted-foreground">Failed to load admin dashboard data.</p>
+        <p className="text-muted-foreground">{p.loadFailed}</p>
       </div>
     )
   }
@@ -174,10 +183,8 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-serif text-2xl font-medium text-foreground">Admin Dashboard</h1>
-        <p className="mt-1 text-muted-foreground">
-          Overview of platform activity and pending tasks
-        </p>
+        <h1 className="font-serif text-2xl font-medium text-foreground">{p.title}</h1>
+        <p className="mt-1 text-muted-foreground">{p.subtitle}</p>
       </div>
 
       {/* Stats Grid */}
@@ -206,11 +213,11 @@ export default function AdminDashboardPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Pending Approvals
+            {p.pendingApprovals}
           </CardTitle>
           <Button variant="outline" size="sm" asChild>
             <Link href="/admin/suppliers">
-              View All
+              {p.viewAll}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
@@ -220,7 +227,7 @@ export default function AdminDashboardPage() {
             {data.pending_approvals.length === 0 ? (
               <div className="py-8 text-center">
                 <CheckCircle className="mx-auto h-12 w-12 text-emerald-500" />
-                <p className="mt-3 text-muted-foreground">All approvals completed</p>
+                <p className="mt-3 text-muted-foreground">{p.noPendingApprovals}</p>
               </div>
             ) : (
               data.pending_approvals.map((item) => (
@@ -232,7 +239,7 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="font-semibold text-foreground truncate">{item.name}</h4>
-                      <p className="text-sm text-muted-foreground">{item.industry || "No industry specified"}</p>
+                      <p className="text-sm text-muted-foreground">{item.industry || p.noIndustry}</p>
                     </div>
                     <Badge variant="secondary" className="bg-amber-100 text-amber-700 shrink-0">
                       {item.status}
@@ -242,13 +249,13 @@ export default function AdminDashboardPage() {
                   {/* Card Body */}
                   <div className="px-5 py-4 space-y-3">
                     <p className="text-sm text-muted-foreground line-clamp-2">
-                      {item.description || "No description provided."}
+                      {item.description || p.noDescription}
                     </p>
                     
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <MapPin className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{item.country || "Not specified"}</span>
+                        <span className="truncate">{item.country || p.notSpecified}</span>
                       </div>
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Calendar className="h-4 w-4 shrink-0" />
@@ -265,7 +272,7 @@ export default function AdminDashboardPage() {
                       onClick={() => openReview(item)}
                     >
                       <Eye className="mr-1.5 h-3.5 w-3.5" />
-                      Review
+                      {c.review}
                     </Button>
                     <Button 
                       size="sm"
@@ -277,7 +284,7 @@ export default function AdminDashboardPage() {
                       ) : (
                         <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
                       )}
-                      Approve
+                      {c.approve}
                     </Button>
                   </div>
                 </div>
@@ -290,12 +297,12 @@ export default function AdminDashboardPage() {
       {/* Recent Activity */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
+          <CardTitle>{p.recentActivity}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {data.recent_activity.length === 0 ? (
-              <p className="text-muted-foreground text-center">No recent activity.</p>
+              <p className="text-muted-foreground text-center">{p.noRecentActivity}</p>
             ) : (
               data.recent_activity.map((activity, index) => (
                 <div key={index} className="flex items-center gap-4">
@@ -316,13 +323,14 @@ export default function AdminDashboardPage() {
 
       {/* Review Dialog */}
       <Dialog open={showReviewDialog} onOpenChange={setShowReviewDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Review Business Application</DialogTitle>
+        <AdminDialogContent mobile="fullscreen" size="md" variant="structured">
+          <DialogHeader className="shrink-0 border-b border-border px-5 py-4 text-left sm:px-6">
+            <DialogTitle>{p.reviewApplication}</DialogTitle>
             <DialogDescription>
-              Review the business details and take action
+              {p.reviewApplicationDesc}
             </DialogDescription>
           </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
           {currentItem && (
             <div className="space-y-4">
               <div className="flex items-start gap-4">
@@ -331,40 +339,41 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-foreground">{currentItem.name}</h3>
-                  <p className="text-sm text-muted-foreground">{currentItem.industry || "No industry specified"}</p>
+                  <p className="text-sm text-muted-foreground">{currentItem.industry || p.noIndustry}</p>
                 </div>
               </div>
               
               <div className="rounded-lg bg-muted/50 p-4 space-y-3">
-                <p className="text-sm text-foreground">{currentItem.description || "No description provided."}</p>
+                <p className="text-sm text-foreground">{currentItem.description || p.noDescription}</p>
               </div>
               
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Country</p>
-                    <p className="font-medium text-foreground">{currentItem.country || "N/A"}</p>
+                    <p className="text-xs text-muted-foreground">{p.countryLabel}</p>
+                    <p className="font-medium text-foreground">{currentItem.country || c.na}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Submitted</p>
+                    <p className="text-xs text-muted-foreground">{p.submitted}</p>
                     <p className="font-medium text-foreground">{currentItem.submitted_date}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 col-span-2">
                   <Mail className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Email</p>
+                    <p className="text-xs text-muted-foreground">{p.emailLabel}</p>
                     <p className="font-medium text-foreground">{currentItem.email}</p>
                   </div>
                 </div>
               </div>
             </div>
           )}
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+          </div>
+          <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border px-5 py-4 sm:flex-row sm:px-6">
             <Button 
               variant="outline" 
               onClick={() => {
@@ -374,14 +383,14 @@ export default function AdminDashboardPage() {
               className="text-destructive hover:text-destructive"
             >
               <X className="mr-2 h-4 w-4" />
-              Reject
+              {c.reject}
             </Button>
             <Button 
               variant="outline"
               onClick={() => setShowReviewDialog(false)}
             >
               <FileQuestion className="mr-2 h-4 w-4" />
-              Request Info
+              {p.requestInfo}
             </Button>
             <Button onClick={() => {
               if (currentItem) {
@@ -390,26 +399,26 @@ export default function AdminDashboardPage() {
               }
             }}>
               <CheckCircle className="mr-2 h-4 w-4" />
-              Approve
+              {c.approve}
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
 
       {/* Reject Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
-        <DialogContent>
+        <AdminDialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Reject Application</DialogTitle>
+            <DialogTitle>{p.rejectApplication}</DialogTitle>
             <DialogDescription>
-              Provide a reason for rejecting this business application
+              {p.rejectApplicationDesc}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Rejection Reason</Label>
+              <Label>{p.rejectionReason}</Label>
               <Textarea
-                placeholder="Please explain why this application is being rejected..."
+                placeholder={p.rejectionPlaceholderLong}
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 className="mt-2"
@@ -419,20 +428,20 @@ export default function AdminDashboardPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
-              Cancel
+              {c.cancel}
             </Button>
             <Button variant="destructive" onClick={rejectItem} disabled={processingId === currentItem?.id}>
               {processingId === currentItem?.id ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Rejecting...
+                  {c.rejecting}
                 </>
               ) : (
-                "Reject Application"
+                p.rejectApplication
               )}
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
     </div>
   )

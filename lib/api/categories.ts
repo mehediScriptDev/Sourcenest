@@ -41,6 +41,54 @@ interface ApiResult<T> {
   data: T
 }
 
+export interface CategoriesPaginationMeta {
+  current_page: number
+  last_page: number
+  per_page: number
+  total: number
+  from: number | null
+  to: number | null
+}
+
+export interface PaginatedApiResult<T> extends ApiResult<T> {
+  meta?: CategoriesPaginationMeta
+}
+
+export const CATEGORIES_LIST_PER_PAGE = 12
+
+function parseCategoriesMeta(payload: unknown): CategoriesPaginationMeta | undefined {
+  if (!payload || typeof payload !== "object") {
+    return undefined
+  }
+  const root = payload as Record<string, unknown>
+  const meta = root.meta
+  if (!meta || typeof meta !== "object") {
+    return undefined
+  }
+  const m = meta as Record<string, unknown>
+  const toNumber = (value: unknown, fallback: number) => {
+    if (typeof value === "number" && Number.isFinite(value)) return value
+    if (typeof value === "string") {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    return fallback
+  }
+  const toNullableNumber = (value: unknown): number | null => {
+    if (value == null) return null
+    return toNumber(value, 0)
+  }
+
+  return {
+    current_page: toNumber(m.current_page, 1),
+    last_page: toNumber(m.last_page, 1),
+    per_page: toNumber(m.per_page, 15),
+    total: toNumber(m.total, 0),
+    from: toNullableNumber(m.from),
+    to: toNullableNumber(m.to),
+  }
+}
+
 /** Parse Laravel-style create response for a category id. */
 function extractCreatedCategoryId(payload: unknown): string | null {
   if (payload == null || typeof payload !== "object") return null
@@ -199,15 +247,24 @@ function normalizeSubcategories(payload: unknown): BackendSubcategory[] {
     .filter((item): item is BackendSubcategory => item !== null)
 }
 
-export async function getAdminCategories(params?: { perPage?: number; page?: number }): Promise<ApiResult<BackendCategory[]>> {
+export async function getAdminCategories(params?: {
+  perPage?: number
+  page?: number
+  search?: string
+}): Promise<PaginatedApiResult<BackendCategory[]>> {
   try {
     const response = await apiClient.get("/admin/categories", {
       params: {
         ...(typeof params?.perPage === "number" ? { per_page: params.perPage } : {}),
         ...(typeof params?.page === "number" ? { page: params.page } : {}),
+        ...(params?.search ? { search: params.search } : {}),
       },
     })
-    return { success: true, data: normalizeCategories(response.data) }
+    return {
+      success: true,
+      data: normalizeCategories(response.data),
+      meta: parseCategoriesMeta(response.data),
+    }
   } catch (error) {
     return {
       success: false,
@@ -217,21 +274,34 @@ export async function getAdminCategories(params?: { perPage?: number; page?: num
   }
 }
 
-export async function getPublicCategories(params?: { perPage?: number; page?: number }): Promise<ApiResult<BackendCategory[]>> {
+export async function getPublicCategories(params?: { perPage?: number; page?: number }): Promise<PaginatedApiResult<BackendCategory[]>> {
   try {
     const response = await publicApiClient.get("/categories", {
       params: {
-        ...(typeof params?.perPage === "number" ? { per_page: params.perPage } : {}),
-        ...(typeof params?.page === "number" ? { page: params.page } : {}),
+        per_page: params?.perPage ?? CATEGORIES_LIST_PER_PAGE,
+        page: params?.page ?? 1,
       },
     })
-    return { success: true, data: normalizeCategories(response.data) }
+    return {
+      success: true,
+      data: normalizeCategories(response.data),
+      meta: parseCategoriesMeta(response.data),
+    }
   } catch (error) {
     return {
       success: false,
       message: getApiErrorMessage(error, "Failed to fetch categories."),
       data: [],
     }
+  }
+}
+
+export async function getPublicCategoriesTotal(): Promise<number> {
+  try {
+    const response = await publicApiClient.get("/categories", { params: { per_page: 1 } })
+    return parseCategoriesMeta(response.data)?.total ?? 0
+  } catch {
+    return 0
   }
 }
 

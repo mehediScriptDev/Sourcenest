@@ -1,9 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import { AdminDialogContent } from "@/components/admin/admin-dialog-content"
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
+import { useTranslation } from "@/lib/i18n"
 import type {
   ReviewRequest,
   ReviewSubmission,
@@ -36,11 +37,7 @@ import type {
 } from "@/lib/api/admin-reviews"
 import {
   updateReviewRequestStatus,
-  REVIEW_TYPE_LABELS,
-  REVIEW_STATUS_LABELS,
 } from "@/lib/api/admin-reviews"
-
-// ─── Status badge styles ─────────────────────────────────────────────────────
 
 function statusVariant(status: ReviewRequestStatus) {
   switch (status) {
@@ -62,17 +59,18 @@ function statusVariant(status: ReviewRequestStatus) {
 }
 
 export function ReviewStatusBadge({ status }: { status: ReviewRequestStatus }) {
+  const { t } = useTranslation()
+  const rs = t.admin.reviewStatus
+  const label = rs[status as keyof typeof rs] || status
   return (
     <Badge
       variant="secondary"
       className={cn("font-semibold", statusVariant(status))}
     >
-      {REVIEW_STATUS_LABELS[status] || status}
+      {label}
     </Badge>
   )
 }
-
-// ─── Capture lightbox ────────────────────────────────────────────────────────
 
 function CaptureLightbox({
   captures,
@@ -83,6 +81,8 @@ function CaptureLightbox({
   initialIndex: number
   onClose: () => void
 }) {
+  const { t } = useTranslation()
+  const c = t.admin.components.reviewSubmission
   const [index, setIndex] = useState(initialIndex)
   const current = captures[index]
 
@@ -98,14 +98,12 @@ function CaptureLightbox({
       </button>
 
       <div className="flex flex-col items-center gap-4">
-        {/* Image */}
         <div className="relative max-h-[80dvh] max-w-[90vw] overflow-hidden rounded-xl">
           <img
             src={current.photo_url}
             alt={current.area_name}
             className="max-h-[80dvh] max-w-[90vw] object-contain"
           />
-          {/* Metadata overlay */}
           <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent px-4 pb-4 pt-10">
             <p className="text-sm font-semibold text-white">{current.area_name}</p>
             {current.captured_at && (
@@ -122,13 +120,12 @@ function CaptureLightbox({
             {current.has_review_code && (
               <Badge className="mt-1.5 bg-secondary text-secondary-foreground text-xs font-medium">
                 <Shield className="mr-1 h-3 w-3" />
-                Code Reviewed
+                {c.codeReviewed}
               </Badge>
             )}
           </div>
         </div>
 
-        {/* Navigation */}
         {captures.length > 1 && (
           <div className="flex items-center gap-3">
             <Button
@@ -157,8 +154,6 @@ function CaptureLightbox({
   )
 }
 
-// ─── Main panel component ────────────────────────────────────────────────────
-
 interface ReviewSubmissionsPanelProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -172,6 +167,12 @@ export default function ReviewSubmissionsPanel({
   review,
   onStatusChange,
 }: ReviewSubmissionsPanelProps) {
+  const { t } = useTranslation()
+  const c = t.admin.components.reviewSubmission
+  const rt = t.admin.reviewType
+  const rs = t.admin.reviewStatus
+  const common = t.admin.common
+  const roles = t.admin.roles
   const { toast } = useToast()
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -189,9 +190,10 @@ export default function ReviewSubmissionsPanel({
       setActionLoading(status)
       await updateReviewRequestStatus(review.id, status, reason)
 
+      const statusLabel = rs[status as keyof typeof rs]?.toLowerCase() ?? status
       toast({
-        title: "Success",
-        description: `Review ${REVIEW_STATUS_LABELS[status].toLowerCase()}.`,
+        title: common.success,
+        description: c.statusUpdated.replace("{status}", statusLabel),
       })
 
       onStatusChange?.()
@@ -201,9 +203,9 @@ export default function ReviewSubmissionsPanel({
       setShowRejectInput(false)
       setRejectReason("")
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "Failed to update status"
+      const msg = error instanceof Error ? error.message : c.updateFailed
       toast({
-        title: "Error",
+        title: common.error,
         description: msg,
         variant: "destructive",
       })
@@ -221,23 +223,26 @@ export default function ReviewSubmissionsPanel({
     }
   }
 
+  const manufacturerLabel = review.company_name || review.manufacturer_name || roles.manufacturer
+  const reviewTypeLabel = rt[review.review_type as keyof typeof rt] || review.review_type
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent
+        <AdminDialogContent
           showCloseButton
-          className="flex max-h-[min(92dvh,56rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+          variant="structured"
+          mobile="fullscreen"
+          size="lg"
         >
-          {/* Header */}
           <DialogHeader className="shrink-0 space-y-3 border-b border-border bg-linear-to-r from-secondary/5 to-transparent px-5 pb-5 pt-5 text-left sm:px-6">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-lg font-semibold">
-                  Review Submission
+                  {c.title}
                 </DialogTitle>
                 <DialogDescription className="mt-1 text-sm">
-                  {review.company_name || review.manufacturer_name || "Manufacturer"} —{" "}
-                  {REVIEW_TYPE_LABELS[review.review_type]}
+                  {manufacturerLabel} — {reviewTypeLabel}
                 </DialogDescription>
               </div>
               <ReviewStatusBadge status={review.status} />
@@ -252,18 +257,16 @@ export default function ReviewSubmissionsPanel({
               </div>
               <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
                 <Clock className="h-3.5 w-3.5" />
-                Requested {formatDate(review.created_at)}
+                {c.requestedAt.replace("{date}", formatDate(review.created_at))}
               </div>
             </div>
           </DialogHeader>
 
-          {/* Body */}
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
             <div className="space-y-5">
-              {/* Requested Areas */}
               <div className="rounded-xl border border-border/60 bg-linear-to-br from-background to-muted/30 p-4 shadow-sm">
                 <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Requested Areas
+                  {c.requestedAreas}
                 </h4>
                 <div className="flex flex-wrap gap-1.5">
                   {review.requested_areas.map((area) => (
@@ -274,23 +277,21 @@ export default function ReviewSubmissionsPanel({
                 </div>
               </div>
 
-              {/* Instructions */}
               {review.additional_instructions && (
                 <div className="rounded-xl border border-border/60 bg-linear-to-br from-background to-muted/30 p-4 shadow-sm">
                   <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Instructions
+                    {c.instructions}
                   </h4>
                   <p className="text-sm text-foreground">{review.additional_instructions}</p>
                 </div>
               )}
 
-              {/* Submissions */}
               {submission ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h4 className="flex items-center gap-2 text-sm font-semibold">
                       <Camera className="h-4 w-4 text-secondary" />
-                      Submitted Captures
+                      {c.submittedCaptures}
                       <Badge variant="outline" className="font-semibold">
                         {allCaptures.length}
                       </Badge>
@@ -300,7 +301,6 @@ export default function ReviewSubmissionsPanel({
                     </p>
                   </div>
 
-                  {/* Capture grid */}
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     {allCaptures.map((capture, i) => (
                       <button
@@ -338,10 +338,9 @@ export default function ReviewSubmissionsPanel({
                     ))}
                   </div>
 
-                  {/* Submission notes */}
                   {submission.notes && (
                     <div className="rounded-lg bg-muted/40 px-4 py-3">
-                      <p className="text-xs font-semibold text-muted-foreground">Manufacturer Notes</p>
+                      <p className="text-xs font-semibold text-muted-foreground">{c.manufacturerNotes}</p>
                       <p className="mt-1 text-sm">{submission.notes}</p>
                     </div>
                   )}
@@ -349,23 +348,22 @@ export default function ReviewSubmissionsPanel({
               ) : (
                 <div className="flex flex-col items-center py-10 text-center">
                   <Camera className="h-10 w-10 text-muted-foreground/40" />
-                  <p className="mt-3 text-sm font-medium text-foreground">No submissions yet</p>
+                  <p className="mt-3 text-sm font-medium text-foreground">{c.noSubmissions}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    The manufacturer hasn&apos;t submitted their review captures yet.
+                    {c.noSubmissionsDesc}
                   </p>
                 </div>
               )}
 
-              {/* Reject reason input */}
               {showRejectInput && (
                 <div className="space-y-2 rounded-lg border border-red-200/60 bg-red-50/40 p-4 dark:border-red-500/20 dark:bg-red-500/10">
                   <Label className="text-sm font-semibold text-red-700 dark:text-red-400">
-                    Reason for Rejection *
+                    {c.reasonForRejection}
                   </Label>
                   <Textarea
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder="Explain why this submission is being rejected..."
+                    placeholder={c.rejectionPlaceholder}
                     className="min-h-20 resize-none border-red-200 focus-visible:ring-red-500/30 dark:border-red-500/30"
                   />
                   <div className="flex justify-end gap-2 pt-1">
@@ -377,7 +375,7 @@ export default function ReviewSubmissionsPanel({
                         setRejectReason("")
                       }}
                     >
-                      Cancel
+                      {common.cancel}
                     </Button>
                     <Button
                       size="sm"
@@ -388,7 +386,7 @@ export default function ReviewSubmissionsPanel({
                       {actionLoading === "rejected" ? (
                         <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                       ) : null}
-                      Confirm Rejection
+                      {c.confirmRejection}
                     </Button>
                   </div>
                 </div>
@@ -396,7 +394,6 @@ export default function ReviewSubmissionsPanel({
             </div>
           </div>
 
-          {/* Footer with actions */}
           {submission && review.status === "submitted" && !showRejectInput && (
             <DialogFooter className="shrink-0 gap-2 border-t border-border px-5 py-4 sm:px-6">
               <Button
@@ -407,7 +404,7 @@ export default function ReviewSubmissionsPanel({
                 className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-500/10"
               >
                 <X className="mr-1.5 h-3.5 w-3.5" />
-                Reject
+                {c.reject}
               </Button>
               <Button
                 variant="outline"
@@ -421,7 +418,7 @@ export default function ReviewSubmissionsPanel({
                 ) : (
                   <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
                 )}
-                Request Another
+                {c.requestAnother}
               </Button>
               <Button
                 size="sm"
@@ -434,12 +431,11 @@ export default function ReviewSubmissionsPanel({
                 ) : (
                   <Check className="mr-1.5 h-3.5 w-3.5" />
                 )}
-                Approve Review
+                {c.approveReview}
               </Button>
             </DialogFooter>
           )}
 
-          {/* Mark as completed for approved reviews */}
           {review.status === "approved" && (
             <DialogFooter className="shrink-0 gap-2 border-t border-border px-5 py-4 sm:px-6">
               <Button
@@ -453,14 +449,13 @@ export default function ReviewSubmissionsPanel({
                 ) : (
                   <Check className="mr-1.5 h-3.5 w-3.5" />
                 )}
-                Mark as Completed
+                {c.markCompleted}
               </Button>
             </DialogFooter>
           )}
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
 
-      {/* Lightbox */}
       {lightboxIndex !== null && (
         <CaptureLightbox
           captures={allCaptures}

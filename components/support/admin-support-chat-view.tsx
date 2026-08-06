@@ -32,9 +32,10 @@ import {
   Building2,
   ChevronDown,
   PanelRight,
-  CornerDownLeft,
-  Loader2
+  Loader2,
 } from "lucide-react"
+import { SupportComposerAttachments, SupportMessageAttachments, SUPPORT_ATTACHMENT_ACCEPT } from "@/components/support/support-message-attachments"
+import { SupportErrorDialog } from "@/components/support/support-error-dialog"
 import { useToast } from "@/hooks/use-toast"
 import {
   getAdminCustomerSupportTickets,
@@ -46,73 +47,85 @@ import {
   type CustomerSupportTicketStatus,
   type CustomerSupportTicketPriority,
 } from "@/lib/api/admin-customer-support-tickets"
+import { useTranslation } from "@/lib/i18n"
 
 type CustomerRole = "buyer" | "supplier" | "provider" | "unknown"
 
-const ROLE_CONFIG: Record<CustomerRole, { label: string; icon: typeof UserIcon; ring: string; bg: string }> = {
-  buyer: { label: "Buyer", icon: UserIcon, ring: "ring-primary/20", bg: "bg-primary/10 text-primary" },
-  supplier: { label: "Supplier", icon: Factory, ring: "ring-secondary/20", bg: "bg-secondary/15 text-secondary" },
-  provider: { label: "Service Provider", icon: Briefcase, ring: "ring-accent/20", bg: "bg-accent/15 text-accent" },
-  unknown: { label: "User", icon: UserIcon, ring: "ring-primary/20", bg: "bg-primary/10 text-primary" },
-}
+const CANNED_REPLY_KEYS = ["cannedReply1", "cannedReply2", "cannedReply3", "cannedReply4"] as const
+const AUTO_CLOSE_MESSAGE =
+  "This support ticket has been closed by the admin.\nIf you still need help or have another question, you can open a new support ticket anytime. Thank you."
 
-const CANNED_REPLIES = [
-  "Thanks for reaching out — I'm looking into this now.",
-  "Could you share a bit more detail so I can help faster?",
-  "I've escalated this to the relevant team and will update you shortly.",
-  "Glad that's sorted! Let me know if there's anything else.",
+const FILTERS: { key: CustomerSupportTicketStatus | "all" | "unresolved"; labelKey: "active" | "open" | "waiting" | "resolved" | "all" }[] = [
+  { key: "unresolved", labelKey: "active" },
+  { key: "open", labelKey: "open" },
+  { key: "waiting_on_customer", labelKey: "waiting" },
+  { key: "resolved", labelKey: "resolved" },
+  { key: "all", labelKey: "all" },
 ]
 
-const FILTERS: { key: CustomerSupportTicketStatus | "all" | "unresolved"; label: string }[] = [
-  { key: "unresolved", label: "Active" },
-  { key: "open", label: "Open" },
-  { key: "waiting_on_customer", label: "Waiting" },
-  { key: "resolved", label: "Resolved" },
-  { key: "all", label: "All" },
-]
-
-export const STATUS_CONFIG: Record<CustomerSupportTicketStatus | "unknown", { label: string; pill: string; dot: string }> = {
-  open: {
-    label: "Open",
-    pill: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900",
-    dot: "bg-amber-500",
-  },
-  "in_progress": {
-    label: "In Progress",
-    pill: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900",
-    dot: "bg-sky-500",
-  },
-  "waiting_on_customer": {
-    label: "Waiting on customer",
-    pill: "bg-muted text-muted-foreground border-border",
-    dot: "bg-foreground/40",
-  },
-  resolved: {
-    label: "Resolved",
-    pill: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900",
-    dot: "bg-emerald-500",
-  },
-  closed: {
-    label: "Closed",
-    pill: "bg-muted/60 text-muted-foreground border-border",
-    dot: "bg-muted-foreground",
-  },
-  unknown: {
-    label: "Unknown",
-    pill: "bg-muted text-muted-foreground border-border",
-    dot: "bg-foreground/40",
-  },
+function useStatusConfig() {
+  const { t } = useTranslation()
+  const ts = t.admin.ticketStatus
+  const s = t.admin.support
+  return {
+    open: {
+      label: ts.open,
+      pill: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900",
+      dot: "bg-amber-500",
+    },
+    "in_progress": {
+      label: s.inProgress,
+      pill: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900",
+      dot: "bg-sky-500",
+    },
+    "waiting_on_customer": {
+      label: s.waitingOnCustomer,
+      pill: "bg-muted text-muted-foreground border-border",
+      dot: "bg-foreground/40",
+    },
+    resolved: {
+      label: ts.resolved,
+      pill: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900",
+      dot: "bg-emerald-500",
+    },
+    closed: {
+      label: ts.closed,
+      pill: "bg-muted/60 text-muted-foreground border-border",
+      dot: "bg-muted-foreground",
+    },
+    unknown: {
+      label: ts.unknown,
+      pill: "bg-muted text-muted-foreground border-border",
+      dot: "bg-foreground/40",
+    },
+  } as const
 }
 
-const PRIORITY_CONFIG: Record<CustomerSupportTicketPriority | "unknown", { label: string; cls: string }> = {
-  urgent: { label: "Urgent", cls: "text-red-600 dark:text-red-400" },
-  high: { label: "High", cls: "text-orange-600 dark:text-orange-400" },
-  medium: { label: "Medium", cls: "text-blue-600 dark:text-blue-400" },
-  low: { label: "Low", cls: "text-muted-foreground" },
-  unknown: { label: "Normal", cls: "text-muted-foreground" },
+function useRoleConfig() {
+  const { t } = useTranslation()
+  const s = t.admin.support
+  return {
+    buyer: { label: s.buyer, icon: UserIcon, ring: "ring-primary/20", bg: "bg-primary/10 text-primary" },
+    supplier: { label: s.supplier, icon: Factory, ring: "ring-secondary/20", bg: "bg-secondary/15 text-secondary" },
+    provider: { label: s.serviceProvider, icon: Briefcase, ring: "ring-accent/20", bg: "bg-accent/15 text-accent" },
+    unknown: { label: s.user, icon: UserIcon, ring: "ring-primary/20", bg: "bg-primary/10 text-primary" },
+  } as const
+}
+
+function usePriorityConfig() {
+  const { t } = useTranslation()
+  const c = t.admin.common
+  return {
+    urgent: { label: c.urgent, cls: "text-red-600 dark:text-red-400" },
+    high: { label: c.high, cls: "text-orange-600 dark:text-orange-400" },
+    medium: { label: c.medium, cls: "text-blue-600 dark:text-blue-400" },
+    low: { label: c.low, cls: "text-muted-foreground" },
+    unknown: { label: c.normal, cls: "text-muted-foreground" },
+  } as const
 }
 
 function StatusPill({ status, className }: { status: CustomerSupportTicketStatus | "unknown"; className?: string }) {
+  const STATUS_CONFIG = useStatusConfig()
   const c = STATUS_CONFIG[status] || STATUS_CONFIG.unknown
   return (
     <span
@@ -129,6 +142,7 @@ function StatusPill({ status, className }: { status: CustomerSupportTicketStatus
 }
 
 function Avatar({ name, role, size = "md" }: { name: string; role: CustomerRole; size?: "sm" | "md" | "lg" }) {
+  const ROLE_CONFIG = useRoleConfig()
   const r = ROLE_CONFIG[role] || ROLE_CONFIG.unknown
   const dim = size === "lg" ? "h-12 w-12 text-base" : size === "sm" ? "h-8 w-8 text-xs" : "h-10 w-10 text-sm"
   return (
@@ -191,6 +205,14 @@ interface AdminSupportChatViewProps {
 }
 
 export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupportChatViewProps) {
+  const { t } = useTranslation()
+  const p = t.admin.pages.supportTickets
+  const s = t.admin.support
+  const common = t.admin.common
+  const ts = t.admin.ticketStatus
+  const PRIORITY_CONFIG = usePriorityConfig()
+  const ROLE_CONFIG = useRoleConfig()
+  const cannedReplies = CANNED_REPLY_KEYS.map((key) => s[key])
   const router = useRouter()
   const { toast } = useToast()
 
@@ -201,7 +223,7 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
   const [active, setActive] = useState<CustomerSupportTicketDetail | null>(null)
   
   const [reply, setReply] = useState("")
-  const [mobileThreadOpen, setMobileThreadOpen] = useState(false)
+  const [mobileThreadOpen, setMobileThreadOpen] = useState(!!initialTicketId)
   const [showContext, setShowContext] = useState(true)
 
   const [isLoadingList, setIsLoadingList] = useState(true)
@@ -209,6 +231,16 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
   const [isReplying, setIsReplying] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [errorDialog, setErrorDialog] = useState<{ title: string; message: string } | null>(null)
+
+  const showError = (title: string, message?: string) => {
+    setErrorDialog({
+      title,
+      message: message?.trim() || "Something went wrong. Please try again.",
+    })
+  }
 
   const fetchConversations = async () => {
     const res = await getAdminCustomerSupportTickets(1, 100)
@@ -218,7 +250,7 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
         // setActiveId(res.data[0].id)
       }
     } else {
-      toast({ title: "Failed to load conversations", variant: "destructive" })
+      toast({ title: s.loadConversationsFailed, variant: "destructive" })
     }
     setIsLoadingList(false)
   }
@@ -245,7 +277,7 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
           messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
         }, 100)
       } else {
-        toast({ title: "Failed to load conversation", variant: "destructive" })
+        toast({ title: s.loadConversationFailed, variant: "destructive" })
         setActive(null)
       }
       setIsLoadingDetail(false)
@@ -281,7 +313,7 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
       })
       .filter((conv) => {
         if (!q) return true
-        const cName = conv.user?.fullName || "Unknown"
+        const cName = conv.user?.fullName || s.unknown
         const cEmail = conv.user?.email || ""
         return (
           cName.toLowerCase().includes(q) ||
@@ -304,23 +336,52 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
   }
 
   const sendReply = async () => {
-    if (!active || !reply.trim()) return
+    if (!active || (!reply.trim() && selectedFiles.length === 0)) return
     setIsReplying(true)
-    const res = await replyAdminCustomerSupportTicket(active.id, { message: reply.trim() })
+    const res = await replyAdminCustomerSupportTicket(active.id, {
+      message: reply.trim() || " ",
+      attachments: selectedFiles.length > 0 ? selectedFiles : undefined,
+    })
     setIsReplying(false)
     if (res.success && res.data) {
       setActive(res.data)
       setReply("")
+      setSelectedFiles([])
+      if (fileInputRef.current) fileInputRef.current.value = ""
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
       }, 100)
     } else {
-      toast({ title: "Failed to send reply", variant: "destructive" })
+      showError(s.sendReplyFailed, res.message)
     }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setSelectedFiles((prev) => [...prev, ...Array.from(e.target.files!)])
+    }
+  }
+
+  const removeFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
   const updateStatus = async (id: number, status: CustomerSupportTicketStatus) => {
     if (!active) return
+
+    if (status === "closed" && active.status !== "closed") {
+      const closeReplyRes = await replyAdminCustomerSupportTicket(id, {
+        message: AUTO_CLOSE_MESSAGE,
+      })
+
+      if (closeReplyRes.success && closeReplyRes.data) {
+        setActive(closeReplyRes.data)
+      } else {
+        showError(s.sendReplyFailed, closeReplyRes.message)
+        return
+      }
+    }
+
     const res = await updateAdminCustomerSupportTicket(id, {
       status,
       priority: active.priority,
@@ -330,9 +391,9 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
     if (res.success && res.data) {
       setActive(res.data)
       setConversations(conversations.map(c => c.id === id ? { ...c, status: res.data!.status } : c))
-      toast({ title: "Status updated" })
+      toast({ title: s.statusUpdated })
     } else {
-      toast({ title: "Failed to update status", variant: "destructive" })
+      toast({ title: s.statusUpdateFailed, variant: "destructive" })
     }
   }
 
@@ -347,30 +408,33 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
     if (res.success && res.data) {
       setActive(res.data)
       setConversations(conversations.map(c => c.id === id ? { ...c, priority: res.data!.priority } : c))
-      toast({ title: "Priority updated" })
+      toast({ title: s.priorityUpdated })
     } else {
-      toast({ title: "Failed to update priority", variant: "destructive" })
+      toast({ title: s.priorityUpdateFailed, variant: "destructive" })
     }
   }
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col gap-4">
+    <div className="flex h-[calc(100dvh-7rem)] lg:h-[calc(100vh-7rem)] flex-col gap-4">
       {/* Header + live KPIs */}
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className={cn(
+        "flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between",
+        mobileThreadOpen && "hidden lg:flex"
+      )}>
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <LifeBuoy className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="font-serif text-2xl font-medium text-foreground">Support Center</h1>
-            <p className="text-sm text-muted-foreground">Every customer message, handled in one calm inbox.</p>
+            <h1 className="font-serif text-2xl font-medium text-foreground">{p.title}</h1>
+            <p className="text-sm text-muted-foreground">{p.subtitle}</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Kpi icon={Inbox} label="Open" value={stats.open} tone="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300" />
-          <Kpi icon={Clock} label="Awaiting reply" value={stats.waiting} tone="bg-muted text-muted-foreground" />
-          <Kpi icon={CheckCircle2} label="Resolved" value={stats.resolved} tone="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300" />
-          <Kpi icon={Timer} label="Avg. first reply" value={"—"} tone="bg-secondary/15 text-secondary" />
+          <Kpi icon={Inbox} label={s.open} value={stats.open} tone="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300" />
+          <Kpi icon={Clock} label={s.waiting} value={stats.waiting} tone="bg-muted text-muted-foreground" />
+          <Kpi icon={CheckCircle2} label={s.resolved} value={stats.resolved} tone="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300" />
+          <Kpi icon={Timer} label={s.avgFirstReply} value={"—"} tone="bg-secondary/15 text-secondary" />
         </div>
       </div>
 
@@ -392,7 +456,7 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
-                placeholder="Search conversations"
+                placeholder={s.searchTickets}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-10 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -410,7 +474,7 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
                       : "bg-muted text-muted-foreground hover:bg-muted/70",
                   )}
                 >
-                  {f.label}
+                  {s[f.labelKey]}
                   {counts[f.key] ? (
                     <span
                       className={cn(
@@ -434,12 +498,12 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
             ) : filtered.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
                 <Inbox className="h-8 w-8 opacity-40" />
-                No conversations in this view.
+                {s.noConversations}
               </div>
             ) : (
               filtered.map((conv) => {
                 const isActive = conv.id === activeId
-                const cName = conv.user?.fullName || "Unknown"
+                const cName = conv.user?.fullName || s.unknown
                 const cRole = (conv.user?.role || "unknown") as CustomerRole
                 return (
                   <button
@@ -506,7 +570,7 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
           ) : !active ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
               <LifeBuoy className="h-10 w-10 opacity-40" />
-              Select a conversation to get started.
+              {s.selectTicket}
             </div>
           ) : (
             <>
@@ -518,14 +582,14 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
                     size="icon"
                     className="lg:hidden"
                     onClick={() => setMobileThreadOpen(false)}
-                    aria-label="Back to list"
+                    aria-label={s.backToList}
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
-                  <Avatar name={active.user?.fullName || "Unknown"} role={(active.user?.role || "unknown") as CustomerRole} size="sm" />
+                  <Avatar name={active.user?.fullName || s.unknown} role={(active.user?.role || "unknown") as CustomerRole} size="sm" />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="truncate font-semibold text-foreground">{active.user?.fullName || "Unknown"}</span>
+                      <span className="truncate font-semibold text-foreground">{active.user?.fullName || s.unknown}</span>
                       <StatusPill status={active.status} className="hidden sm:inline-flex" />
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
@@ -538,24 +602,24 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
                   {active.status === "resolved" || active.status === "closed" ? (
                     <Button size="sm" className="gap-1.5" onClick={() => updateStatus(active.id, "open")}>
                       <RotateCcw className="h-4 w-4" />
-                      Reopen
+                      <span className="hidden sm:inline">{s.reopen}</span>
                     </Button>
                   ) : (
                     <Button size="sm" className="gap-1.5" onClick={() => updateStatus(active.id, "resolved")}>
                       <CheckCircle2 className="h-4 w-4" />
-                      Resolve
+                      <span className="hidden sm:inline">{s.markResolved}</span>
                     </Button>
                   )}
                   <Select value={active.status} onValueChange={(v) => updateStatus(active.id, v as CustomerSupportTicketStatus)}>
-                    <SelectTrigger className="h-8 w-[44px] px-2 [&>svg:last-child]:hidden" aria-label="Change status">
+                    <SelectTrigger className="h-8 w-[44px] px-2 [&>svg:last-child]:hidden" aria-label={s.changeStatus}>
                       <ChevronDown className="h-4 w-4 text-muted-foreground" />
                     </SelectTrigger>
                     <SelectContent align="end">
-                      <SelectItem value="open">Open</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="waiting_on_customer">Waiting on customer</SelectItem>
-                      <SelectItem value="resolved">Resolved</SelectItem>
-                      <SelectItem value="closed">Closed</SelectItem>
+                      <SelectItem value="open">{ts.open}</SelectItem>
+                      <SelectItem value="in_progress">{s.inProgress}</SelectItem>
+                      <SelectItem value="waiting_on_customer">{s.waitingOnCustomer}</SelectItem>
+                      <SelectItem value="resolved">{ts.resolved}</SelectItem>
+                      <SelectItem value="closed">{ts.closed}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button
@@ -563,7 +627,7 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
                     size="icon"
                     className="hidden h-8 w-8 xl:inline-flex"
                     onClick={() => setShowContext((s) => !s)}
-                    aria-label="Toggle customer details"
+                    aria-label={s.toggleDetails}
                   >
                     <PanelRight className="h-4 w-4" />
                   </Button>
@@ -587,7 +651,7 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
                         </div>
                       )}
                       <div className={cn("flex items-end gap-2", isAgent ? "justify-end" : "justify-start")}>
-                        {!isAgent && <Avatar name={active.user?.fullName || "Unknown"} role={(active.user?.role || "unknown") as CustomerRole} size="sm" />}
+                        {!isAgent && <Avatar name={active.user?.fullName || s.unknown} role={(active.user?.role || "unknown") as CustomerRole} size="sm" />}
                         <div className={cn("max-w-[78%]", isAgent && "text-right")}>
                           <div
                             className={cn(
@@ -598,6 +662,10 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
                             )}
                           >
                             <div className="whitespace-pre-wrap">{m.message}</div>
+                            <SupportMessageAttachments
+                              attachments={m.attachments}
+                              linkClassName={isAgent ? "text-primary-foreground/90" : "text-secondary"}
+                            />
                           </div>
                           <div
                             className={cn(
@@ -605,7 +673,7 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
                               isAgent && "justify-end",
                             )}
                           >
-                            <span>{isAgent ? "You" : (active.user?.fullName || "Customer")}</span>
+                            <span>{isAgent ? s.you : (active.user?.fullName || s.customer)}</span>
                             <span>·</span>
                             <span>{m.createdAt ? clockTime(m.createdAt) : ""}</span>
                           </div>
@@ -623,33 +691,34 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
                     <span className="flex items-center gap-2">
                       <Mail className="h-4 w-4" />
-                      This conversation is closed.
+                      {s.conversationClosed}
                     </span>
                     <Button size="sm" variant="outline" className="gap-1.5 bg-transparent" onClick={() => updateStatus(active.id, "open")}>
                       <RotateCcw className="h-4 w-4" />
-                      Reopen to reply
+                      {s.reopenToReply}
                     </Button>
                   </div>
                 ) : (
                   <div className="rounded-xl border border-border bg-background focus-within:ring-2 focus-within:ring-ring">
-                    <div className="flex flex-wrap gap-1.5 border-b border-border px-2 py-2">
-                      <span className="mr-1 inline-flex items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground">
+                    <div className="flex gap-1.5 overflow-x-auto whitespace-nowrap border-b border-border px-2 py-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                      <span className="mr-1 inline-flex shrink-0 items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground">
                         <Sparkles className="h-3 w-3" />
-                        Quick replies
+                        {s.quickReplies}
                       </span>
-                      {CANNED_REPLIES.map((r, i) => (
+                      {CANNED_REPLY_KEYS.map((key, i) => (
                         <button
-                          key={i}
-                          onClick={() => setReply((prevReply) => (prevReply ? `${prevReply} ${r}` : r))}
-                          className="max-w-[200px] truncate rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                          title={r}
+                          key={key}
+                          onClick={() => setReply((prevReply) => (prevReply ? `${prevReply} ${cannedReplies[i]}` : cannedReplies[i]))}
+                          className="max-w-[200px] shrink-0 truncate rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          title={cannedReplies[i]}
                         >
-                          {r}
+                          {cannedReplies[i]}
                         </button>
                       ))}
                     </div>
+                    <SupportComposerAttachments files={selectedFiles} onRemove={removeFile} />
                     <Textarea
-                      placeholder={`Reply to ${active.user?.fullName || "Customer"}…`}
+                      placeholder={s.replyTo.replace("{name}", active.user?.fullName || s.customer)}
                       value={reply}
                       onChange={(e) => setReply(e.target.value)}
                       onKeyDown={(e) => {
@@ -658,21 +727,39 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
                           sendReply()
                         }
                       }}
-                      className="min-h-[60px] resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+                      className="min-h-[60px] resize-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
                       rows={2}
                     />
                     <div className="flex items-center justify-between gap-2 px-2 pb-2">
-                      <div className="w-8"></div>
-                      <div className="flex items-center gap-2">
-                        <span className="hidden items-center gap-1 text-[11px] text-muted-foreground sm:flex">
-                          <CornerDownLeft className="h-3 w-3" />
-                          ⌘ + Enter to send
-                        </span>
-                        <Button onClick={sendReply} disabled={!reply.trim() || isReplying} size="sm" className="gap-1.5">
-                          {isReplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                          Send
+                      <div className="flex items-center gap-1">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          multiple
+                          accept={SUPPORT_ATTACHMENT_ACCEPT}
+                          className="hidden"
+                          onChange={handleFileChange}
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          onClick={() => fileInputRef.current?.click()}
+                          aria-label={(s as any).attachFile || "Attach file"}
+                        >
+                          <Paperclip className="h-4 w-4" />
                         </Button>
                       </div>
+                      <Button
+                        onClick={sendReply}
+                        disabled={(!reply.trim() && selectedFiles.length === 0) || isReplying}
+                        size="sm"
+                        className="gap-1.5"
+                      >
+                        {isReplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        {s.sendReply}
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -685,9 +772,9 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
         {active && showContext && (
           <div className="hidden min-h-0 flex-col gap-4 overflow-y-auto rounded-xl border border-border bg-card p-4 xl:flex">
             <div className="flex flex-col items-center gap-2 border-b border-border pb-4 text-center">
-              <Avatar name={active.user?.fullName || "Unknown"} role={(active.user?.role || "unknown") as CustomerRole} size="lg" />
+              <Avatar name={active.user?.fullName || s.unknown} role={(active.user?.role || "unknown") as CustomerRole} size="lg" />
               <div>
-                <p className="font-semibold text-foreground">{active.user?.fullName || "Unknown"}</p>
+                <p className="font-semibold text-foreground">{active.user?.fullName || s.unknown}</p>
               </div>
               {(() => {
                 const roleType = (active.user?.role || "unknown") as CustomerRole
@@ -703,30 +790,30 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
             </div>
 
             <div className="space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Contact</p>
-              <DetailRow icon={Mail} label="Email" value={active.user?.email || "N/A"} />
-              <DetailRow icon={Building2} label="Department" value={active.departmentType} />
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{s.contact}</p>
+              <DetailRow icon={Mail} label={common.email} value={active.user?.email || common.na} />
+              <DetailRow icon={Building2} label={s.department} value={active.departmentType} />
             </div>
 
             <div className="space-y-3 border-t border-border pt-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Conversation</p>
-              <DetailRow icon={LifeBuoy} label="Ticket" value={String(active.id)} />
-              <DetailRow icon={Clock} label="Opened" value={active.createdAt ? relativeTime(active.createdAt) + " ago" : "N/A"} />
-              <DetailRow icon={Timer} label="First reply" value={"Pending"} />
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{s.conversation}</p>
+              <DetailRow icon={LifeBuoy} label={s.ticket} value={String(active.id)} />
+              <DetailRow icon={Clock} label={s.opened} value={active.createdAt ? common.ago.replace("{time}", relativeTime(active.createdAt)) : common.na} />
+              <DetailRow icon={Timer} label={s.firstReply} value={s.pending} />
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2 text-sm text-muted-foreground">
                   <CircleDot className="h-4 w-4" />
-                  Priority
+                  {s.priority}
                 </span>
                 <Select value={active.priority} onValueChange={(v) => updatePriority(active.id, v as CustomerSupportTicketPriority)}>
                   <SelectTrigger className="h-7 w-[110px] text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent align="end">
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="low">{common.low}</SelectItem>
+                    <SelectItem value="medium">{common.medium}</SelectItem>
+                    <SelectItem value="high">{common.high}</SelectItem>
+                    <SelectItem value="urgent">{common.urgent}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -740,13 +827,21 @@ export function AdminSupportChatView({ basePath, initialTicketId }: AdminSupport
                   onClick={() => updateStatus(active.id, "closed")}
                 >
                   <Mail className="h-4 w-4" />
-                  Close conversation
+                  {s.closeConversation}
                 </Button>
               )}
             </div>
           </div>
         )}
       </div>
+
+      <SupportErrorDialog
+        open={!!errorDialog}
+        title={errorDialog?.title ?? ""}
+        message={errorDialog?.message ?? ""}
+        onClose={() => setErrorDialog(null)}
+        closeLabel={common.ok}
+      />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { Header } from "@/components/layout/header"
+import { SiteHeader } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -166,8 +166,8 @@ export default async function SupplierPage({ params }: { params: Promise<{ slug:
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-background">
+      <SiteHeader />
       <main className="flex-1">
         {/* Breadcrumb */}
         <div className="border-b border-border bg-muted/50">
@@ -333,7 +333,7 @@ export default async function SupplierPage({ params }: { params: Promise<{ slug:
                     </div>
 
                     {/* Business Type & Capabilities */}
-                    <div className="grid gap-6 sm:grid-cols-2">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:gap-6">
                       {/* Business Type */}
                       {supplier.businessType && supplier.businessType.length > 0 && (
                         <div className="rounded-xl border border-border bg-card p-6">
@@ -370,7 +370,7 @@ export default async function SupplierPage({ params }: { params: Promise<{ slug:
                     </div>
 
                     {/* Languages & Payment Terms */}
-                    <div className="grid gap-6 sm:grid-cols-2">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:gap-6">
                       {/* Languages */}
                       {supplier.languages && supplier.languages.length > 0 && (
                         <div className="rounded-xl border border-border bg-card p-6">
@@ -513,7 +513,7 @@ export default async function SupplierPage({ params }: { params: Promise<{ slug:
 
               {/* Products Tab */}
               <TabsContent value="products">
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 lg:gap-6">
                   {apiProducts.map((product) => (
                     <Link
                       key={product.id}
@@ -600,40 +600,50 @@ export default async function SupplierPage({ params }: { params: Promise<{ slug:
                     </p>
                   </div>
                 ) : (
-                  <div className="grid gap-6">
-                    {apiCatalogs.map((catalog) => (
-                      <div key={catalog.id} className="rounded-xl border border-border bg-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary/10 shrink-0">
-                            <BookOpen className="h-6 w-6 text-secondary" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-foreground">{catalog.name}</h3>
-                            <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-                              <span>PDF Document</span>
-                              <span className="h-3 w-px bg-border" />
-                              <span>{catalog.file_size}</span>
-                              <span className="h-3 w-px bg-border" />
-                              <span>Updated {new Date(catalog.updated_at).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-3">
-                          <Button variant="outline" className="gap-2" size="sm" asChild>
-                            <Link href={catalog.file_path} target="_blank" rel="noopener noreferrer">
-                              <Eye className="h-4 w-4" />
-                              View
-                            </Link>
-                          </Button>
-                          <Button className="gap-2" size="sm" asChild>
-                            <Link href={catalog.file_path} target="_blank" rel="noopener noreferrer" download>
-                              <Download className="h-4 w-4" />
-                              Download
-                            </Link>
-                          </Button>
-                        </div>
+                  <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+                    {/* Header */}
+                    <div className="border-b border-border px-6 py-5 bg-card/50">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="h-5 w-5 text-amber-700/80" />
+                        <h2 className="text-lg font-semibold text-foreground">Factory Catalog</h2>
                       </div>
-                    ))}
+                      <p className="mt-1.5 text-sm text-muted-foreground">
+                        Browse {supplier.name}'s complete product catalogs
+                      </p>
+                    </div>
+                    
+                    {/* Content */}
+                    <div className="p-6">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                        {apiCatalogs.map((catalog, index) => (
+                          <Link
+                            key={catalog.id}
+                            href={catalog.file_path}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group relative flex flex-col rounded-lg border border-border/60 bg-[#f4f3f0] hover:bg-[#efede9] hover:border-amber-700/30 transition-all overflow-hidden aspect-3/4"
+                          >
+                            <div className="flex-1 flex items-center justify-center relative">
+                              <Image className="h-10 w-10 text-muted-foreground/30 transition-all duration-300 group-hover:opacity-0 group-hover:scale-75 absolute" />
+                              <Eye className="h-10 w-10 text-[#8B5E3C] opacity-0 scale-75 transition-all duration-300 group-hover:opacity-100 group-hover:scale-100 absolute" />
+                            </div>
+                            
+                            {/* Gradient overlay at bottom for better text readability */}
+                            <div className="absolute bottom-0 left-0 right-0 h-24 bg-linear-to-t from-[#e8e6e1]/90 to-transparent pointer-events-none transition-opacity duration-300 group-hover:opacity-80" />
+                            
+                            <div className="absolute bottom-0 left-0 right-0 p-4">
+                              <span className="text-sm font-medium text-muted-foreground transition-colors duration-300 group-hover:text-[#8B5E3C] line-clamp-1">
+                                {catalog.name || `Catalog ${index + 1}`}
+                              </span>
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+
+                      <div className="mt-8 text-center text-sm text-muted-foreground pb-2">
+                        Showing {apiCatalogs.length} of {apiCatalogs.length} catalogs
+                      </div>
+                    </div>
                   </div>
                 )}
               </TabsContent>

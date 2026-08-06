@@ -44,21 +44,11 @@ export default function BuyerMessagesPage() {
       setIsLoading(true)
       try {
         const data = await getConversations()
-        
-        let finalConversations = data;
-        const hasAdmin = data.some(c => c.participants.some(p => p.id === "1" || p.role === "admin"));
-        
-        if (!hasAdmin && user.id) {
-          const newConv = await createConversation([1, user.id], "Admin Support");
-          if (newConv) {
-            finalConversations = [newConv, ...data];
-          }
-        }
 
         if (isMounted) {
-          setConversations(finalConversations)
-          if (finalConversations.length > 0 && !selectedConvId) {
-            setSelectedConvId(finalConversations[0].id)
+          setConversations(data)
+          if (data.length > 0 && !selectedConvId) {
+            setSelectedConvId(data[0].id)
           }
         }
       } catch (error) {
@@ -84,7 +74,7 @@ export default function BuyerMessagesPage() {
       const fallbackDesc = searchParams.get('productDesc')
       let productName = searchParams.get('productName') || productSlug
       
-      if (supplierSlug && productSlug) {
+      if (supplierSlug) {
         setHasProcessedAutoMessage(true)
         
         const isAutoSend = autoMessage === '1'
@@ -96,8 +86,9 @@ export default function BuyerMessagesPage() {
         try {
           // Fetch product info to show in card
           let loadedProductRef = null
-          try {
-            const prodRes = await getProduct(productSlug)
+          if (productSlug) {
+            try {
+              const prodRes = await getProduct(productSlug)
             if (prodRes.success && prodRes.data) {
               const prod = prodRes.data
               productName = prod.name
@@ -135,6 +126,7 @@ export default function BuyerMessagesPage() {
             }
             setInitialProductRef(loadedProductRef)
           }
+          }
 
           // In a real app, we'd lookup the supplier ID. For dummy data, use a static ID or slug
           let conv = conversations.find(c => c.participants.some(p => 
@@ -145,7 +137,8 @@ export default function BuyerMessagesPage() {
           
           if (!conv) {
             const supplierIdNum = supplierSlug === "admin" ? 1 : supplierSlug;
-            conv = await createConversation([supplierIdNum, user?.id?.toString() || "buyer-1"], `Inquiry about ${productSlug}`) || undefined;
+            const title = productSlug ? `Inquiry about ${productSlug}` : "General Inquiry";
+            conv = await createConversation([supplierIdNum, user?.id?.toString() || "buyer-1"], title) || undefined;
             if (conv) {
               setConversations(prev => [conv!, ...prev])
             } else {
@@ -156,7 +149,7 @@ export default function BuyerMessagesPage() {
           
           if (conv) {
             setSelectedConvId(conv.id)
-            const defaultText = `Hello,\n\nI am interested in your product "${productName}".\n\nCould you please provide more details regarding pricing, minimum order quantity, and available shipping options?\n\nI look forward to hearing from you soon.\n\nBest regards.`
+            const defaultText = productName ? `Hello,\n\nI am interested in your product "${productName}".\n\nCould you please provide more details regarding pricing, minimum order quantity, and available shipping options?\n\nI look forward to hearing from you soon.\n\nBest regards.` : ""
             
             if (isAutoSend) {
               // Send the message

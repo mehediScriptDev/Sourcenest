@@ -22,15 +22,18 @@ function isLikelyComponent(thing: unknown): boolean {
   return false
 }
 
-export default function DynamicIcon({ name, size = 24, className = "", color, fallback = null }: DynamicIconProps) {
+export default function DynamicIcon({ name, size, className = "", color, fallback = null }: DynamicIconProps) {
   if (!name) return fallback
 
   const Icon = (Icons as Record<string, unknown>)[name]
   if (!isLikelyComponent(Icon)) return fallback
 
   const Cmp = Icon as ComponentType<{ size?: number; className?: string; color?: string; style?: CSSProperties }>
-  if (color) {
-    return <Cmp size={size} className={className} color={color} style={{ color }} />
+  const iconProps = {
+    className,
+    ...(size != null ? { size } : {}),
+    ...(color ? { color, style: { color } as CSSProperties } : {}),
   }
-  return <Cmp size={size} className={className} />
+
+  return <Cmp {...iconProps} />
 }

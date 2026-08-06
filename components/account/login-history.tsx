@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useTranslation } from "@/lib/i18n"
 
 type LoginEntry = {
   id: number
@@ -21,6 +22,7 @@ type LoginEntry = {
 }
 
 export default function AccountLoginHistory({ backHref }: { backHref: string }) {
+  const { t } = useTranslation()
   const [items, setItems] = useState<LoginEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
@@ -49,41 +51,41 @@ export default function AccountLoginHistory({ backHref }: { backHref: string }) 
   }, [page])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-serif text-2xl font-medium text-foreground">Login History</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Recent sign-ins for this account</p>
+          <h1 className="font-serif text-2xl font-medium text-foreground">{t.mfg.loginHistory.title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t.mfg.loginHistory.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" asChild>
-            <Link href={backHref}>Back to Settings</Link>
+            <Link href={backHref}>{t.common.back}</Link>
           </Button>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Logins</CardTitle>
+          <CardTitle>{t.mfg.loginHistory.title}</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <p className="text-sm text-muted-foreground">{t.common.loading}</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>When</TableHead>
-                    <TableHead>IP Address</TableHead>
-                    <TableHead>Device / Agent</TableHead>
+                    <TableHead>{t.mfg.loginHistory.timestamp}</TableHead>
+                    <TableHead>{t.mfg.loginHistory.ipAddress}</TableHead>
+                    <TableHead>{t.mfg.loginHistory.device}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
-                        No login history found
+                        {t.common.noResults}
                       </TableCell>
                     </TableRow>
                   )}
@@ -108,7 +110,7 @@ export default function AccountLoginHistory({ backHref }: { backHref: string }) 
                 disabled={!meta.links || !meta.links.find((l: any) => l.active && l.page > 1)}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
-                Previous
+                {t.common.back}
               </Button>
               <span className="text-sm text-muted-foreground">Page {meta.current_page}</span>
               <Button
@@ -117,7 +119,7 @@ export default function AccountLoginHistory({ backHref }: { backHref: string }) 
                 disabled={meta.current_page >= meta.last_page}
                 onClick={() => setPage((p) => p + 1)}
               >
-                Next
+                {t.common.next}
               </Button>
             </div>
           )}

@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/lib/auth-context"
 import { useTranslation } from "@/lib/i18n"
 import type { UserRole } from "@/lib/roles/dashboard-route"
+import { saveEmailVerificationChallenge } from "@/lib/email-verification-storage"
 import { Eye, EyeOff, Loader2, Users, Factory, Shield, AlertCircle } from "lucide-react"
 import { FcGoogle } from "react-icons/fc";
 import { useToast } from "@/hooks/use-toast"
@@ -83,10 +84,28 @@ export default function SignInPage() {
         const params = new URLSearchParams(window.location.search)
         const callbackUrl = params.get("callbackUrl")
         router.push(callbackUrl || result.redirectTo)
+      } else if ("requiresEmailVerification" in result && result.requiresEmailVerification) {
+        const safeRole = result.role === "admin" ? "buyer" : result.role
+
+        saveEmailVerificationChallenge({
+          verificationToken: result.verificationToken,
+          codeExpiryTime: result.codeExpiryTime,
+          email: formData.email,
+          role: safeRole,
+          pendingReview: result.pendingReview,
+          message: result.message,
+          manufactureStatus: result.manufactureStatus ?? null,
+        })
+
+        const params = new URLSearchParams({
+          email: formData.email,
+          role: safeRole,
+        })
+        router.push(`/auth/verify-otp?${params.toString()}`)
       } else if (result.message?.toLowerCase().includes("pending review")) {
         // Intercept the backend's "pending review" error block and push them to the review page
         router.push("/review")
-      } else if (result.requiresTwoFactor) {
+      } else if ("requiresTwoFactor" in result && result.requiresTwoFactor) {
         const params = new URLSearchParams({
           token: result.twoFactorToken,
           role: result.role,

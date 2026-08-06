@@ -34,10 +34,10 @@ import {
   Loader2
 } from "lucide-react"
 import { toast } from "sonner"
-import { exportMarketRegions } from "@/lib/data/countries"
 import { 
   getManufacturerMarkets, 
   getExportCountries, 
+  syncExportCountries,
   createRegionCountries, 
   updateRegionCountries,
   deleteRegion,
@@ -46,8 +46,13 @@ import {
   type ExportCountry, 
   type MarketStats 
 } from "@/lib/api/manufacturer-markets"
+import { useTranslation } from "@/lib/i18n"
+
+const SUPPLIER_MAP_GROUPS = ["Africa", "Americas", "Asia", "Europe", "Oceania"] as const
 
 export default function ExportMarketsPage() {
+  const { t } = useTranslation()
+  const m = t.mfg.markets
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [stats, setStats] = useState<MarketStats | null>(null)
@@ -55,11 +60,12 @@ export default function ExportMarketsPage() {
   const [suggestions, setSuggestions] = useState<SuggestionMarket[]>([])
   const [availableCountries, setAvailableCountries] = useState<ExportCountry[]>([])
   const [metaRegions, setMetaRegions] = useState<string[]>([])
+  const [mapGroups, setMapGroups] = useState<string[]>([])
   
   const [initialSelectedCountries, setInitialSelectedCountries] = useState<string[]>([])
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
 
-  const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
+  const [selectedMapGroup, setSelectedMapGroup] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showManageDialog, setShowManageDialog] = useState(false)
@@ -71,7 +77,7 @@ export default function ExportMarketsPage() {
       setLoading(true)
       const [marketsRes, countriesRes] = await Promise.all([
         getManufacturerMarkets(),
-        getExportCountries({ per_page: 100 })
+        getExportCountries({ per_page: 250 })
       ])
       
       if (marketsRes.success && marketsRes.data) {
@@ -79,6 +85,11 @@ export default function ExportMarketsPage() {
         setActiveRegions(marketsRes.data.active_regions || [])
         setSuggestions(marketsRes.data.suggestions || [])
         setMetaRegions(marketsRes.data.meta?.regions || [])
+        setMapGroups(
+          marketsRes.data.meta?.geographic_regions?.length
+            ? marketsRes.data.meta.geographic_regions
+            : [...SUPPLIER_MAP_GROUPS]
+        )
       }
       
       if (countriesRes.success && countriesRes.data) {
@@ -88,7 +99,7 @@ export default function ExportMarketsPage() {
         setInitialSelectedCountries(selected)
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load export markets data")
+      toast.error(err instanceof Error ? err.message : m.loadError)
     } finally {
       setLoading(false)
     }
@@ -99,75 +110,27 @@ export default function ExportMarketsPage() {
   }, [])
 
   const handleSaveChanges = async () => {
+    const hasChanged =
+      initialSelectedCountries.length !== selectedCountries.length ||
+      initialSelectedCountries.some((code) => !selectedCountries.includes(code))
+
+    if (!hasChanged) {
+      toast.info(m.noChanges)
+      return
+    }
+
     try {
       setSaving(true)
-      
-      // Group available countries by region
-      const countriesByRegion: Record<string, ExportCountry[]> = {}
-      availableCountries.forEach(c => {
-        if (!countriesByRegion[c.export_market_region]) {
-          countriesByRegion[c.export_market_region] = []
-        }
-        countriesByRegion[c.export_market_region].push(c)
-      })
+      const res = await syncExportCountries(selectedCountries)
 
-      const regionsToCreate: Array<{ region: string; codes: string[] }> = []
-      const regionsToUpdate: Array<{ id: number; codes: string[] }> = []
-      const regionsToDelete: number[] = []
-
-      Object.entries(countriesByRegion).forEach(([region, regionCountries]) => {
-        const initialCodesInRegion = regionCountries
-          .filter(c => initialSelectedCountries.includes(c.code))
-          .map(c => c.code)
-          .sort()
-
-        const currentCodesInRegion = regionCountries
-          .filter(c => selectedCountries.includes(c.code))
-          .map(c => c.code)
-          .sort()
-
-        const hasChanged = 
-          initialCodesInRegion.length !== currentCodesInRegion.length ||
-          initialCodesInRegion.some((val, index) => val !== currentCodesInRegion[index])
-
-        if (hasChanged) {
-          const existingActiveRegion = activeRegions.find(r => r.region === region)
-          if (existingActiveRegion) {
-            if (currentCodesInRegion.length === 0) {
-              regionsToDelete.push(existingActiveRegion.id)
-            } else {
-              regionsToUpdate.push({ id: existingActiveRegion.id, codes: currentCodesInRegion })
-            }
-          } else {
-            if (currentCodesInRegion.length > 0) {
-              regionsToCreate.push({ region, codes: currentCodesInRegion })
-            }
-          }
-        }
-      })
-
-      if (regionsToCreate.length === 0 && regionsToUpdate.length === 0 && regionsToDelete.length === 0) {
-        toast.info("No changes to save.")
-        return
-      }
-
-      // Execute all modifications in parallel
-      const results = await Promise.all([
-        ...regionsToCreate.map(({ region, codes }) => createRegionCountries(region, codes)),
-        ...regionsToUpdate.map(({ id, codes }) => updateRegionCountries(id, codes)),
-        ...regionsToDelete.map(id => deleteRegion(id))
-      ])
-
-      const failures = results.filter(r => !r.success)
-      if (failures.length > 0) {
-        toast.error("Failed to save some export market modifications.")
+      if (res.success) {
+        toast.success(m.successUpdate)
+        await loadData()
       } else {
-        toast.success("Export markets updated successfully")
+        toast.error(m.saveFailed)
       }
-      
-      await loadData()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update export markets")
+      toast.error(err instanceof Error ? err.message : m.updateFailed)
     } finally {
       setSaving(false)
     }
@@ -175,7 +138,7 @@ export default function ExportMarketsPage() {
 
   const handleAddMarket = async () => {
     if (!newMarketRegion) {
-      toast.error("Please select a region.")
+      toast.error(m.selectRegionError)
       return
     }
     try {
@@ -196,10 +159,10 @@ export default function ExportMarketsPage() {
         toast.success(`Region ${newMarketRegion} updated successfully`)
         await loadData()
       } else {
-        toast.error(res.message || "Failed to add/update region")
+        toast.error(res.message || m.addRegionFailed)
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to add/update region")
+      toast.error(err instanceof Error ? err.message : m.addRegionFailed)
     } finally {
       setSaving(false)
       setShowAddDialog(false)
@@ -218,10 +181,10 @@ export default function ExportMarketsPage() {
         toast.success(`Region ${regionName} removed successfully`)
         await loadData()
       } else {
-        toast.error(res.message || "Failed to remove region")
+        toast.error(res.message || m.removeRegionFailed)
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to remove region")
+      toast.error(err instanceof Error ? err.message : m.removeRegionFailed)
     } finally {
       setSaving(false)
       setShowManageDialog(false)
@@ -236,19 +199,24 @@ export default function ExportMarketsPage() {
     )
   }
 
-  const regionOptions = metaRegions.length > 0 ? metaRegions : exportMarketRegions
+  const exportRegionOptions = metaRegions
+
+  const mapGroupOptions =
+    mapGroups.length > 0
+      ? mapGroups
+      : [...SUPPLIER_MAP_GROUPS]
 
   const filteredCountries = availableCountries.filter(c => {
-    const matchesRegion = selectedRegion ? c.export_market_region === selectedRegion : true
+    const matchesMapGroup = selectedMapGroup ? c.geographic_region === selectedMapGroup : true
     const matchesQuery = 
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
       c.code.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesRegion && matchesQuery
+    return matchesMapGroup && matchesQuery
   })
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6 overflow-x-hidden">
         {/* Header Skeleton */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-2">
@@ -259,7 +227,7 @@ export default function ExportMarketsPage() {
         </div>
 
         {/* Stats Skeleton */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i} className="w-full overflow-hidden">
               <CardContent className="p-4 sm:p-5 py-0 sm:py-0">
@@ -305,29 +273,29 @@ export default function ExportMarketsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Export Markets</h1>
-          <p className="text-muted-foreground">Define your target export regions and countries</p>
+          <h1 className="text-2xl font-semibold text-foreground">{m.title}</h1>
+          <p className="text-muted-foreground">{m.subtitle}</p>
         </div>
         <Button onClick={() => setShowAddDialog(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Add New Market
+          {m.addNewMarket}
         </Button>
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         <ManufacturerStatCard
-          title="Active Markets"
+          title={m.activeMarkets}
           value={selectedCountries.length}
           icon={Globe}
           layout="horizontal"
         />
         <ManufacturerStatCard
-          title="Total Inquiries"
+          title={m.totalInquiries}
           value={stats?.total_inquiries ?? 0}
           icon={Users}
           iconClassName="text-primary"
@@ -335,7 +303,7 @@ export default function ExportMarketsPage() {
           layout="horizontal"
         />
         <ManufacturerStatCard
-          title="Orders"
+          title={m.orders}
           value={stats?.total_orders ?? 0}
           icon={Package}
           iconClassName="text-green-600"
@@ -343,7 +311,7 @@ export default function ExportMarketsPage() {
           layout="horizontal"
         />
         <ManufacturerStatCard
-          title="Growth Rate"
+          title={m.growthRate}
           value={stats?.growth_rate.value ?? "+0.0%"}
           icon={TrendingUp}
           iconClassName="text-amber-600"
@@ -355,8 +323,8 @@ export default function ExportMarketsPage() {
       {/* Current Markets */}
       <Card>
         <CardHeader>
-          <CardTitle>Active Export Regions</CardTitle>
-          <CardDescription>Markets where you are currently receiving inquiries</CardDescription>
+          <CardTitle>{m.activeRegions}</CardTitle>
+          <CardDescription>{m.activeRegionsDesc}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -377,7 +345,7 @@ export default function ExportMarketsPage() {
                         <p className="text-sm text-muted-foreground truncate">
                           {activeCountriesInRegion.length > 0 
                             ? activeCountriesInRegion.join(", ") 
-                            : "No countries selected"}
+                            : m.noCountriesSelected}
                         </p>
                       </div>
                     </div>
@@ -386,11 +354,11 @@ export default function ExportMarketsPage() {
                       <div className="flex justify-between sm:justify-end w-full sm:w-auto gap-4">
                         <div className="text-left sm:text-right">
                           <p className="font-medium">{market.inquiries}</p>
-                          <p className="text-xs text-muted-foreground">Inquiries</p>
+                          <p className="text-xs text-muted-foreground">{m.inquiries}</p>
                         </div>
                         <div className="text-left sm:text-right">
                           <p className="font-medium">{market.orders}</p>
-                          <p className="text-xs text-muted-foreground">Orders</p>
+                          <p className="text-xs text-muted-foreground">{m.orders}</p>
                         </div>
                       </div>
                       <Button 
@@ -402,7 +370,7 @@ export default function ExportMarketsPage() {
                           setShowManageDialog(true)
                         }}
                       >
-                        Manage
+                        {m.manage}
                       </Button>
                     </div>
                   </div>
@@ -410,7 +378,7 @@ export default function ExportMarketsPage() {
               })
             ) : (
               <p className="text-sm text-muted-foreground text-center py-6">
-                No active export regions defined. Click "Add New Market" to get started.
+                {m.noActiveRegions}
               </p>
             )}
           </div>
@@ -420,11 +388,11 @@ export default function ExportMarketsPage() {
       {/* Suggested Markets */}
       <Card>
         <CardHeader>
-          <CardTitle>Suggested Markets</CardTitle>
-          <CardDescription>Recommended regions based on your product categories</CardDescription>
+          <CardTitle>{m.suggestedMarkets}</CardTitle>
+          <CardDescription>{m.suggestedMarketsDesc}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 sm:gap-4">
             {suggestions.length > 0 ? (
               suggestions.map((market) => (
                 <div key={market.region} className="p-4 rounded-lg border border-dashed border-border hover:border-secondary transition-colors">
@@ -469,7 +437,7 @@ export default function ExportMarketsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input 
-                placeholder="Search countries..." 
+                placeholder={m.searchCountries} 
                 className="pl-9"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -477,20 +445,20 @@ export default function ExportMarketsPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button 
-                variant={selectedRegion === null ? "default" : "outline"} 
+                variant={selectedMapGroup === null ? "default" : "outline"} 
                 size="sm"
-                onClick={() => setSelectedRegion(null)}
+                onClick={() => setSelectedMapGroup(null)}
               >
                 All
               </Button>
-              {regionOptions.map((region) => (
+              {mapGroupOptions.map((group) => (
                 <Button 
-                  key={region}
-                  variant={selectedRegion === region ? "default" : "outline"} 
+                  key={group}
+                  variant={selectedMapGroup === group ? "default" : "outline"} 
                   size="sm"
-                  onClick={() => setSelectedRegion(region)}
+                  onClick={() => setSelectedMapGroup(group)}
                 >
-                  {region}
+                  {group}
                 </Button>
               ))}
             </div>
@@ -522,7 +490,7 @@ export default function ExportMarketsPage() {
             </p>
             <Button onClick={handleSaveChanges} disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Changes
+              {saving ? m.saving : m.saveMarkets}
             </Button>
           </div>
         </CardContent>
@@ -545,10 +513,10 @@ export default function ExportMarketsPage() {
                 onValueChange={setNewMarketRegion}
               >
                 <SelectTrigger className="mt-2">
-                  <SelectValue placeholder="Select a region" />
+                  <SelectValue placeholder={m.selectRegion} />
                 </SelectTrigger>
                 <SelectContent>
-                  {regionOptions.map((region) => (
+                  {exportRegionOptions.map((region) => (
                     <SelectItem key={region} value={region}>{region}</SelectItem>
                   ))}
                 </SelectContent>

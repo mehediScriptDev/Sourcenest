@@ -19,6 +19,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/lib/auth-context"
+import { useTranslation } from "@/lib/i18n"
 import {
   activateAccount,
   deactivateAccount,
@@ -31,6 +32,7 @@ export function AccountDangerZone() {
   const { toast } = useToast()
   const router = useRouter()
   const { logout } = useAuth()
+  const { t } = useTranslation()
 
   const [deactivateOpen, setDeactivateOpen] = useState(false)
   const [activateOpen, setActivateOpen] = useState(false)
@@ -160,14 +162,14 @@ export function AccountDangerZone() {
   return (
     <Card className="border-destructive/50">
       <CardHeader>
-        <CardTitle className="text-destructive">Account status</CardTitle>
+        <CardTitle className="text-destructive">{t.settings.accountStatus}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-foreground">Deactivate account</p>
+            <p className="text-sm font-medium text-foreground">{t.settings.deactivateAccount}</p>
             <p className="text-sm text-muted-foreground">
-              Temporarily disable your account. You can reactivate later with your password.
+              {t.settings.deactivateDesc}
             </p>
           </div>
           <Dialog
@@ -179,20 +181,20 @@ export function AccountDangerZone() {
           >
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="shrink-0">
-                Deactivate
+                {t.settings.deactivateBtn}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <form onSubmit={handleDeactivate}>
                 <DialogHeader>
-                  <DialogTitle>Deactivate account</DialogTitle>
+                  <DialogTitle>{t.settings.deactivateAccount}</DialogTitle>
                   <DialogDescription>
-                    Confirm your password. You will be signed out until you activate again.
+                    {t.settings.confirmPassword}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="deactivate-pw">Password</Label>
+                    <Label htmlFor="deactivate-pw">{t.settings.passwordLabel}</Label>
                     <Input
                       id="deactivate-pw"
                       type="password"
@@ -204,7 +206,7 @@ export function AccountDangerZone() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="deactivate-reason">Reason (optional)</Label>
+                    <Label htmlFor="deactivate-reason">{t.settings.reasonOptional}</Label>
                     <Textarea
                       id="deactivate-reason"
                       value={deactivateReason}
@@ -219,10 +221,10 @@ export function AccountDangerZone() {
                     {loading === "deactivate" ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Deactivating…
+                        {t.settings.deactivating}
                       </>
                     ) : (
-                      "Confirm deactivation"
+                      t.settings.confirmDeactivation
                     )}
                   </Button>
                 </DialogFooter>
@@ -234,9 +236,9 @@ export function AccountDangerZone() {
         <div className="border-t border-border pt-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium text-foreground">Reactivate account</p>
+              <p className="text-sm font-medium text-foreground">{t.settings.reactivateAccount}</p>
               <p className="text-sm text-muted-foreground">
-                If you previously deactivated, enter your password to turn your account back on.
+                {t.settings.reactivateDesc}
               </p>
             </div>
             <Dialog
@@ -248,18 +250,18 @@ export function AccountDangerZone() {
             >
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm" className="shrink-0">
-                  Reactivate
+                  {t.settings.reactivateBtn}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <form onSubmit={handleActivate}>
                   <DialogHeader>
-                    <DialogTitle>Reactivate account</DialogTitle>
-                    <DialogDescription>Enter your current password to restore full access.</DialogDescription>
+                    <DialogTitle>{t.settings.reactivateAccount}</DialogTitle>
+                    <DialogDescription>{t.settings.enterPasswordToRestore}</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="activate-pw">Password</Label>
+                      <Label htmlFor="activate-pw">{t.settings.passwordLabel}</Label>
                       <Input
                         id="activate-pw"
                         type="password"
@@ -276,10 +278,10 @@ export function AccountDangerZone() {
                       {loading === "activate" ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Reactivating…
+                          {t.settings.reactivating}
                         </>
                       ) : (
-                        "Reactivate"
+                        t.settings.reactivateBtn
                       )}
                     </Button>
                   </DialogFooter>
@@ -292,9 +294,9 @@ export function AccountDangerZone() {
         <div className="border-t border-border pt-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium text-foreground">Delete account</p>
+              <p className="text-sm font-medium text-foreground">{t.settings.deleteAccount}</p>
               <p className="text-sm text-muted-foreground">
-                Request permanent deletion. You may need to confirm by email or OTP afterward.
+                {t.settings.deleteDesc}
               </p>
             </div>
             <Dialog
@@ -306,21 +308,20 @@ export function AccountDangerZone() {
             >
               <DialogTrigger asChild>
                 <Button variant="destructive" size="sm" className="shrink-0">
-                  Delete account
+                  {t.settings.deleteAccount}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <form onSubmit={handleDelete}>
                   <DialogHeader>
-                    <DialogTitle>Request account deletion</DialogTitle>
+                    <DialogTitle>{t.settings.deleteAccount}</DialogTitle>
                     <DialogDescription>
-                      This starts the deletion process on the server. This action cannot be undone from
-                      here once completed.
+                      {t.settings.deleteRequestDesc}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="delete-pw">Password</Label>
+                      <Label htmlFor="delete-pw">{t.settings.passwordLabel}</Label>
                       <Input
                         id="delete-pw"
                         type="password"
@@ -332,13 +333,13 @@ export function AccountDangerZone() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="delete-reason">Reason</Label>
+                      <Label htmlFor="delete-reason">{t.settings.reasonRequired}</Label>
                       <Textarea
                         id="delete-reason"
                         value={deleteReason}
                         onChange={(e) => setDeleteReason(e.target.value)}
                         rows={2}
-                        placeholder="Tell us why you're leaving (optional but helpful)"
+                        placeholder={t.settings.reasonPlaceholder}
                         disabled={loading === "delete"}
                       />
                     </div>
@@ -348,10 +349,10 @@ export function AccountDangerZone() {
                       {loading === "delete" ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Submitting…
+                          {t.settings.submitting}
                         </>
                       ) : (
-                        "Submit deletion request"
+                        t.settings.submitDeletionRequest
                       )}
                     </Button>
                   </DialogFooter>
@@ -362,9 +363,9 @@ export function AccountDangerZone() {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Started a deletion by mistake?{" "}
+          {t.settings.startedDeletionMistake}{" "}
           <Link href="/auth/restore-account" className="font-medium text-secondary hover:underline">
-            Restore account
+            {t.settings.restoreAccount}
           </Link>
         </p>
       </CardContent>
